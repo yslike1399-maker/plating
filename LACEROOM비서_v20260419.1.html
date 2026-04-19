@@ -1,0 +1,1982 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LACEROOM - 도금 작업 지시서</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.min.js"></script>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const Package = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>;
+        const FileText = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>;
+        const Calendar = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>;
+        const Plus = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
+        const Trash = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>;
+        const Edit = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
+        const X = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
+        const Check = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>;
+        const Download = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
+        const Copy = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>;
+        const Image = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>;
+
+        const COLOR_DEFS = [
+          { name: '대금', displayName: '대금(골드)', finishType: 'both' },
+          { name: '니켈', displayName: '니켈(실버)', finishType: 'both' },
+          { name: '흑진주', displayName: '흑진주(블랙)', finishType: 'both' },
+          { name: '흑골드', displayName: '흑골드(다크골드)', finishType: 'both' },
+          { name: '로즈골드 대용금', displayName: '로즈골드 대용금(로즈골드)', finishType: 'both' },
+          { name: '은', displayName: '은(리얼은도금)', finishType: 'glossOnly' },
+          { name: '14k대용금', displayName: '14k대용금(14k도금)', finishType: 'glossOnly' },
+          { name: '동착', displayName: '동착(흑코팅 전처리)', finishType: 'other' },
+        ];
+
+        const FINISH_OPTIONS = ['유광', '반무광'];
+        const GRIND_OPTIONS = ['연마', '연마 제외', '연마 완료'];
+
+        // 화면 표시용 (직원용 - 설명 포함, 줄바꿈)
+        const getColorDisplayName = (name) => {
+          const color = COLOR_DEFS.find(c => c.name === name);
+          if (!color) return name;
+          const parts = color.displayName.match(/^([^(]+)\(([^)]+)\)$/);
+          if (parts) {
+            return <>{parts[1]}<br/>({parts[2]})</>;
+          }
+          return color.displayName;
+        };
+
+        // 엑셀용 색상명 (공장용 - 설명 없음)
+        const excelColorName = (name, finish) => {
+          if (!finish) return name;
+          if (name === '로즈골드 대용금') {
+            return finish === '유광' ? '로즈골드(대용금)유광' : '로즈골드(반무광)대용금';
+          }
+          return `${name}(${finish})`;
+        };
+
+        const formatDate = (date) => date.toISOString().split('T')[0];
+
+        function App() {
+          const [activeMainTab, setActiveMainTab] = useState('plating');
+          const [activeTab, setActiveTab] = useState('products');
+          const [products, setProducts] = useState([]);
+          const [history, setHistory] = useState([]);
+          
+          // 도금미수금 데이터
+          const [receivables, setReceivables] = useState([]);
+          
+          // 프리랜서 데이터
+          const [freelancers, setFreelancers] = useState([]);
+          const [freelancerWorks, setFreelancerWorks] = useState([]);
+          const [filterMonth, setFilterMonth] = useState('');
+          const [filterFreelancerId, setFilterFreelancerId] = useState('');
+          
+          const [productForm, setProductForm] = useState({
+            name: '', 
+            grindRequired: true, 
+            image: null, 
+            imagePreview: null,
+            grindCost: '',
+            injectionCost: '',
+            springCost: '',
+            pinCost: '',
+            platingCosts: {} // 색상별 유광/반무광 도금 단가
+          });
+
+          const [editingProduct, setEditingProduct] = useState(null);
+
+          const [orderForm, setOrderForm] = useState({
+            date: formatDate(new Date()), products: []
+          });
+
+          useEffect(() => {
+            try {
+              const savedProducts = localStorage.getItem('plating_products');
+              const savedHistory = localStorage.getItem('plating_history');
+              const savedReceivables = localStorage.getItem('plating_receivables');
+              const savedFreelancers = localStorage.getItem('plating_freelancers');
+              const savedFreelancerWorks = localStorage.getItem('plating_freelancer_works');
+              if (savedProducts) setProducts(JSON.parse(savedProducts));
+              if (savedHistory) setHistory(JSON.parse(savedHistory));
+              if (savedReceivables) setReceivables(JSON.parse(savedReceivables));
+              if (savedFreelancers) setFreelancers(JSON.parse(savedFreelancers));
+              if (savedFreelancerWorks) setFreelancerWorks(JSON.parse(savedFreelancerWorks));
+            } catch (e) {
+              console.error('localStorage 오류:', e);
+              alert('데이터 로드 실패. Chrome을 --allow-file-access-from-files 플래그로 실행하세요.');
+            }
+          }, []);
+
+          const saveProducts = (data) => {
+            setProducts(data);
+            try {
+              localStorage.setItem('plating_products', JSON.stringify(data));
+            } catch (e) {
+              console.error('저장 오류:', e);
+            }
+          };
+
+          const saveHistory = (data) => {
+            setHistory(data);
+            try {
+              localStorage.setItem('plating_history', JSON.stringify(data));
+            } catch (e) {
+              console.error('저장 오류:', e);
+            }
+          };
+
+          const saveReceivables = (data) => {
+            setReceivables(data);
+            try {
+              localStorage.setItem('plating_receivables', JSON.stringify(data));
+            } catch (e) {
+              console.error('저장 오류:', e);
+            }
+          };
+
+          const saveFreelancers = (data) => {
+            setFreelancers(data);
+            try {
+              localStorage.setItem('plating_freelancers', JSON.stringify(data));
+            } catch (e) {
+              console.error('저장 오류:', e);
+            }
+          };
+
+          const saveFreelancerWorks = (data) => {
+            setFreelancerWorks(data);
+            try {
+              localStorage.setItem('plating_freelancer_works', JSON.stringify(data));
+            } catch (e) {
+              console.error('저장 오류:', e);
+            }
+          };
+
+          const handleImageUpload = (e) => {
+            const file = e.target.files[0];
+            if (file) {
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                setProductForm({...productForm, image: reader.result, imagePreview: reader.result});
+              };
+              reader.readAsDataURL(file);
+            }
+          };
+
+          const handleAddProduct = () => {
+            if (!productForm.name.trim()) return alert('제품명을 입력하세요');
+            const newProduct = {
+              id: Date.now(),
+              name: productForm.name,
+              grindRequired: productForm.grindRequired,
+              image: productForm.image,
+              platingCosts: productForm.platingCosts,
+              grindCost: productForm.grindCost,
+              injectionCost: productForm.injectionCost,
+              springCost: productForm.springCost,
+              pinCost: productForm.pinCost,
+              createdAt: new Date().toISOString()
+            };
+            saveProducts([...products, newProduct]);
+            setProductForm({ 
+              name: '', 
+              grindRequired: true, 
+              image: null, 
+              imagePreview: null,
+              grindCost: '',
+              injectionCost: '',
+              springCost: '',
+              pinCost: '',
+              platingCosts: {}
+            });
+            alert('제품 등록 완료!');
+          };
+
+          const handleDeleteProduct = (id) => {
+            if (confirm('삭제하시겠습니까?')) {
+              saveProducts(products.filter(p => p.id !== id));
+            }
+          };
+
+          const handleEditProduct = (product) => {
+            setEditingProduct(product);
+            setProductForm({
+              name: product.name,
+              grindRequired: product.grindRequired,
+              image: product.image,
+              imagePreview: product.image,
+              platingCosts: product.platingCosts || {},
+              grindCost: product.grindCost || '',
+              injectionCost: product.injectionCost || '',
+              springCost: product.springCost || '',
+              pinCost: product.pinCost || ''
+            });
+          };
+
+          const handleUpdateProduct = () => {
+            if (!productForm.name.trim()) return alert('제품명을 입력하세요');
+            
+            const updatedProducts = products.map(p => 
+              p.id === editingProduct.id ? {
+                ...p,
+                name: productForm.name,
+                grindRequired: productForm.grindRequired,
+                image: productForm.image,
+                platingCosts: productForm.platingCosts,
+                grindCost: productForm.grindCost,
+                injectionCost: productForm.injectionCost,
+                springCost: productForm.springCost,
+                pinCost: productForm.pinCost
+              } : p
+            );
+            
+            saveProducts(updatedProducts);
+            setEditingProduct(null);
+            setProductForm({
+              name: '', 
+              grindRequired: true, 
+              image: null, 
+              imagePreview: null,
+              grindCost: '',
+              injectionCost: '',
+              springCost: '',
+              pinCost: '',
+              platingCosts: {}
+            });
+            alert('제품 수정 완료!');
+          };
+
+          const handleAddProductToOrder = (productId) => {
+            if (!productId) return alert('제품을 선택하세요');
+            
+            const product = products.find(p => p.id === productId);
+            
+            // 이미 추가된 연마 상태 찾기
+            const existingGrinds = orderForm.products
+              .filter(p => p.productId === productId)
+              .map(p => p.grind);
+            
+            // 사용 가능한 연마 상태 찾기
+            const availableGrind = GRIND_OPTIONS.find(g => !existingGrinds.includes(g));
+            
+            if (!availableGrind) {
+              return alert(`"${product.name}"의 모든 연마 상태가 이미 추가되었습니다.`);
+            }
+            
+            // 연마 필요 여부에 따라 기본값 설정
+            let defaultGrind = product.grindRequired ? '연마' : '연마 제외';
+            const grindToUse = existingGrinds.includes(defaultGrind) ? availableGrind : defaultGrind;
+            
+            setOrderForm({
+              ...orderForm,
+              products: [{
+                productId: product.id,
+                productName: product.name,
+                grindRequired: product.grindRequired,
+                grind: grindToUse,
+                image: product.image,
+                items: []
+              }, ...orderForm.products]
+            });
+            
+            if (grindToUse !== defaultGrind) {
+              alert(`"${product.name} (${defaultGrind})"는 이미 추가되어\n자동으로 "${grindToUse}"로 추가되었습니다.`);
+            }
+          };
+
+          const handleRemoveProductFromOrder = (productId, grind) => {
+            setOrderForm({
+              ...orderForm,
+              products: orderForm.products.filter(p => !(p.productId === productId && p.grind === grind))
+            });
+          };
+
+          const updateGrind = (productId, oldGrind, newGrind) => {
+            const newProducts = orderForm.products.map(p => {
+              if (p.productId === productId && p.grind === oldGrind) {
+                return {...p, grind: newGrind};
+              }
+              return p;
+            });
+            setOrderForm({ ...orderForm, products: newProducts });
+          };
+
+          const handleAddColorItem = (productId, grind) => {
+            const newProducts = orderForm.products.map(p => {
+              if (p.productId === productId && p.grind === grind) {
+                return {...p, items: [...p.items, { color: '대금', finish: '유광', qty: 1 }]};
+              }
+              return p;
+            });
+            setOrderForm({ ...orderForm, products: newProducts });
+          };
+
+          const handleRemoveColorItem = (productId, grind, itemIndex) => {
+            const newProducts = orderForm.products.map(p => {
+              if (p.productId === productId && p.grind === grind) {
+                return {...p, items: p.items.filter((_, i) => i !== itemIndex)};
+              }
+              return p;
+            });
+            setOrderForm({ ...orderForm, products: newProducts });
+          };
+
+          const updateColorItem = (productId, grind, itemIndex, field, value) => {
+            const newProducts = orderForm.products.map(p => {
+              if (p.productId === productId && p.grind === grind) {
+                const newItems = [...p.items];
+                newItems[itemIndex] = { ...newItems[itemIndex], [field]: value };
+                return { ...p, items: newItems };
+              }
+              return p;
+            });
+            setOrderForm({ ...orderForm, products: newProducts });
+          };
+
+          const handleCreateOrder = () => {
+            if (orderForm.products.length === 0) {
+              alert('제품을 추가하세요');
+              return;
+            }
+            
+            for (const product of orderForm.products) {
+              if (product.items.length === 0) {
+                alert(`${product.productName} (${product.grind})에 색상을 추가하세요`);
+                return;
+              }
+              
+              const colorMap = new Map();
+              for (const item of product.items) {
+                const colorKey = excelColorName(item.color, item.finish);
+                if (colorMap.has(colorKey)) {
+                  alert(`${product.productName}에 중복된 색상이 있습니다:\n"${colorKey}"\n\n같은 색상/구분은 수량을 합쳐서 하나로 입력해주세요.`);
+                  return;
+                }
+                colorMap.set(colorKey, true);
+              }
+            }
+
+            try {
+              const existingOrdersOnDate = history.filter(h => h.date === orderForm.date);
+              const orderNum = Math.max(0, ...existingOrdersOnDate.map(h => h.orderNum || 0)) + 1;
+
+              const newOrder = {
+                id: Date.now(),
+                date: orderForm.date,
+                orderNum,
+                products: orderForm.products.map(product => ({
+                  productId: product.productId,
+                  productName: product.productName,
+                  grind: product.grind,
+                  image: product.image,
+                  items: product.items.map(item => ({
+                    color: item.color,
+                    finish: item.finish || '',
+                    qty: parseInt(item.qty) || 0,
+                    received: false,
+                    receivedDate: ''
+                  })),
+                  total: product.items.reduce((sum, item) => sum + (parseInt(item.qty) || 0), 0)
+                })),
+                totalQty: orderForm.products.reduce((sum, product) => 
+                  sum + product.items.reduce((s, item) => s + (parseInt(item.qty) || 0), 0), 0
+                ),
+                createdAt: new Date().toISOString()
+              };
+
+              const newHistory = [newOrder, ...history];
+              saveHistory(newHistory);
+              
+              setOrderForm({ date: formatDate(new Date()), products: [] });
+              
+              alert(`${orderNum}차 작업 지시서 생성 완료!`);
+              setActiveTab('history');
+            } catch (error) {
+              console.error('오류:', error);
+              alert('작업 지시서 생성 실패. 콘솔을 확인하세요.');
+            }
+          };
+
+          const handleReceiveItem = (orderId, productIndex, itemIndex) => {
+            const newHistory = history.map(order => {
+              if (order.id === orderId) {
+                const newProducts = [...order.products];
+                const newItems = [...newProducts[productIndex].items];
+                const currentStatus = newItems[itemIndex].received;
+                newItems[itemIndex] = {
+                  ...newItems[itemIndex],
+                  received: !currentStatus,
+                  receivedDate: !currentStatus ? formatDate(new Date()) : ''
+                };
+                newProducts[productIndex] = { ...newProducts[productIndex], items: newItems };
+                return { ...order, products: newProducts };
+              }
+              return order;
+            });
+            saveHistory(newHistory);
+          };
+
+          const handleDeleteOrder = (orderId) => {
+            if (confirm('이 작업 지시서를 삭제하시겠습니까?')) {
+              saveHistory(history.filter(h => h.id !== orderId));
+            }
+          };
+
+          const handleDownloadExcel = async (order) => {
+            const ExcelJS = window.ExcelJS;
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet('작업지시서');
+
+            // 제목
+            worksheet.mergeCells('A1:H1');
+            worksheet.getCell('A1').value = '주식회사 골드 / 도금 작업 지시서';
+            worksheet.getCell('A1').font = { size: 22, bold: true };
+            worksheet.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
+            worksheet.getRow(1).height = 32;
+
+            // 헤더
+            const headers = ['출고날짜', '품명', '이미지', '연마', '색상', '구분', '출고\n수량', '비고'];
+            worksheet.getRow(2).values = headers;
+            worksheet.getRow(2).font = { bold: true, size: 14 };
+            worksheet.getRow(2).alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+            worksheet.getRow(2).height = 40;
+
+            // 열 너비 설정
+            worksheet.columns = [
+              { key: 'date', width: 14 },
+              { key: 'name', width: 20 },
+              { key: 'image', width: 12 },
+              { key: 'grind', width: 12 },
+              { key: 'color', width: 25 },
+              { key: 'finish', width: 12 },
+              { key: 'qty', width: 12 },
+              { key: 'note', width: 6.35 }
+            ];
+
+            let currentRow = 3;
+            const dateStartRow = 3;
+            let productIndex = 0;
+
+            // 제품별 데이터 추가
+            for (const product of order.products) {
+              const startRow = currentRow;
+              const isGrayBackground = productIndex % 2 === 0;
+              
+              // 각 색상 행 추가
+              for (let i = 0; i < product.items.length; i++) {
+                const item = product.items[i];
+                const row = worksheet.getRow(currentRow);
+                
+                if (i === 0) {
+                  row.getCell(1).value = order.date;
+                  row.getCell(1).font = { size: 14 };
+                  row.getCell(2).value = product.productName;
+                  row.getCell(2).font = { size: 14 };
+                  
+                  // 연마 상태 텍스트 변환
+                  let grindText = product.grind;
+                  if (product.grind === '연마 제외') grindText = '연마\n제외';
+                  if (product.grind === '연마 완료') grindText = '연마\n완료';
+                  
+                  row.getCell(4).value = grindText;
+                  row.getCell(4).alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+                  row.getCell(4).font = { size: 14, bold: true };
+                  
+                  // 연마 상태별 색상
+                  if (product.grind === '연마 제외') {
+                    row.getCell(4).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF0000' } };
+                    row.getCell(4).font = { color: { argb: 'FFFFFFFF' }, bold: true, size: 14 };
+                  } else if (product.grind === '연마') {
+                    row.getCell(4).font = { color: { argb: 'FFFF0000' }, bold: true, size: 14 };
+                    if (isGrayBackground) {
+                      row.getCell(4).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC0C0C0' } };
+                    }
+                  } else if (product.grind === '연마 완료') {
+                    row.getCell(4).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF33CCFF' } };
+                    row.getCell(4).font = { color: { argb: 'FFFFFFFF' }, bold: true, size: 14 };
+                  }
+                }
+                
+                row.getCell(5).value = item.color;
+                row.getCell(5).font = { size: 14 };
+                row.getCell(6).value = item.finish || '';
+                row.getCell(6).font = { size: 14 };
+                row.getCell(7).value = item.qty;
+                row.getCell(7).font = { size: 14 };
+                
+                // 기본 배경색 (출고날짜 제외)
+                if (isGrayBackground) {
+                  for (let col = 2; col <= 8; col++) { // 2부터 시작 (출고날짜 제외)
+                    const cell = row.getCell(col);
+                    if (!cell.fill || !cell.fill.fgColor) {
+                      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC0C0C0' } };
+                    }
+                  }
+                }
+                
+                // 반무광 서식 적용
+                if (item.finish === '반무광') {
+                  row.getCell(5).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9F26D' } };
+                  row.getCell(5).font = { color: { argb: 'FFFF0000' }, bold: true, size: 14 };
+                  row.getCell(6).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9F26D' } };
+                  row.getCell(6).font = { color: { argb: 'FFFF0000' }, bold: true, size: 14 };
+                  row.getCell(7).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9F26D' } };
+                  row.getCell(7).font = { color: { argb: 'FFFF0000' }, bold: true, size: 14 };
+                }
+                
+                row.height = 32;
+                row.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+                
+                currentRow++;
+              }
+
+              const endRow = currentRow - 1;
+
+              // 셀 병합
+              if (product.items.length > 1) {
+                worksheet.mergeCells(`B${startRow}:B${endRow}`);
+                worksheet.mergeCells(`C${startRow}:C${endRow}`);
+                worksheet.mergeCells(`D${startRow}:D${endRow}`);
+              }
+
+              // 이미지 추가
+              if (product.image) {
+                try {
+                  const imageId = workbook.addImage({
+                    base64: product.image,
+                    extension: 'png',
+                  });
+
+                  const imageHeight = (endRow - startRow + 1) * 32;
+                  worksheet.addImage(imageId, {
+                    tl: { col: 2, row: startRow - 1 },
+                    ext: { width: 80, height: Math.min(imageHeight * 0.9, 80) },
+                    editAs: 'oneCell'
+                  });
+                } catch (e) {
+                  console.error('이미지 추가 실패:', e);
+                }
+              }
+
+              // 총수량 행
+              const sumRow = worksheet.getRow(currentRow);
+              sumRow.getCell(2).value = '총수량';
+              sumRow.getCell(7).value = { formula: `SUM(G${startRow}:G${endRow})` };
+              sumRow.getCell(7).font = { bold: true, size: 14, color: { argb: 'FFFF0000' } }; // 빨간색
+              sumRow.font = { bold: true, size: 14 };
+              sumRow.alignment = { horizontal: 'center', vertical: 'middle' };
+              sumRow.height = 32;
+              
+              // 총수량 행 배경색 (출고날짜 제외)
+              if (isGrayBackground) {
+                for (let col = 2; col <= 8; col++) {
+                  sumRow.getCell(col).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC0C0C0' } };
+                }
+              }
+              
+              worksheet.mergeCells(`B${currentRow}:F${currentRow}`);
+              worksheet.mergeCells(`H${startRow}:H${currentRow}`);
+              
+              currentRow++;
+              productIndex++;
+            }
+
+            // 출고날짜 열 병합 (전체)
+            const dateEndRow = currentRow - 1;
+            worksheet.mergeCells(`A${dateStartRow}:A${dateEndRow}`);
+            worksheet.getCell(`A${dateStartRow}`).alignment = { horizontal: 'center', vertical: 'middle' };
+            worksheet.getCell(`A${dateStartRow}`).font = { size: 14 };
+
+            // 테두리 추가
+            for (let row = 2; row < currentRow; row++) {
+              for (let col = 1; col <= 8; col++) {
+                const cell = worksheet.getRow(row).getCell(col);
+                cell.border = {
+                  top: { style: 'thin' },
+                  left: { style: 'thin' },
+                  bottom: { style: 'thin' },
+                  right: { style: 'thin' }
+                };
+              }
+            }
+
+            // 파일 다운로드
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `도금작업지시서_${order.date}_${order.orderNum}차.xlsx`;
+            link.click();
+            URL.revokeObjectURL(url);
+          };
+
+          const handleDownloadImages = (order) => {
+            const productsWithImages = order.products.filter(p => p.image);
+            if (productsWithImages.length === 0) return alert('이미지가 없습니다');
+
+            let html = `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>제품이미지 ${order.date} ${order.orderNum}차</title><style>body{font-family:sans-serif;max-width:1200px;margin:40px auto;padding:20px;background:#f5f5f5}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:30px}.card{background:white;border-radius:12px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.1)}.card img{width:100%;height:300px;object-fit:contain;border-radius:8px;background:#f9f9f9;margin-bottom:15px}h1{text-align:center;color:#333;margin-bottom:40px}.name{font-size:18px;font-weight:bold;color:#333;margin-bottom:8px}.info{font-size:14px;color:#666}</style></head><body><h1>제품 이미지 - ${order.date} (${order.orderNum}차)</h1><div class="grid">`;
+            
+            productsWithImages.forEach(p => {
+              html += `<div class="card"><img src="${p.image}" alt="${p.productName}"><div class="name">${p.productName}</div><div class="info">연마: ${p.grind} | 수량: ${p.total}개</div></div>`;
+            });
+            
+            html += `</div></body></html>`;
+            
+            const blob = new Blob([html], { type: 'text/html;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `제품이미지_${order.date}_${order.orderNum}차.html`;
+            link.click();
+            URL.revokeObjectURL(url);
+          };
+
+          const handleCopyCalendar = (order) => {
+            let text = `[도금 작업 의뢰] ${order.date} (${order.orderNum}차)\n`;
+            order.products.forEach(product => {
+              const colorList = product.items.map(item => 
+                `${excelColorName(item.color, item.finish)} ${item.qty}개`
+              ).join(', ');
+              text += `• ${product.productName} (${product.grind}) — 총 ${product.total}개\n  ${colorList}\n`;
+            });
+            text += `\n전체 총 수량: ${order.totalQty}개`;
+            navigator.clipboard.writeText(text);
+            alert('클립보드에 복사되었습니다!');
+          };
+
+          return (
+            <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/20">
+              <header className="bg-white/80 backdrop-blur-xl border-b border-slate-200/60 sticky top-0 z-50">
+                <div className="max-w-7xl mx-auto px-6 py-5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <img src="data:image/png;base64,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" 
+                           alt="LACEROOM Logo" 
+                           className="h-12 w-auto" />
+                      <div>
+                        <h1 className="text-2xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">LACEROOM 비서</h1>
+                        <p className="text-xs text-slate-500 font-medium">통합 업무 관리 시스템 v20260419.1</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex space-x-2 bg-slate-100/80 rounded-2xl p-1.5">
+                      {[
+                        ['plating', '도금작업지시서'],
+                        ['cost', '도금/연마 원가표'],
+                        ['receivable', '도금미수금'],
+                        ['defect', '도금불량'],
+                        ['labor', '프리랜서 관리'],
+                        ['china', '중국발주']
+                      ].map(([tab, label]) => (
+                        <button
+                          key={tab}
+                          onClick={() => {
+                            setActiveMainTab(tab);
+                            if (tab === 'plating') setActiveTab('products');
+                          }}
+                          className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-all ${
+                            activeMainTab === tab
+                              ? 'bg-white text-blue-600 shadow-lg'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 도금작업지시서 서브 탭 */}
+                {activeMainTab === 'plating' && (
+                  <div className="border-t border-slate-200/60 bg-white/60 backdrop-blur-sm">
+                    <div className="max-w-7xl mx-auto px-6 py-3">
+                      <div className="flex space-x-2">
+                        {[
+                          ['products', '제품 관리', <Package key="1"/>],
+                          ['order', '작업 지시서', <FileText key="2"/>],
+                          ['history', '작업 내역', <Calendar key="3"/>]
+                        ].map(([tab, label, icon]) => (
+                          <button
+                            key={tab}
+                            onClick={() => setActiveTab(tab)}
+                            className={`px-4 py-2 rounded-lg font-semibold text-xs transition-all ${
+                              activeTab === tab
+                                ? 'bg-blue-100 text-blue-700'
+                                : 'text-slate-500 hover:text-slate-700'
+                            }`}
+                          >
+                            <span className="inline-block mr-1.5">{icon}</span>
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </header>
+
+              <main className="max-w-7xl mx-auto px-6 py-8">
+                {/* 도금작업지시서 탭 */}
+                {activeMainTab === 'plating' && (
+                  <>
+                {activeTab === 'products' && (
+                  <div className="space-y-6">
+                    <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8">
+                      <h2 className="text-xl font-bold text-slate-900 mb-6 flex items-center">
+                        <Plus /> <span className="ml-2">새 제품 등록</span>
+                      </h2>
+                      
+                      <div className="space-y-5">
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 mb-2">제품명</label>
+                          <input
+                            type="text"
+                            value={productForm.name}
+                            onChange={(e) => setProductForm({...productForm, name: e.target.value})}
+                            className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none"
+                            placeholder="예: 체인 목걸이"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 mb-2">연마 필요</label>
+                          <select
+                            value={productForm.grindRequired}
+                            onChange={(e) => setProductForm({...productForm, grindRequired: e.target.value === 'true'})}
+                            className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none bg-white"
+                          >
+                            <option value="true">예 (연마 필요)</option>
+                            <option value="false">아니오 (연마 불필요)</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 mb-2">제품 이미지</label>
+                          <label className="cursor-pointer block">
+                            <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 hover:border-blue-500 hover:bg-blue-50/50 transition-all text-center">
+                              {productForm.imagePreview ? (
+                                <img src={productForm.imagePreview} alt="미리보기" className="max-h-32 mx-auto rounded-lg" />
+                              ) : (
+                                <div className="text-slate-400">
+                                  <div className="flex justify-center mb-2"><Image /></div>
+                                  <p className="text-sm font-medium">이미지 업로드</p>
+                                </div>
+                              )}
+                            </div>
+                            <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                          </label>
+                        </div>
+
+                        <div className="border-t pt-5">
+                          <h3 className="text-sm font-bold text-slate-700 mb-4">도금 단가 (색상별)</h3>
+                          <div className="overflow-x-auto mb-6">
+                            <table className="w-full text-xs border border-slate-200">
+                              <thead className="bg-slate-100">
+                                <tr>
+                                  <th className="border border-slate-300 px-3 py-2 text-left font-bold">색상</th>
+                                  <th className="border border-slate-300 px-3 py-2 text-center font-bold">유광 (원)</th>
+                                  <th className="border border-slate-300 px-3 py-2 text-center font-bold">반무광 (원)</th>
+                                  <th className="border border-slate-300 px-3 py-2 text-center font-bold">기타 (원)</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {COLOR_DEFS.map(color => (
+                                  <tr key={color.name}>
+                                    <td className="border border-slate-300 px-3 py-2 font-semibold">{color.displayName}</td>
+                                    <td className="border border-slate-300 px-2 py-1">
+                                      {(color.finishType === 'both' || color.finishType === 'glossOnly') ? (
+                                        <input
+                                          type="number"
+                                          value={productForm.platingCosts[`${color.name}_유광`] || ''}
+                                          onChange={(e) => setProductForm({
+                                            ...productForm,
+                                            platingCosts: {
+                                              ...productForm.platingCosts,
+                                              [`${color.name}_유광`]: e.target.value
+                                            }
+                                          })}
+                                          className="w-full px-2 py-1 rounded border border-slate-300 focus:border-blue-500 outline-none text-center"
+                                          placeholder="0"
+                                        />
+                                      ) : (
+                                        <span className="text-slate-400 text-center block text-xs">-</span>
+                                      )}
+                                    </td>
+                                    <td className="border border-slate-300 px-2 py-1">
+                                      {color.finishType === 'both' ? (
+                                        <input
+                                          type="number"
+                                          value={productForm.platingCosts[`${color.name}_반무광`] || ''}
+                                          onChange={(e) => setProductForm({
+                                            ...productForm,
+                                            platingCosts: {
+                                              ...productForm.platingCosts,
+                                              [`${color.name}_반무광`]: e.target.value
+                                            }
+                                          })}
+                                          className="w-full px-2 py-1 rounded border border-slate-300 focus:border-blue-500 outline-none text-center"
+                                          placeholder="0"
+                                        />
+                                      ) : (
+                                        <span className="text-slate-400 text-center block text-xs">-</span>
+                                      )}
+                                    </td>
+                                    <td className="border border-slate-300 px-2 py-1">
+                                      {color.finishType === 'other' ? (
+                                        <input
+                                          type="number"
+                                          value={productForm.platingCosts[color.name] || ''}
+                                          onChange={(e) => setProductForm({
+                                            ...productForm,
+                                            platingCosts: {
+                                              ...productForm.platingCosts,
+                                              [color.name]: e.target.value
+                                            }
+                                          })}
+                                          className="w-full px-2 py-1 rounded border border-slate-300 focus:border-blue-500 outline-none text-center"
+                                          placeholder="0"
+                                        />
+                                      ) : (
+                                        <span className="text-slate-400 text-center block text-xs">-</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          <h3 className="text-sm font-bold text-slate-700 mb-4">기타 원가 (선택)</h3>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-600 mb-1">연마 원가</label>
+                              <input
+                                type="number"
+                                value={productForm.grindCost}
+                                onChange={(e) => setProductForm({...productForm, grindCost: e.target.value})}
+                                className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-blue-500 outline-none text-sm"
+                                placeholder="원"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-600 mb-1">사출 원가</label>
+                              <input
+                                type="number"
+                                value={productForm.injectionCost}
+                                onChange={(e) => setProductForm({...productForm, injectionCost: e.target.value})}
+                                className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-blue-500 outline-none text-sm"
+                                placeholder="원"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-600 mb-1">스프링 원가</label>
+                              <input
+                                type="number"
+                                value={productForm.springCost}
+                                onChange={(e) => setProductForm({...productForm, springCost: e.target.value})}
+                                className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-blue-500 outline-none text-sm"
+                                placeholder="원"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-600 mb-1">핀대 원가</label>
+                              <input
+                                type="number"
+                                value={productForm.pinCost}
+                                onChange={(e) => setProductForm({...productForm, pinCost: e.target.value})}
+                                className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-blue-500 outline-none text-sm"
+                                placeholder="원"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex space-x-3">
+                          <button
+                            onClick={editingProduct ? handleUpdateProduct : handleAddProduct}
+                            className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 rounded-xl font-bold shadow-lg hover:shadow-xl transition-all"
+                          >
+                            {editingProduct ? '제품 수정하기' : '제품 등록하기'}
+                          </button>
+                          {editingProduct && (
+                            <button
+                              onClick={() => {
+                                setEditingProduct(null);
+                                setProductForm({
+                                  name: '', grindRequired: true, image: null, imagePreview: null,
+                                  platingCost: '', grindCost: '', injectionCost: '', springCost: '', pinCost: ''
+                                });
+                              }}
+                              className="px-6 py-4 bg-slate-500 text-white rounded-xl font-bold shadow-lg hover:shadow-xl transition-all"
+                            >
+                              취소
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8">
+                      <h2 className="text-xl font-bold text-slate-900 mb-6">등록된 제품 ({products.length})</h2>
+                      
+                      {products.length === 0 ? (
+                        <div className="text-center py-12 text-slate-400">
+                          <div className="flex justify-center mb-4"><Package /></div>
+                          <p className="font-medium">등록된 제품이 없습니다</p>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                          {[...products].sort((a, b) => a.name.localeCompare(b.name, 'ko-KR')).map(product => (
+                            <div key={product.id} className="relative p-4 rounded-2xl border-2 border-slate-100 hover:border-blue-300 hover:shadow-lg transition-all group">
+                              <div className="absolute top-2 right-2 flex space-x-1 opacity-0 group-hover:opacity-100 z-10">
+                                <button
+                                  onClick={() => handleEditProduct(product)}
+                                  className="p-1.5 bg-white text-blue-600 hover:bg-blue-50 rounded-lg shadow-lg transition-all"
+                                  title="수정"
+                                >
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                  </svg>
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteProduct(product.id)}
+                                  className="p-1.5 bg-white text-red-500 hover:bg-red-50 rounded-lg shadow-lg transition-all"
+                                  title="삭제"
+                                >
+                                  <Trash />
+                                </button>
+                              </div>
+
+                              <div className="mb-3">
+                                {product.image ? (
+                                  <img src={product.image} alt={product.name} className="w-full h-32 rounded-xl object-cover border-2 border-slate-200" />
+                                ) : (
+                                  <div className="w-full h-32 rounded-xl bg-slate-100 flex items-center justify-center border-2 border-slate-200">
+                                    <Image />
+                                  </div>
+                                )}
+                              </div>
+
+                              <div>
+                                <h3 className="font-bold text-slate-900 text-sm mb-1 line-clamp-2">{product.name}</h3>
+                                <p className="text-xs text-slate-500 bg-slate-50 px-2 py-1 rounded-md inline-block">
+                                  {product.grindRequired ? '연마 필요' : '연마 불필요'}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === 'order' && (
+                  <div className="space-y-6">
+                    <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8">
+                      <h2 className="text-xl font-bold text-slate-900 mb-6 flex items-center">
+                        <FileText /> <span className="ml-2">작업 지시서 생성</span>
+                      </h2>
+
+                      <div className="space-y-5">
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 mb-2">출고 날짜</label>
+                          <input
+                            type="date"
+                            value={orderForm.date}
+                            onChange={(e) => setOrderForm({...orderForm, date: e.target.value})}
+                            className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 mb-2">제품 추가</label>
+                          <div className="flex space-x-3">
+                            <select id="productSelect" className="flex-1 px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none bg-white">
+                              <option value="">제품을 선택하세요</option>
+                              {products.map(p => (
+                                <option key={p.id} value={p.id}>{p.name} ({p.grindRequired ? '연마필요' : '연마불필요'})</option>
+                              ))}
+                            </select>
+                            <button
+                              onClick={() => {
+                                const select = document.getElementById('productSelect');
+                                const productId = parseInt(select.value);
+                                if (productId) {
+                                  handleAddProductToOrder(productId);
+                                  select.value = '';
+                                }
+                              }}
+                              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold shadow-lg transition-all flex items-center whitespace-nowrap"
+                            >
+                              <Plus /> <span className="ml-2">추가</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {orderForm.products.length === 0 ? (
+                      <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-16 text-center">
+                        <div className="flex justify-center mb-4"><Package /></div>
+                        <p className="text-slate-400 font-medium text-lg">제품을 추가해주세요</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-6">
+                        {orderForm.products.map((product, idx) => (
+                          <div key={`${product.productId}-${product.grind}-${idx}`} className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8">
+                            <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-200">
+                              <div className="flex items-center space-x-4">
+                                {product.image ? (
+                                  <img src={product.image} alt={product.productName} className="w-24 h-24 rounded-xl object-cover border-2 border-slate-200" />
+                                ) : (
+                                  <div className="w-24 h-24 rounded-xl bg-slate-100 flex items-center justify-center">
+                                    <Package />
+                                  </div>
+                                )}
+                                <div>
+                                  <h3 className="font-bold text-lg text-slate-900">{product.productName}</h3>
+                                  <div className="flex items-center space-x-2 mt-1">
+                                    <span className="text-sm text-slate-500">연마:</span>
+                                    {product.grindRequired ? (
+                                      <select
+                                        value={product.grind}
+                                        onChange={(e) => updateGrind(product.productId, product.grind, e.target.value)}
+                                        className="text-sm px-2 py-1 rounded-md border border-slate-300 focus:border-blue-500 outline-none"
+                                      >
+                                        {GRIND_OPTIONS.map(g => <option key={g} value={g}>{g}</option>)}
+                                      </select>
+                                    ) : (
+                                      <span className="text-sm px-2 py-1 bg-slate-100 text-slate-600 rounded-md font-medium">연마 제외</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              <button
+                                onClick={() => handleRemoveProductFromOrder(product.productId, product.grind)}
+                                className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                              >
+                                <Trash />
+                              </button>
+                            </div>
+
+                            <div>
+                              <div className="flex items-center justify-between mb-3">
+                                <label className="text-sm font-semibold text-slate-700">색상 및 수량</label>
+                                <button
+                                  onClick={() => handleAddColorItem(product.productId, product.grind)}
+                                  className="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 font-semibold text-sm flex items-center"
+                                >
+                                  <Plus /> <span className="ml-1">색상 추가</span>
+                                </button>
+                              </div>
+
+                              <div className="space-y-3">
+                                {product.items.map((item, index) => (
+                                  <div key={index} className="flex items-center space-x-3 p-4 rounded-xl bg-slate-50 border border-slate-200">
+                                    <select
+                                      value={item.color}
+                                      onChange={(e) => updateColorItem(product.productId, product.grind, index, 'color', e.target.value)}
+                                      className="flex-1 px-3 py-2 rounded-lg border border-slate-300 focus:border-blue-500 outline-none text-sm"
+                                    >
+                                      {COLOR_DEFS.map(c => <option key={c.name} value={c.name}>{c.displayName}</option>)}
+                                    </select>
+
+                                    {COLOR_DEFS.find(c => c.name === item.color)?.hasFinish && (
+                                      <select
+                                        value={item.finish}
+                                        onChange={(e) => updateColorItem(product.productId, product.grind, index, 'finish', e.target.value)}
+                                        className="px-3 py-2 rounded-lg border border-slate-300 focus:border-blue-500 outline-none text-sm"
+                                      >
+                                        {FINISH_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}
+                                      </select>
+                                    )}
+
+                                    <input
+                                      type="number"
+                                      value={item.qty}
+                                      onChange={(e) => updateColorItem(product.productId, product.grind, index, 'qty', parseInt(e.target.value) || 1)}
+                                      min="1"
+                                      className="w-24 px-3 py-2 rounded-lg border border-slate-300 focus:border-blue-500 outline-none text-sm text-center"
+                                    />
+
+                                    <button
+                                      onClick={() => handleRemoveColorItem(product.productId, product.grind, index)}
+                                      className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                    >
+                                      <X />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+
+                              {product.items.length > 0 && (
+                                <div className="mt-4 bg-blue-50 rounded-xl p-4 border border-blue-200">
+                                  <div className="flex justify-between items-center">
+                                    <span className="font-semibold text-slate-700">이 제품 총 수량</span>
+                                    <span className="text-xl font-bold text-blue-600">
+                                      {product.items.reduce((sum, item) => sum + parseInt(item.qty || 0), 0)}개
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+
+                        <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-6 text-white shadow-lg">
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <p className="text-blue-100 text-sm font-medium">전체 총 수량</p>
+                              <p className="text-xs text-blue-200 mt-1">{orderForm.products.length}개 제품</p>
+                            </div>
+                            <span className="text-4xl font-bold">
+                              {orderForm.products.reduce((sum, product) => 
+                                sum + product.items.reduce((s, item) => s + parseInt(item.qty || 0), 0), 0
+                              )}개
+                            </span>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={handleCreateOrder}
+                          className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-5 rounded-2xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all"
+                        >
+                          작업 지시서 생성
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {activeTab === 'history' && (
+                  <div className="space-y-4">
+                    <div className="bg-white rounded-2xl shadow-lg border border-slate-200/60 p-6">
+                      <h2 className="text-xl font-bold text-slate-900 mb-1">작업 내역</h2>
+                      <p className="text-sm text-slate-500">총 {history.length}건의 작업 지시서</p>
+                    </div>
+
+                    {history.length === 0 ? (
+                      <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-16 text-center">
+                        <div className="flex justify-center mb-4"><Calendar /></div>
+                        <p className="text-slate-400 font-medium text-lg">작업 내역이 없습니다</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {history.map(order => (
+                          <div key={order.id} className="bg-white rounded-2xl shadow-xl border border-slate-200/60 overflow-hidden">
+                            <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-5 text-white">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-3">
+                                  <Calendar />
+                                  <h3 className="text-lg font-bold">{order.date}</h3>
+                                  <span className="px-3 py-1 bg-white/20 backdrop-blur rounded-lg font-bold text-sm">{order.orderNum}차</span>
+                                  <span className="text-blue-100 text-sm">{order.products.length}개 제품 · 총 {order.totalQty}개</span>
+                                </div>
+                                <div className="flex space-x-2">
+                                  <button onClick={() => handleDownloadImages(order)} className="px-4 py-2 bg-white/20 hover:bg-white/30 backdrop-blur text-white rounded-xl font-semibold text-sm flex items-center">
+                                    <Image /> <span className="ml-2">이미지</span>
+                                  </button>
+                                  <button onClick={() => handleDownloadExcel(order)} className="px-4 py-2 bg-white text-blue-600 hover:bg-blue-50 rounded-xl font-semibold text-sm shadow-lg flex items-center">
+                                    <Download /> <span className="ml-2">엑셀</span>
+                                  </button>
+                                  <button onClick={() => handleCopyCalendar(order)} className="px-4 py-2 bg-white/20 hover:bg-white/30 backdrop-blur text-white rounded-xl font-semibold text-sm flex items-center">
+                                    <Copy /> <span className="ml-2">캘린더</span>
+                                  </button>
+                                  <button onClick={() => handleDeleteOrder(order.id)} className="p-2 bg-red-500/20 hover:bg-red-500/30 backdrop-blur text-white rounded-xl">
+                                    <Trash />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="p-6 space-y-6">
+                              {order.products.map((product, productIndex) => (
+                                <div key={productIndex} className="border-b border-slate-200 last:border-0 pb-6 last:pb-0">
+                                  <div className="flex items-center space-x-4 mb-4">
+                                    {product.image ? (
+                                      <img src={product.image} alt={product.productName} className="w-16 h-16 rounded-xl object-cover border-2 border-slate-200" />
+                                    ) : (
+                                      <div className="w-16 h-16 rounded-xl bg-slate-100 flex items-center justify-center">
+                                        <Package />
+                                      </div>
+                                    )}
+                                    <div className="flex-1">
+                                      <h4 className="font-bold text-lg text-slate-900">{product.productName}</h4>
+                                      <p className="text-sm text-slate-500">연마: {product.grind} · 총 {product.total}개</p>
+                                    </div>
+                                  </div>
+
+                                  <div className="space-y-2 ml-20">
+                                    {product.items.map((item, itemIndex) => (
+                                      <div key={itemIndex} className={`flex items-center justify-between p-3 rounded-xl transition-all ${item.received ? 'bg-green-50 border border-green-200' : 'bg-slate-50 border border-slate-200'}`}>
+                                        <div className="flex items-center space-x-3">
+                                          <div className={`w-3 h-3 rounded-full ${item.received ? 'bg-green-500' : 'bg-slate-300'}`} />
+                                          <span className={`font-semibold ${item.received ? 'text-slate-500 line-through' : 'text-slate-900'}`}>
+                                            {getColorDisplayName(item.color)}{item.finish ? `(${item.finish})` : ''}
+                                          </span>
+                                          <span className={`font-bold ${item.received ? 'text-slate-400' : 'text-blue-600'}`}>{item.qty}개</span>
+                                          {item.received && (
+                                            <span className="text-xs text-green-600 font-medium">입고완료 ({item.receivedDate})</span>
+                                          )}
+                                        </div>
+
+                                        <button
+                                          onClick={() => handleReceiveItem(order.id, productIndex, itemIndex)}
+                                          className={`px-3 py-1.5 rounded-lg font-semibold text-sm flex items-center ${item.received ? 'bg-slate-200 text-slate-600 hover:bg-slate-300' : 'bg-green-500 text-white hover:bg-green-600'}`}
+                                        >
+                                          {item.received ? <><X /> <span className="ml-1">해제</span></> : <><Check /> <span className="ml-1">입고</span></>}
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+                </>
+                )}
+
+                {/* 도금/연마 원가표 탭 */}
+                {activeMainTab === 'cost' && (
+                  <div className="space-y-6">
+                    <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8">
+                      <h2 className="text-xl font-bold text-slate-900 mb-6">월별 도금/연마 원가 집계</h2>
+                      
+                      {(() => {
+                        // 월별로 그룹화
+                        const monthlyData = {};
+                        history.forEach(order => {
+                          const month = order.date.substring(0, 7); // YYYY-MM
+                          if (!monthlyData[month]) monthlyData[month] = {};
+                          
+                          order.products.forEach(product => {
+                            const prod = products.find(p => p.id === product.productId);
+                            if (!prod) return;
+                            
+                            product.items.forEach(item => {
+                              const key = `${product.productName}_${item.color}_${item.finish || 'other'}`;
+                              
+                              if (!monthlyData[month][key]) {
+                                // 색상별 도금 단가 가져오기
+                                let platingCost = 0;
+                                const colorDef = COLOR_DEFS.find(c => c.name === item.color);
+                                
+                                if (prod.platingCosts && colorDef) {
+                                  if (colorDef.finishType === 'both') {
+                                    // 유광/반무광 둘 다 있음
+                                    platingCost = parseFloat(prod.platingCosts[`${item.color}_${item.finish}`]) || 0;
+                                  } else if (colorDef.finishType === 'glossOnly') {
+                                    // 유광만 (은, 14k대용금)
+                                    platingCost = parseFloat(prod.platingCosts[`${item.color}_유광`]) || 0;
+                                  } else if (colorDef.finishType === 'other') {
+                                    // 기타 (동착)
+                                    platingCost = parseFloat(prod.platingCosts[item.color]) || 0;
+                                  }
+                                }
+                                
+                                monthlyData[month][key] = {
+                                  productName: product.productName,
+                                  color: item.color,
+                                  finish: item.finish || '',
+                                  finishType: colorDef?.finishType || 'both',
+                                  totalQty: 0,
+                                  platingCost: platingCost,
+                                  grindCost: parseFloat(prod.grindCost) || 0,
+                                  grindQty: 0,
+                                  platingQty: 0
+                                };
+                              }
+                              
+                              const qty = item.qty;
+                              monthlyData[month][key].totalQty += qty;
+                              
+                              // 연마 여부에 따라 구분
+                              if (product.grind === '연마' || product.grind === '연마 완료') {
+                                monthlyData[month][key].grindQty += qty;
+                              }
+                              monthlyData[month][key].platingQty += qty;
+                            });
+                          });
+                        });
+                        
+                        const months = Object.keys(monthlyData).sort().reverse();
+                        
+                        return months.length === 0 ? (
+                          <div className="text-center py-12 text-slate-400">
+                            <p className="font-medium">작업 내역이 없습니다</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-8">
+                            {months.map(month => {
+                              const items = Object.values(monthlyData[month]);
+                              const totalPlating = items.reduce((sum, item) => sum + (item.platingQty * item.platingCost), 0);
+                              const totalGrind = items.reduce((sum, item) => sum + (item.grindQty * item.grindCost), 0);
+                              const grandTotal = totalPlating + totalGrind;
+                              
+                              return (
+                                <div key={month} className="border-2 border-slate-200 rounded-2xl p-6">
+                                  <h3 className="text-lg font-bold text-slate-900 mb-4">{month}</h3>
+                                  
+                                  <div className="overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                      <thead>
+                                        <tr className="border-b-2 border-slate-300">
+                                          <th className="text-left py-3 px-4 font-bold">제품명</th>
+                                          <th className="text-center py-3 px-4 font-bold">색상</th>
+                                          <th className="text-center py-3 px-4 font-bold">구분</th>
+                                          <th className="text-center py-3 px-4 font-bold">도금<br/>수량</th>
+                                          <th className="text-right py-3 px-4 font-bold">도금<br/>단가</th>
+                                          <th className="text-right py-3 px-4 font-bold">도금<br/>금액</th>
+                                          <th className="text-center py-3 px-4 font-bold">연마<br/>수량</th>
+                                          <th className="text-right py-3 px-4 font-bold">연마<br/>단가</th>
+                                          <th className="text-right py-3 px-4 font-bold">연마<br/>금액</th>
+                                          <th className="text-right py-3 px-4 font-bold">합계</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {items.map((item, idx) => {
+                                          const platingAmount = item.platingQty * item.platingCost;
+                                          const grindAmount = item.grindQty * item.grindCost;
+                                          const itemTotal = platingAmount + grindAmount;
+                                          
+                                          // 구분 표시
+                                          let finishDisplay = '-';
+                                          if (item.finishType === 'both') {
+                                            finishDisplay = item.finish || '-';
+                                          } else if (item.finishType === 'glossOnly') {
+                                            finishDisplay = '유광';
+                                          } else if (item.finishType === 'other') {
+                                            finishDisplay = '기타';
+                                          }
+                                          
+                                          return (
+                                            <tr key={idx} className="border-b border-slate-200 hover:bg-slate-50">
+                                              <td className="py-3 px-4">{item.productName}</td>
+                                              <td className="text-center py-3 px-4">{getColorDisplayName(item.color)}</td>
+                                              <td className="text-center py-3 px-4">{finishDisplay}</td>
+                                              <td className="text-center py-3 px-4">{item.platingQty.toLocaleString()}</td>
+                                              <td className="text-right py-3 px-4">{item.platingCost.toLocaleString()}원</td>
+                                              <td className="text-right py-3 px-4 font-semibold">{platingAmount.toLocaleString()}원</td>
+                                              <td className="text-center py-3 px-4">{item.grindQty.toLocaleString()}</td>
+                                              <td className="text-right py-3 px-4">{item.grindCost.toLocaleString()}원</td>
+                                              <td className="text-right py-3 px-4 font-semibold">{grindAmount.toLocaleString()}원</td>
+                                              <td className="text-right py-3 px-4 font-bold text-blue-600">{itemTotal.toLocaleString()}원</td>
+                                            </tr>
+                                          );
+                                        })}
+                                        <tr className="bg-slate-100 font-bold">
+                                          <td className="py-4 px-4" colSpan="5">월 합계</td>
+                                          <td className="text-right py-4 px-4 text-blue-600">{totalPlating.toLocaleString()}원</td>
+                                          <td className="py-4 px-4" colSpan="2"></td>
+                                          <td className="text-right py-4 px-4 text-blue-600">{totalGrind.toLocaleString()}원</td>
+                                          <td className="text-right py-4 px-4 text-lg text-red-600">{grandTotal.toLocaleString()}원</td>
+                                        </tr>
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                )}
+
+                {/* 도금미수금 탭 */}
+                {activeMainTab === 'receivable' && (
+                  <div className="space-y-6">
+                    <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8">
+                      <div className="flex items-center justify-between mb-6">
+                        <h2 className="text-xl font-bold text-slate-900">도금 미수금 관리</h2>
+                        <button
+                          onClick={() => {
+                            const month = prompt('월 입력 (예: 2026-04)');
+                            if (!month) return;
+                            const carryOver = parseFloat(prompt('이월금액 입력 (원)')) || 0;
+                            const billed = parseFloat(prompt('청구금액 입력 (원)')) || 0;
+                            
+                            const newRecord = {
+                              id: Date.now(),
+                              month,
+                              carryOver,
+                              billed,
+                              paid: 0,
+                              createdAt: new Date().toISOString()
+                            };
+                            
+                            saveReceivables([newRecord, ...receivables]);
+                          }}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-xl font-semibold shadow-lg hover:bg-blue-700 transition-all flex items-center"
+                        >
+                          <Plus /> <span className="ml-2">월 추가</span>
+                        </button>
+                      </div>
+
+                      {receivables.length === 0 ? (
+                        <div className="text-center py-12 text-slate-400">
+                          <p className="font-medium">등록된 내역이 없습니다</p>
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full">
+                            <thead>
+                              <tr className="border-b-2 border-slate-300">
+                                <th className="text-left py-4 px-4 font-bold">월</th>
+                                <th className="text-right py-4 px-4 font-bold">이월금액</th>
+                                <th className="text-right py-4 px-4 font-bold">청구금액</th>
+                                <th className="text-right py-4 px-4 font-bold">실결제금액</th>
+                                <th className="text-right py-4 px-4 font-bold">미수잔액</th>
+                                <th className="text-center py-4 px-4 font-bold">관리</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {receivables.map((record) => {
+                                const balance = record.carryOver + record.billed - record.paid;
+                                
+                                return (
+                                  <tr key={record.id} className="border-b border-slate-200 hover:bg-slate-50">
+                                    <td className="py-4 px-4 font-semibold">{record.month}</td>
+                                    <td className="text-right py-4 px-4">{record.carryOver.toLocaleString()}원</td>
+                                    <td className="text-right py-4 px-4">{record.billed.toLocaleString()}원</td>
+                                    <td className="text-right py-4 px-4">
+                                      <input
+                                        type="number"
+                                        value={record.paid}
+                                        onChange={(e) => {
+                                          const newReceivables = receivables.map(r => 
+                                            r.id === record.id ? {...r, paid: parseFloat(e.target.value) || 0} : r
+                                          );
+                                          saveReceivables(newReceivables);
+                                        }}
+                                        className="w-32 px-3 py-2 rounded-lg border border-slate-300 focus:border-blue-500 outline-none text-right"
+                                      />
+                                    </td>
+                                    <td className={`text-right py-4 px-4 font-bold text-lg ${balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                      {balance.toLocaleString()}원
+                                    </td>
+                                    <td className="text-center py-4 px-4">
+                                      <button
+                                        onClick={() => {
+                                          if (confirm('삭제하시겠습니까?')) {
+                                            saveReceivables(receivables.filter(r => r.id !== record.id));
+                                          }
+                                        }}
+                                        className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
+                                      >
+                                        <Trash />
+                                      </button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* 도금불량 탭 */}
+                {activeMainTab === 'defect' && (
+                  <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-16 text-center">
+                    <div className="flex justify-center mb-4"><Package /></div>
+                    <h2 className="text-2xl font-bold text-slate-900 mb-2">도금불량 관리</h2>
+                    <p className="text-slate-500">준비 중입니다</p>
+                  </div>
+                )}
+
+                {/* 프리랜서 관리 탭 */}
+                {activeMainTab === 'labor' && (
+                  <div className="space-y-6">
+                    {/* 프리랜서 등록 */}
+                    <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8">
+                      <h2 className="text-xl font-bold text-slate-900 mb-6 flex items-center">
+                        <Plus /> <span className="ml-2">프리랜서 등록</span>
+                      </h2>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 mb-4">
+                        <input type="text" id="freelancerName" placeholder="프리랜서명" className="px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none" />
+                        <input type="text" id="freelancerWork" placeholder="작업내용" className="px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none" />
+                        <input type="text" id="freelancerSSN" placeholder="주민등록번호" className="px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none" />
+                        <input type="text" id="freelancerPhone" placeholder="전화번호" className="px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none" />
+                        <input type="text" id="freelancerBank" placeholder="은행명" className="px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none" />
+                        <input type="text" id="freelancerAccount" placeholder="계좌번호" className="px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none" />
+                      </div>
+                      
+                      <button
+                        onClick={() => {
+                          const name = document.getElementById('freelancerName').value.trim();
+                          const work = document.getElementById('freelancerWork').value.trim();
+                          const ssn = document.getElementById('freelancerSSN').value.trim();
+                          const phone = document.getElementById('freelancerPhone').value.trim();
+                          const bank = document.getElementById('freelancerBank').value.trim();
+                          const account = document.getElementById('freelancerAccount').value.trim();
+                          
+                          if (!name) return alert('프리랜서명을 입력하세요');
+                          
+                          const newFreelancer = {
+                            id: Date.now(),
+                            name,
+                            work,
+                            ssn,
+                            phone,
+                            bank,
+                            account,
+                            createdAt: new Date().toISOString()
+                          };
+                          
+                          saveFreelancers([...freelancers, newFreelancer]);
+                          document.getElementById('freelancerName').value = '';
+                          document.getElementById('freelancerWork').value = '';
+                          document.getElementById('freelancerSSN').value = '';
+                          document.getElementById('freelancerPhone').value = '';
+                          document.getElementById('freelancerBank').value = '';
+                          document.getElementById('freelancerAccount').value = '';
+                          alert('프리랜서 등록 완료!');
+                        }}
+                        className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 rounded-xl font-bold shadow-lg hover:shadow-xl transition-all"
+                      >
+                        등록하기
+                      </button>
+                    </div>
+
+                    {/* 등록된 프리랜서 목록 */}
+                    <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8">
+                      <h2 className="text-xl font-bold text-slate-900 mb-6">등록된 프리랜서 ({freelancers.length})</h2>
+                      
+                      {freelancers.length === 0 ? (
+                        <div className="text-center py-12 text-slate-400">
+                          <p className="font-medium">등록된 프리랜서가 없습니다</p>
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="border-b-2 border-slate-300">
+                                <th className="text-left py-3 px-4 font-bold">프리랜서명</th>
+                                <th className="text-left py-3 px-4 font-bold">작업내용</th>
+                                <th className="text-left py-3 px-4 font-bold">전화번호</th>
+                                <th className="text-left py-3 px-4 font-bold">은행명</th>
+                                <th className="text-left py-3 px-4 font-bold">계좌번호</th>
+                                <th className="text-center py-3 px-4 font-bold">관리</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {freelancers.map(freelancer => (
+                                <tr key={freelancer.id} className="border-b border-slate-200 hover:bg-slate-50">
+                                  <td className="py-3 px-4 font-semibold">{freelancer.name}</td>
+                                  <td className="py-3 px-4">{freelancer.work}</td>
+                                  <td className="py-3 px-4">{freelancer.phone}</td>
+                                  <td className="py-3 px-4">{freelancer.bank}</td>
+                                  <td className="py-3 px-4">{freelancer.account}</td>
+                                  <td className="text-center py-3 px-4">
+                                    <div className="flex gap-2 justify-center">
+                                      <button
+                                        onClick={() => {
+                                          const newName = prompt('프리랜서명', freelancer.name);
+                                          if (newName === null) return;
+                                          const newWork = prompt('작업내용', freelancer.work);
+                                          if (newWork === null) return;
+                                          const newSSN = prompt('주민등록번호', freelancer.ssn);
+                                          if (newSSN === null) return;
+                                          const newPhone = prompt('전화번호', freelancer.phone);
+                                          if (newPhone === null) return;
+                                          const newBank = prompt('은행명', freelancer.bank);
+                                          if (newBank === null) return;
+                                          const newAccount = prompt('계좌번호', freelancer.account);
+                                          if (newAccount === null) return;
+                                          
+                                          const updated = freelancers.map(f => 
+                                            f.id === freelancer.id 
+                                              ? {...f, name: newName.trim(), work: newWork.trim(), ssn: newSSN.trim(), phone: newPhone.trim(), bank: newBank.trim(), account: newAccount.trim()} 
+                                              : f
+                                          );
+                                          saveFreelancers(updated);
+                                          alert('수정되었습니다');
+                                        }}
+                                        className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg"
+                                      >
+                                        <Edit />
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          if (confirm('삭제하시겠습니까?')) {
+                                            saveFreelancers(freelancers.filter(f => f.id !== freelancer.id));
+                                          }
+                                        }}
+                                        className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
+                                      >
+                                        <Trash />
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 작업 등록 */}
+                    <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8">
+                      <h2 className="text-xl font-bold text-slate-900 mb-6">작업 등록</h2>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
+                        <input type="date" id="workDate" className="px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none" defaultValue={new Date().toISOString().split('T')[0]} />
+                        <select id="workFreelancer" className="px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none">
+                          <option value="">프리랜서 선택</option>
+                          {freelancers.map(f => (
+                            <option key={f.id} value={f.id}>{f.name} - {f.work}</option>
+                          ))}
+                        </select>
+                        <input type="text" id="workItemName" placeholder="품명" className="px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none" />
+                        <input type="number" id="workQty" placeholder="수량" className="px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none" />
+                        <input type="number" id="workWage" placeholder="공임" className="px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none" />
+                      </div>
+                      
+                      <div className="mb-4">
+                        <label className="block text-sm font-semibold text-slate-700 mb-2">작업 이미지</label>
+                        <label className="cursor-pointer block">
+                          <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 hover:border-blue-500 hover:bg-blue-50/50 transition-all text-center">
+                            <div id="workImagePreview" className="hidden">
+                              <img id="workImagePreviewImg" alt="미리보기" className="max-h-32 mx-auto rounded-lg" />
+                            </div>
+                            <div id="workImagePlaceholder" className="text-slate-400">
+                              <div className="flex justify-center mb-2"><Image /></div>
+                              <p className="text-sm font-medium">작업 이미지 업로드</p>
+                            </div>
+                          </div>
+                          <input type="file" accept="image/*" id="workImageInput" className="hidden" onChange={(e) => {
+                            const file = e.target.files[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onload = (ev) => {
+                                document.getElementById('workImagePreviewImg').src = ev.target.result;
+                                document.getElementById('workImagePreview').classList.remove('hidden');
+                                document.getElementById('workImagePlaceholder').classList.add('hidden');
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }} />
+                        </label>
+                      </div>
+                      
+                      <button
+                        onClick={() => {
+                          const workDate = document.getElementById('workDate').value;
+                          const freelancerId = document.getElementById('workFreelancer').value;
+                          const itemName = document.getElementById('workItemName').value.trim();
+                          const qty = parseInt(document.getElementById('workQty').value) || 0;
+                          const wage = parseInt(document.getElementById('workWage').value) || 0;
+                          const imageInput = document.getElementById('workImageInput');
+                          const workImage = document.getElementById('workImagePreviewImg').src;
+                          
+                          if (!workDate) return alert('날짜를 선택하세요');
+                          if (!freelancerId) return alert('프리랜서를 선택하세요');
+                          if (!itemName) return alert('품명을 입력하세요');
+                          if (!qty || !wage) return alert('수량과 공임을 입력하세요');
+                          
+                          const total = qty * wage;
+                          const tax = Math.round(total * 0.033);
+                          const payment = total - tax;
+                          
+                          const newWork = {
+                            id: Date.now(),
+                            workDate,
+                            freelancerId: parseInt(freelancerId),
+                            itemName,
+                            workImage: workImage && workImage.startsWith('data:') ? workImage : null,
+                            qty,
+                            wage,
+                            total,
+                            tax,
+                            payment,
+                            paid: false,
+                            paidDate: '',
+                            taxReported: false,
+                            note: '',
+                            createdAt: new Date().toISOString()
+                          };
+                          
+                          saveFreelancerWorks([newWork, ...freelancerWorks]);
+                          document.getElementById('workDate').value = new Date().toISOString().split('T')[0];
+                          document.getElementById('workFreelancer').value = '';
+                          document.getElementById('workItemName').value = '';
+                          document.getElementById('workQty').value = '';
+                          document.getElementById('workWage').value = '';
+                          imageInput.value = '';
+                          document.getElementById('workImagePreview').classList.add('hidden');
+                          document.getElementById('workImagePlaceholder').classList.remove('hidden');
+                          alert('작업 등록 완료!');
+                        }}
+                        className="w-full bg-gradient-to-r from-green-600 to-teal-600 text-white py-4 rounded-xl font-bold shadow-lg hover:shadow-xl transition-all"
+                      >
+                        작업 등록
+                      </button>
+                    </div>
+
+                    {/* 작업 내역 및 통계 */}
+                    <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8">
+                      <h2 className="text-xl font-bold text-slate-900 mb-6">작업 내역 및 통계</h2>
+                      
+                      {freelancerWorks.length === 0 ? (
+                        <div className="text-center py-12 text-slate-400">
+                          <p className="font-medium">등록된 작업이 없습니다</p>
+                        </div>
+                      ) : (
+                        <>
+                          {/* 조회 필터 */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                            <div>
+                              <label className="block text-sm font-semibold text-slate-700 mb-2">월별 조회</label>
+                              <input 
+                                type="month" 
+                                value={filterMonth}
+                                onChange={(e) => setFilterMonth(e.target.value)}
+                                className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-semibold text-slate-700 mb-2">프리랜서별 조회</label>
+                              <select 
+                                value={filterFreelancerId}
+                                onChange={(e) => setFilterFreelancerId(e.target.value)}
+                                className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none"
+                              >
+                                <option value="">전체</option>
+                                {freelancers.map(f => (
+                                  <option key={f.id} value={f.id}>{f.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="overflow-x-auto mb-8">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b-2 border-slate-300">
+                                  <th className="text-left py-3 px-4 font-bold">날짜</th>
+                                  <th className="text-left py-3 px-4 font-bold whitespace-nowrap">프리랜서명</th>
+                                  <th className="text-left py-3 px-4 font-bold">품명</th>
+                                  <th className="text-center py-3 px-4 font-bold whitespace-nowrap">작업이미지</th>
+                                  <th className="text-center py-3 px-4 font-bold">수량</th>
+                                  <th className="text-right py-3 px-4 font-bold whitespace-nowrap">공임단가</th>
+                                  <th className="text-right py-3 px-4 font-bold">총금액</th>
+                                  <th className="text-right py-3 px-4 font-bold whitespace-nowrap">세금(3.3%)</th>
+                                  <th className="text-right py-3 px-4 font-bold">실지급액</th>
+                                  <th className="text-center py-3 px-4 font-bold">지급여부</th>
+                                  <th className="text-center py-3 px-4 font-bold whitespace-nowrap">지급완료일</th>
+                                  <th className="text-center py-3 px-4 font-bold">세금신고</th>
+                                  <th className="text-left py-3 px-4 font-bold">비고</th>
+                                  <th className="text-center py-3 px-4 font-bold">관리</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {(() => {
+                                  return freelancerWorks.filter(work => {
+                                    let match = true;
+                                    if (filterMonth && work.workDate) {
+                                      const workMonth = work.workDate.substring(0, 7);
+                                      match = match && workMonth === filterMonth;
+                                    }
+                                    if (filterFreelancerId) {
+                                      match = match && work.freelancerId === parseInt(filterFreelancerId);
+                                    }
+                                    return match;
+                                  }).map(work => {
+                                    const freelancer = freelancers.find(f => f.id === work.freelancerId);
+                                    return (
+                                      <tr key={work.id} className="border-b border-slate-200 hover:bg-slate-50">
+                                        <td className="py-3 px-4 whitespace-nowrap">{work.workDate}</td>
+                                        <td className="py-3 px-4 font-semibold whitespace-nowrap">{freelancer?.name || '삭제된 프리랜서'}</td>
+                                        <td className="py-3 px-4">{work.itemName}</td>
+                                        <td className="py-3 px-4 text-center">
+                                          {work.workImage ? (
+                                            <img src={work.workImage} alt="작업" className="w-16 h-16 rounded-lg object-cover mx-auto border-2 border-slate-200" />
+                                          ) : (
+                                            <span className="text-slate-400 text-xs">없음</span>
+                                          )}
+                                        </td>
+                                        <td className="text-center py-3 px-4">{work.qty}</td>
+                                        <td className="text-right py-3 px-4 whitespace-nowrap">{work.wage.toLocaleString()}원</td>
+                                        <td className="text-right py-3 px-4 font-semibold whitespace-nowrap">{work.total.toLocaleString()}원</td>
+                                        <td className="text-right py-3 px-4 text-red-600 whitespace-nowrap">{work.tax.toLocaleString()}원</td>
+                                        <td className="text-right py-3 px-4 font-bold text-blue-600 whitespace-nowrap">{work.payment.toLocaleString()}원</td>
+                                        <td className="text-center py-3 px-4">
+                                          <input
+                                            type="checkbox"
+                                            checked={work.paid}
+                                            onChange={(e) => {
+                                              const updated = freelancerWorks.map(w => 
+                                                w.id === work.id ? {...w, paid: e.target.checked} : w
+                                              );
+                                              saveFreelancerWorks(updated);
+                                            }}
+                                            className="w-5 h-5"
+                                          />
+                                        </td>
+                                        <td className="text-center py-3 px-4">
+                                          <input
+                                            type="date"
+                                            value={work.paidDate}
+                                            onChange={(e) => {
+                                              const updated = freelancerWorks.map(w => 
+                                                w.id === work.id ? {...w, paidDate: e.target.value} : w
+                                              );
+                                              saveFreelancerWorks(updated);
+                                            }}
+                                            className="px-2 py-1 rounded border border-slate-300 text-xs"
+                                          />
+                                        </td>
+                                        <td className="text-center py-3 px-4">
+                                          <input
+                                            type="checkbox"
+                                            checked={work.taxReported}
+                                            onChange={(e) => {
+                                              const updated = freelancerWorks.map(w => 
+                                                w.id === work.id ? {...w, taxReported: e.target.checked} : w
+                                              );
+                                              saveFreelancerWorks(updated);
+                                            }}
+                                            className="w-5 h-5"
+                                          />
+                                        </td>
+                                        <td className="py-3 px-4">
+                                          <input
+                                            type="text"
+                                            value={work.note}
+                                            onChange={(e) => {
+                                              const updated = freelancerWorks.map(w => 
+                                                w.id === work.id ? {...w, note: e.target.value} : w
+                                              );
+                                              saveFreelancerWorks(updated);
+                                            }}
+                                            className="px-2 py-1 rounded border border-slate-300 text-xs w-full"
+                                            placeholder="비고"
+                                          />
+                                        </td>
+                                        <td className="text-center py-3 px-4">
+                                          <button
+                                            onClick={() => {
+                                              if (confirm('삭제하시겠습니까?')) {
+                                                saveFreelancerWorks(freelancerWorks.filter(w => w.id !== work.id));
+                                              }
+                                            }}
+                                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
+                                          >
+                                            <Trash />
+                                          </button>
+                                        </td>
+                                      </tr>
+                                    );
+                                  });
+                                })()}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          {/* 통계 */}
+                          <div className="border-t-2 pt-6">
+                            <h3 className="text-lg font-bold mb-4">프리랜서별 통계</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                              {freelancers.map(freelancer => {
+                                const works = freelancerWorks.filter(w => w.freelancerId === freelancer.id);
+                                const totalAmount = works.reduce((sum, w) => sum + w.total, 0);
+                                const totalTax = works.reduce((sum, w) => sum + w.tax, 0);
+                                const totalPayment = works.reduce((sum, w) => sum + w.payment, 0);
+                                const paidAmount = works.filter(w => w.paid).reduce((sum, w) => sum + w.payment, 0);
+                                const unpaidAmount = totalPayment - paidAmount;
+                                
+                                // 미신고 세금 계산 (지급완료일 기준)
+                                const unreportedWorks = works.filter(w => !w.taxReported && w.paidDate);
+                                const unreportedTotalAmount = unreportedWorks.reduce((sum, w) => sum + w.total, 0);
+                                const unreportedTax = unreportedWorks.reduce((sum, w) => sum + w.tax, 0);
+                                const unreportedPayment = unreportedWorks.reduce((sum, w) => sum + w.payment, 0);
+                                
+                                return (
+                                  <div key={freelancer.id} className="p-4 border-2 border-slate-200 rounded-xl">
+                                    <h4 className="font-bold text-lg mb-2">{freelancer.name}</h4>
+                                    <p className="text-sm text-slate-600 mb-1">작업 건수: {works.length}건</p>
+                                    <p className="text-sm text-slate-600 mb-1">총 금액: {totalAmount.toLocaleString()}원</p>
+                                    <p className="text-sm text-red-600 mb-1">세금: {totalTax.toLocaleString()}원</p>
+                                    <p className="text-sm text-blue-600 mb-1">실지급액: {totalPayment.toLocaleString()}원</p>
+                                    <p className="text-sm text-green-600 mb-1">지급 완료: {paidAmount.toLocaleString()}원</p>
+                                    <p className="text-sm text-orange-600 font-bold mb-2">미지급: {unpaidAmount.toLocaleString()}원</p>
+                                    
+                                    {unreportedTax > 0 && (
+                                      <div className="mt-3 pt-3 border-t border-slate-300">
+                                        <p className="text-sm font-bold mb-2 text-purple-700">📋 미신고 세금 내역 (지급월 기준)</p>
+                                        <div className="bg-purple-50 p-3 rounded-lg mb-2">
+                                          <p className="text-xs text-slate-600 mb-1">세전 금액: <span className="font-semibold text-slate-800">{unreportedTotalAmount.toLocaleString()}원</span></p>
+                                          <p className="text-xs text-red-600 mb-1">세금(3.3%): <span className="font-semibold">{unreportedTax.toLocaleString()}원</span></p>
+                                          <p className="text-xs text-blue-600">세후 금액: <span className="font-semibold">{unreportedPayment.toLocaleString()}원</span></p>
+                                        </div>
+                                        <div className="text-xs text-slate-500">
+                                          <p className="font-semibold mb-1">세부내역 ({unreportedWorks.length}건):</p>
+                                          {unreportedWorks.slice(0, 3).map(w => (
+                                            <p key={w.id} className="ml-2 mb-1">
+                                              • {w.paidDate} ({w.itemName})<br/>
+                                              <span className="ml-3 text-slate-400">
+                                                세전 {w.total.toLocaleString()}원 → 세금 {w.tax.toLocaleString()}원 → 세후 {w.payment.toLocaleString()}원
+                                              </span>
+                                            </p>
+                                          ))}
+                                          {unreportedWorks.length > 3 && (
+                                            <p className="ml-2 text-slate-400">외 {unreportedWorks.length - 3}건...</p>
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* 중국발주 탭 */}
+                {activeMainTab === 'china' && (
+                  <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-16 text-center">
+                    <div className="flex justify-center mb-4"><Package /></div>
+                    <h2 className="text-2xl font-bold text-slate-900 mb-2">중국 발주 관리</h2>
+                    <p className="text-slate-500">준비 중입니다</p>
+                  </div>
+                )}
+              </main>
+
+              <footer className="mt-16 pb-8 text-center text-sm text-slate-400">
+                <p>© 2026 LACEROOM 비서 v20260419.1 · All rights reserved.</p>
+              </footer>
+            </div>
+          );
+        }
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
