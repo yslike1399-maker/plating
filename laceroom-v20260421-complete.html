@@ -9,6 +9,7 @@
     <script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone@7.23.5/babel.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
     <div id="root"></div>
@@ -27,6 +28,7 @@
         const Copy = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>;
         const Image = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>;
         const Search = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>;
+        const Upload = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>;
 
         const COMPANY_INFO = {
           name: '주식회사 골드',
@@ -844,7 +846,11 @@
           };
 
           const addFabric = (supplierId) => {
-            if (!newFabric[supplierId]?.name) return;
+            if (!newFabric[supplierId]?.name) {
+              alert('원단명을 입력하세요');
+              return;
+            }
+            
             const colorsList = newFabric[supplierId].colors 
               ? newFabric[supplierId].colors.split(',').map(c => c.trim()).filter(c => c)
               : [];
@@ -854,24 +860,31 @@
               newFabric[supplierId]?.tag3
             ].filter(tag => tag && tag.trim());
             
+            const newFabricData = {
+              id: Date.now(),
+              name: newFabric[supplierId].name,
+              price: parseInt(newFabric[supplierId].price) || 0,
+              productTags: productTags,
+              supplierColors: colorsList,
+              colorMapping: {},
+              swatchImage: newFabric[supplierId].swatchImage || null
+            };
+            
             const suppliers = fabricSuppliersState.map(supplier => {
               if (supplier.id === supplierId) {
                 return {
                   ...supplier,
-                  fabrics: [...(supplier.fabrics || []), {
-                    id: Date.now(),
-                    name: newFabric[supplierId].name,
-                    price: newFabric[supplierId].price || 0,
-                    productTags: productTags,
-                    supplierColors: colorsList,
-                    colorMapping: {}
-                  }]
+                  fabrics: [...(supplier.fabrics || []), newFabricData]
                 };
               }
               return supplier;
             });
+            
             saveFabricSuppliers(suppliers);
-            setNewFabric({...newFabric, [supplierId]: { name: '', price: '', tag1: '', tag2: '', tag3: '', colors: '' }});
+            setFabricSuppliersState(suppliers); // 강제 리렌더링
+            setNewFabric({...newFabric, [supplierId]: { name: '', price: '', tag1: '', tag2: '', tag3: '', colors: '', swatchImage: null }});
+            
+            alert(`${newFabricData.name} 원단이 추가되었습니다!`);
           };
 
           const deleteFabric = (supplierId, fabricId) => {
@@ -2362,10 +2375,26 @@
                                 if (searchQuery && filteredFabrics.length === 0) return null;
                                 
                                 return (
-                                <div key={supplier.id} className="border border-slate-200 rounded-xl p-6">
+                                <div 
+                                  key={supplier.id} 
+                                  className="border-4 rounded-xl p-6 shadow-lg"
+                                  style={{
+                                    borderColor: `hsl(${(supplier.id * 137.5) % 360}, 70%, 60%)`,
+                                    backgroundColor: `hsla(${(supplier.id * 137.5) % 360}, 70%, 60%, 0.05)`
+                                  }}
+                                >
                                   <div className="flex justify-between items-start mb-4">
                                     <div>
-                                      <h4 className="text-lg font-bold text-slate-900">{supplier.name}</h4>
+                                      <div className="flex items-center gap-3">
+                                        <h4 className="text-lg font-bold text-slate-900">{supplier.name}</h4>
+                                        <div 
+                                          className="w-6 h-6 rounded-full border-2 border-white shadow-md"
+                                          style={{
+                                            backgroundColor: `hsl(${(supplier.id * 137.5) % 360}, 70%, 60%)`
+                                          }}
+                                          title="거래처 색상"
+                                        ></div>
+                                      </div>
                                       <p className="text-sm text-slate-600">전화: {supplier.phone} / {supplier.mobile}</p>
                                       <p className="text-sm text-slate-600">호수: {supplier.location}</p>
                                     </div>
@@ -2432,6 +2461,54 @@
                                         className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
                                       />
                                     </div>
+                                    
+                                    {/* 스와치 이미지 업로드 */}
+                                    <div className="mb-3">
+                                      <label className="block text-sm text-slate-600 mb-2">스와치 이미지 (샘플 원단)</label>
+                                      <label className="cursor-pointer block">
+                                        <div className="border-2 border-dashed border-slate-300 rounded-lg p-4 hover:border-blue-500 hover:bg-blue-50/50 transition-all text-center">
+                                          {newFabric[supplier.id]?.swatchImage ? (
+                                            <div>
+                                              <img 
+                                                src={newFabric[supplier.id].swatchImage} 
+                                                alt="스와치" 
+                                                className="max-h-24 mx-auto rounded mb-2" 
+                                              />
+                                              <p className="text-xs text-slate-500">클릭하여 변경</p>
+                                            </div>
+                                          ) : (
+                                            <div className="text-slate-400">
+                                              <div className="flex justify-center mb-1">
+                                                <Image />
+                                              </div>
+                                              <p className="text-xs">스와치 이미지 업로드</p>
+                                            </div>
+                                          )}
+                                        </div>
+                                        <input
+                                          type="file"
+                                          accept="image/*"
+                                          className="hidden"
+                                          onChange={(e) => {
+                                            const file = e.target.files[0];
+                                            if (file) {
+                                              const reader = new FileReader();
+                                              reader.onloadend = () => {
+                                                setNewFabric({
+                                                  ...newFabric, 
+                                                  [supplier.id]: {
+                                                    ...(newFabric[supplier.id] || {}), 
+                                                    swatchImage: reader.result
+                                                  }
+                                                });
+                                              };
+                                              reader.readAsDataURL(file);
+                                            }
+                                          }}
+                                        />
+                                      </label>
+                                    </div>
+                                    
                                     <button
                                       onClick={() => addFabric(supplier.id)}
                                       className="w-full bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 text-sm font-medium"
@@ -2441,74 +2518,150 @@
                                     
                                     {/* 원단 목록 */}
                                     {filteredFabrics.length > 0 && (
-                                      <div className="space-y-3">
-                                        {filteredFabrics.map(fabric => (
-                                          <div key={fabric.id} className="bg-slate-50 p-4 rounded-lg">
-                                            <div className="flex justify-between items-start mb-3">
-                                              <div className="flex-1">
-                                                <div className="flex items-center gap-3 flex-wrap">
-                                                  <div className="font-semibold text-slate-900">{fabric.name}</div>
-                                                  {fabric.productTags && fabric.productTags.length > 0 && (
-                                                    <div className="flex gap-1">
-                                                      {fabric.productTags.map((tag, idx) => (
-                                                        <span key={idx} className="bg-blue-100 text-blue-700 px-2 py-1 rounded-md text-xs font-medium">
-                                                          {tag}
-                                                        </span>
-                                                      ))}
-                                                    </div>
-                                                  )}
-                                                  <button
-                                                    onClick={() => {
-                                                      setActiveFabricTab('orders');
-                                                      setSelectedFabricForOrder({
-                                                        supplierId: supplier.id,
-                                                        supplierName: supplier.name,
-                                                        fabricId: fabric.id,
-                                                        fabricName: fabric.name,
-                                                        price: fabric.price,
-                                                        supplierColors: fabric.supplierColors || [],
-                                                        colorMapping: fabric.colorMapping || {}
-                                                      });
-                                                    }}
-                                                    className="bg-green-500 text-white px-3 py-1 rounded-lg hover:bg-green-600 text-xs font-medium"
-                                                  >
-                                                    주문하기
-                                                  </button>
-                                                </div>
-                                                <div className="text-sm text-slate-600">{fabric.price}원/Y</div>
-                                              </div>
-                                              <button
-                                                onClick={() => deleteFabric(supplier.id, fabric.id)}
-                                                className="text-red-500 hover:text-red-700 text-sm px-3 py-1 rounded hover:bg-red-50"
-                                              >
-                                                삭제
-                                              </button>
-                                            </div>
-                                            
-                                            {fabric.supplierColors && fabric.supplierColors.length > 0 && (
-                                              <div className="border-t border-slate-200 pt-3">
-                                                <div className="text-xs font-semibold text-slate-700 mb-2">색상 매칭 (거래처 색상 → 자사 색상)</div>
-                                                <div className="grid grid-cols-2 gap-2">
-                                                  {fabric.supplierColors.map((supplierColor, idx) => (
-                                                    <div key={idx} className="flex items-center gap-2 text-xs">
-                                                      <span className="bg-white px-2 py-1 rounded border border-slate-300 flex-1">
-                                                        {supplierColor}
-                                                      </span>
-                                                      <span className="text-slate-400">→</span>
-                                                      <input
-                                                        type="text"
-                                                        placeholder="자사색상"
-                                                        value={fabric.colorMapping?.[supplierColor] || ''}
-                                                        onChange={(e) => updateColorMapping(supplier.id, fabric.id, supplierColor, e.target.value)}
-                                                        className="flex-1 px-2 py-1 border border-slate-300 rounded text-xs"
+                                      <div className="mt-6 bg-white rounded-xl border-2 border-slate-200 overflow-hidden">
+                                        <div className="bg-slate-100 px-4 py-2 border-b border-slate-300">
+                                          <h5 className="font-bold text-slate-700">등록된 원단 ({filteredFabrics.length}개)</h5>
+                                        </div>
+                                        <table className="w-full text-sm">
+                                          <thead className="bg-slate-50 border-b-2 border-slate-300">
+                                            <tr>
+                                              <th className="text-left py-3 px-3 font-bold w-20">이미지</th>
+                                              <th className="text-left py-3 px-3 font-bold">원단명</th>
+                                              <th className="text-left py-3 px-3 font-bold">태그</th>
+                                              <th className="text-right py-3 px-3 font-bold w-28">단가</th>
+                                              <th className="text-center py-3 px-3 font-bold w-36">작업</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {filteredFabrics.map((fabric, idx) => (
+                                              <React.Fragment key={fabric.id}>
+                                                <tr className={`border-b ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'} hover:bg-blue-50 transition-colors`}>
+                                                  <td className="py-3 px-3">
+                                                    {fabric.swatchImage ? (
+                                                      <img 
+                                                        src={fabric.swatchImage} 
+                                                        alt={fabric.name} 
+                                                        className="w-14 h-14 object-cover rounded border-2 border-slate-200 cursor-pointer hover:scale-150 transition-transform shadow-sm" 
+                                                        title="클릭하여 크게 보기"
                                                       />
+                                                    ) : (
+                                                      <div className="w-14 h-14 bg-slate-200 rounded flex items-center justify-center text-xs text-slate-400">
+                                                        No IMG
+                                                      </div>
+                                                    )}
+                                                  </td>
+                                                  <td className="py-3 px-3">
+                                                    <div className="font-semibold text-slate-900">{fabric.name}</div>
+                                                    {fabric.supplierColors && fabric.supplierColors.length > 0 && (
+                                                      <div className="text-xs text-slate-500 mt-1">
+                                                        {fabric.supplierColors.length}개 색상
+                                                      </div>
+                                                    )}
+                                                  </td>
+                                                  <td className="py-3 px-3">
+                                                    {fabric.productTags && fabric.productTags.length > 0 ? (
+                                                      <div className="flex gap-1 flex-wrap">
+                                                        {fabric.productTags.map((tag, tagIdx) => (
+                                                          <span key={tagIdx} className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs font-medium">
+                                                            {tag}
+                                                          </span>
+                                                        ))}
+                                                      </div>
+                                                    ) : (
+                                                      <span className="text-xs text-slate-400">-</span>
+                                                    )}
+                                                  </td>
+                                                  <td className="py-3 px-3 text-right">
+                                                    <span className="font-bold text-blue-600">{fabric.price.toLocaleString()}원</span>
+                                                    <div className="text-xs text-slate-500">/Y</div>
+                                                  </td>
+                                                  <td className="py-3 px-3">
+                                                    <div className="flex gap-1 justify-center flex-wrap">
+                                                      <button
+                                                        onClick={() => {
+                                                          setActiveFabricTab('orders');
+                                                          setSelectedFabricForOrder({
+                                                            supplierId: supplier.id,
+                                                            supplierName: supplier.name,
+                                                            fabricId: fabric.id,
+                                                            fabricName: fabric.name,
+                                                            price: fabric.price,
+                                                            supplierColors: fabric.supplierColors || [],
+                                                            colorMapping: fabric.colorMapping || {}
+                                                          });
+                                                        }}
+                                                        className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600 text-xs font-medium shadow-sm"
+                                                        title="주문하기"
+                                                      >
+                                                        주문
+                                                      </button>
+                                                      
+                                                      {fabric.supplierColors && fabric.supplierColors.length > 0 && (
+                                                        <button
+                                                          onClick={() => {
+                                                            const row = document.getElementById(`fabric-colors-${fabric.id}`);
+                                                            if (row.classList.contains('hidden')) {
+                                                              row.classList.remove('hidden');
+                                                            } else {
+                                                              row.classList.add('hidden');
+                                                            }
+                                                          }}
+                                                          className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 text-xs font-medium shadow-sm"
+                                                          title="색상 매칭"
+                                                        >
+                                                          색상
+                                                        </button>
+                                                      )}
+                                                      
+                                                      <button
+                                                        onClick={() => {
+                                                          if (confirm(`${fabric.name} 원단을 삭제하시겠습니까?`)) {
+                                                            deleteFabric(supplier.id, fabric.id);
+                                                          }
+                                                        }}
+                                                        className="text-red-500 hover:bg-red-50 px-2 py-1 rounded text-xs font-medium"
+                                                        title="삭제"
+                                                      >
+                                                        삭제
+                                                      </button>
                                                     </div>
-                                                  ))}
-                                                </div>
-                                              </div>
-                                            )}
-                                          </div>
-                                        ))}
+                                                  </td>
+                                                </tr>
+                                                
+                                                {/* 색상 매칭 (접기/펼치기) */}
+                                                {fabric.supplierColors && fabric.supplierColors.length > 0 && (
+                                                  <tr id={`fabric-colors-${fabric.id}`} className="hidden bg-slate-50">
+                                                    <td colSpan="5" className="py-3 px-4 border-b">
+                                                      <div className="bg-white rounded-lg p-4 border border-slate-200">
+                                                        <div className="text-xs font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                                                          <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded">색상 매칭</span>
+                                                          <span className="text-slate-500">거래처 색상 → 자사 색상</span>
+                                                        </div>
+                                                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                                          {fabric.supplierColors.map((supplierColor, colorIdx) => (
+                                                            <div key={colorIdx} className="flex items-center gap-2 text-xs">
+                                                              <span className="bg-slate-100 px-3 py-2 rounded flex-1 text-center font-medium border border-slate-200">
+                                                                {supplierColor}
+                                                              </span>
+                                                              <span className="text-slate-400 font-bold">→</span>
+                                                              <input
+                                                                type="text"
+                                                                placeholder="자사색상"
+                                                                value={fabric.colorMapping?.[supplierColor] || ''}
+                                                                onChange={(e) => updateColorMapping(supplier.id, fabric.id, supplierColor, e.target.value)}
+                                                                className="flex-1 px-3 py-2 border-2 border-slate-300 rounded text-xs focus:border-blue-500 outline-none"
+                                                              />
+                                                            </div>
+                                                          ))}
+                                                        </div>
+                                                      </div>
+                                                    </td>
+                                                  </tr>
+                                                )}
+                                              </React.Fragment>
+                                            ))}
+                                          </tbody>
+                                        </table>
                                       </div>
                                     )}
                                   </div>
@@ -3424,6 +3577,205 @@
                       )}
                     </div>
 
+                    {/* 엑셀 급여 기록 일괄 업로드 */}
+                    <div className="bg-gradient-to-br from-purple-50 to-blue-50 rounded-3xl shadow-xl border-2 border-purple-200 p-8">
+                      <h2 className="text-xl font-bold text-slate-900 mb-4">📊 과거 급여 기록 일괄 업로드</h2>
+                      <p className="text-sm text-slate-600 mb-6">
+                        은행 거래내역 엑셀 파일을 업로드하여 과거 급여 지급 기록을 자동으로 등록할 수 있습니다.
+                      </p>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 mb-2">직원 선택</label>
+                          <select 
+                            id="excelUploadEmployee" 
+                            className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none"
+                          >
+                            <option value="">직원 선택</option>
+                            {employees.filter(e => e.active).map(emp => (
+                              <option key={emp.id} value={emp.id}>
+                                {emp.name} ({emp.position})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 mb-2">대상 연월</label>
+                          <input 
+                            type="month" 
+                            id="excelUploadMonth"
+                            defaultValue={new Date().toISOString().substring(0, 7)}
+                            className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none" 
+                          />
+                        </div>
+                      </div>
+                      
+                      <div className="mb-6">
+                        <label className="block text-sm font-semibold text-slate-700 mb-2">엑셀 파일 업로드</label>
+                        <label className="cursor-pointer block">
+                          <div className="border-2 border-dashed border-purple-300 rounded-xl p-8 hover:border-purple-500 hover:bg-purple-50/50 transition-all text-center">
+                            <div className="text-purple-600 mb-2">
+                              <Upload className="w-12 h-12 mx-auto" />
+                            </div>
+                            <p className="text-sm font-semibold text-slate-700">엑셀 파일을 선택하세요</p>
+                            <p className="text-xs text-slate-500 mt-1">xls, xlsx 파일 지원</p>
+                          </div>
+                          <input
+                            type="file"
+                            accept=".xls,.xlsx"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files[0];
+                              if (!file) return;
+                              
+                              const employeeId = document.getElementById('excelUploadEmployee').value;
+                              const month = document.getElementById('excelUploadMonth').value;
+                              
+                              if (!employeeId) {
+                                alert('직원을 선택하세요');
+                                e.target.value = '';
+                                return;
+                              }
+                              
+                              if (!month) {
+                                alert('대상 연월을 선택하세요');
+                                e.target.value = '';
+                                return;
+                              }
+                              
+                              const employee = employees.find(emp => emp.id === parseInt(employeeId));
+                              if (!employee) {
+                                alert('직원 정보를 찾을 수 없습니다');
+                                return;
+                              }
+                              
+                              try {
+                                // SheetJS 사용하여 엑셀 파싱
+                                const reader = new FileReader();
+                                reader.onload = async (evt) => {
+                                  try {
+                                    const data = new Uint8Array(evt.target.result);
+                                    const workbook = XLSX.read(data, { type: 'array' });
+                                    const sheetName = workbook.SheetNames[0];
+                                    const worksheet = workbook.Sheets[sheetName];
+                                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                                    
+                                    // 데이터 파싱
+                                    const payments = [];
+                                    let headerFound = false;
+                                    
+                                    for (let i = 0; i < jsonData.length; i++) {
+                                      const row = jsonData[i];
+                                      
+                                      // 헤더 찾기
+                                      if (row[0] === '거래일시' || (typeof row[0] === 'string' && row[0].includes('거래일시'))) {
+                                        headerFound = true;
+                                        continue;
+                                      }
+                                      
+                                      if (!headerFound) continue;
+                                      
+                                      const dateTimeStr = row[0];
+                                      const amount = row[1];
+                                      
+                                      if (!dateTimeStr || !amount) continue;
+                                      
+                                      // 날짜 파싱 (시간 제거)
+                                      const dateStr = String(dateTimeStr).split(' ')[0]; // "2026.01.08"
+                                      const dateParts = dateStr.split('.');
+                                      
+                                      if (dateParts.length === 3) {
+                                        const payDate = `${dateParts[0]}-${dateParts[1].padStart(2, '0')}-${dateParts[2].padStart(2, '0')}`;
+                                        
+                                        payments.push({
+                                          payDate,
+                                          amount: parseInt(amount)
+                                        });
+                                      }
+                                    }
+                                    
+                                    if (payments.length === 0) {
+                                      alert('유효한 데이터를 찾을 수 없습니다');
+                                      return;
+                                    }
+                                    
+                                    // 총 급여액 계산
+                                    const totalAmount = payments.reduce((sum, p) => sum + p.amount, 0);
+                                    
+                                    const confirmMsg = `${employee.name}님의 ${month} 급여 기록을 등록합니다.\n\n` +
+                                      `지급 내역: ${payments.length}건\n` +
+                                      `총 지급액: ${totalAmount.toLocaleString()}원\n\n` +
+                                      `계속하시겠습니까?`;
+                                    
+                                    if (!confirm(confirmMsg)) return;
+                                    
+                                    // 급여 레코드 생성 (이미 있으면 건너뛰기)
+                                    let salaryRecord = salaryRecords.find(r => r.employeeId === employee.id && r.month === month);
+                                    
+                                    if (!salaryRecord) {
+                                      salaryRecord = {
+                                        id: Date.now(),
+                                        employeeId: employee.id,
+                                        month,
+                                        totalAmount,
+                                        breakdown: {
+                                          basicAmount: employee.monthlySalary,
+                                          insurance: 0,
+                                          bonus: totalAmount - employee.monthlySalary,
+                                          deduction: 0,
+                                          totalAmount,
+                                          note: `엑셀 업로드 (${payments.length}건)`
+                                        },
+                                        createdAt: new Date().toISOString()
+                                      };
+                                      
+                                      saveSalaryRecords([...salaryRecords, salaryRecord]);
+                                    }
+                                    
+                                    // 지급 내역 등록
+                                    const newPayments = payments.map((p, idx) => ({
+                                      id: Date.now() + idx,
+                                      salaryRecordId: salaryRecord.id,
+                                      amount: p.amount,
+                                      payDate: p.payDate,
+                                      paymentOrder: idx + 1,
+                                      note: '엑셀 업로드',
+                                      createdAt: new Date().toISOString()
+                                    }));
+                                    
+                                    saveSalaryPayments([...salaryPayments, ...newPayments]);
+                                    
+                                    alert(`✅ ${payments.length}건의 급여 지급 기록이 등록되었습니다!`);
+                                    e.target.value = '';
+                                    
+                                  } catch (err) {
+                                    alert('엑셀 파일 파싱 중 오류가 발생했습니다: ' + err.message);
+                                    console.error(err);
+                                  }
+                                };
+                                
+                                reader.readAsArrayBuffer(file);
+                                
+                              } catch (err) {
+                                alert('파일 읽기 중 오류가 발생했습니다: ' + err.message);
+                              }
+                            }}
+                          />
+                        </label>
+                      </div>
+                      
+                      <div className="bg-white rounded-xl p-4">
+                        <p className="text-xs text-slate-600 mb-2"><strong>📋 엑셀 양식 안내:</strong></p>
+                        <ul className="text-xs text-slate-500 space-y-1">
+                          <li>• 첫 번째 열: 거래일시 (예: 2026.01.08 11:42:23) - 시간은 무시됩니다</li>
+                          <li>• 두 번째 열: 출금액(원) (예: 200000)</li>
+                          <li>• 헤더 행은 자동으로 인식됩니다</li>
+                          <li>• 날짜별로 자동 정렬되어 1차, 2차, 3차... 지급으로 등록됩니다</li>
+                        </ul>
+                      </div>
+                    </div>
+
                     {/* 급여 발생 등록 */}
                     <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8">
                       <h2 className="text-xl font-bold text-slate-900 mb-6">급여 발생 등록</h2>
@@ -3632,7 +3984,41 @@
 
                     {/* 급여 지급 처리 */}
                     <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8">
-                      <h2 className="text-xl font-bold text-slate-900 mb-6">급여 지급 내역</h2>
+                      <div className="flex items-center justify-between mb-6">
+                        <h2 className="text-xl font-bold text-slate-900">급여 지급 내역</h2>
+                        
+                        {/* 기간 필터 */}
+                        <div className="flex gap-3 items-center">
+                          <select 
+                            id="salaryFilterEmployee"
+                            className="px-4 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm"
+                            onChange={(e) => {
+                              const filterMonth = document.getElementById('salaryFilterMonth').value;
+                              // 필터링은 아래 map에서 처리
+                            }}
+                          >
+                            <option value="">전체 직원</option>
+                            {employees.filter(e => e.active).map(emp => (
+                              <option key={emp.id} value={emp.id}>
+                                {emp.name} ({emp.position})
+                              </option>
+                            ))}
+                          </select>
+                          
+                          <select 
+                            id="salaryFilterMonth"
+                            className="px-4 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm"
+                          >
+                            <option value="">전체 기간</option>
+                            {Array.from(new Set(salaryRecords.map(r => r.month)))
+                              .sort((a, b) => b.localeCompare(a))
+                              .map(month => (
+                                <option key={month} value={month}>{month}</option>
+                              ))
+                            }
+                          </select>
+                        </div>
+                      </div>
                       
                       {salaryRecords.length === 0 ? (
                         <div className="text-center py-12 text-slate-400">
@@ -3640,7 +4026,18 @@
                         </div>
                       ) : (
                         <>
-                          {salaryRecords.sort((a, b) => b.month.localeCompare(a.month)).map(record => {
+                          {(() => {
+                            const filterEmployeeId = document.getElementById('salaryFilterEmployee')?.value;
+                            const filterMonth = document.getElementById('salaryFilterMonth')?.value;
+                            
+                            return salaryRecords
+                              .filter(record => {
+                                if (filterEmployeeId && record.employeeId !== parseInt(filterEmployeeId)) return false;
+                                if (filterMonth && record.month !== filterMonth) return false;
+                                return true;
+                              })
+                              .sort((a, b) => b.month.localeCompare(a.month))
+                              .map(record => {
                             const employee = employees.find(e => e.id === record.employeeId);
                             if (!employee) return null;
                             
@@ -3648,8 +4045,54 @@
                             const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
                             const remaining = record.totalAmount - totalPaid;
                             
+                            // 초과 지급 체크
+                            const overpaid = totalPaid - record.totalAmount;
+                            const isOverpaid = overpaid > 0;
+                            
+                            // 상여금 미신고 체크
+                            const hasBonus = record.breakdown?.bonus > 0;
+                            const needsBonusWarning = isOverpaid && !hasBonus;
+                            
                             return (
-                              <div key={record.id} className="border-2 border-slate-200 rounded-2xl p-6 mb-6">
+                              <div 
+                                key={record.id} 
+                                className={`border-2 rounded-2xl p-6 mb-6 ${
+                                  needsBonusWarning 
+                                    ? 'border-red-600 bg-red-50' 
+                                    : isOverpaid 
+                                      ? 'border-orange-500 bg-orange-50' 
+                                      : 'border-slate-200'
+                                }`}
+                              >
+                                {/* 상여금 미신고 강력 경고 */}
+                                {needsBonusWarning && (
+                                  <div className="mb-4 bg-red-600 text-white rounded-xl p-4 shadow-lg animate-pulse">
+                                    <div className="flex items-center gap-3">
+                                      <div className="text-3xl">⚠️</div>
+                                      <div className="flex-1">
+                                        <div className="font-bold text-lg mb-1">🚨 상여금 신고 필요!</div>
+                                        <div className="text-sm">
+                                          기본급보다 <strong className="text-yellow-300 text-lg">{overpaid.toLocaleString()}원</strong> 초과 지급되었습니다.
+                                          <br />반드시 상여금으로 신고하세요!
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+                                
+                                {/* 일반 초과 지급 경고 */}
+                                {isOverpaid && hasBonus && (
+                                  <div className="mb-4 bg-orange-100 border-2 border-orange-500 text-orange-900 rounded-xl p-3">
+                                    <div className="flex items-center gap-2 text-sm">
+                                      <div className="text-xl">💰</div>
+                                      <div>
+                                        상여금 <strong>{record.breakdown.bonus.toLocaleString()}원</strong> 포함 
+                                        (초과 지급액: {overpaid.toLocaleString()}원)
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+                                
                                 <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
                                   <div>
                                     <h3 className="text-lg font-bold text-slate-900">
@@ -3786,9 +4229,360 @@
                                 )}
                               </div>
                             );
-                          })}
+                          })})()}
                         </>
                       )}
+                    </div>
+
+                    {/* 상여금 미신고 현황 */}
+                    <div className="bg-gradient-to-br from-red-600 to-orange-600 rounded-3xl shadow-2xl border-4 border-red-700 p-8 animate-pulse">
+                      <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
+                        <span className="text-4xl">🚨</span> 
+                        상여금 미신고 현황 (긴급!)
+                      </h2>
+                      
+                      {(() => {
+                        const today = new Date();
+                        const currentYear = today.getFullYear();
+                        const currentMonth = today.getMonth() + 1;
+                        
+                        // 모든 급여 기록에서 상여금 미신고 건 찾기
+                        const unreportedBonus = salaryRecords.map(record => {
+                          const employee = employees.find(e => e.id === record.employeeId);
+                          if (!employee) return null;
+                          
+                          const payments = salaryPayments.filter(p => p.salaryRecordId === record.id);
+                          const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+                          const overpaid = totalPaid - record.totalAmount;
+                          const hasBonus = record.breakdown?.bonus > 0;
+                          
+                          // 초과 지급됐는데 상여금 미신고
+                          if (overpaid > 0 && !hasBonus) {
+                            // 신고 완료 체크된 건은 제외
+                            if (record.bonusReported) return null;
+                            
+                            // 급여월 파싱 (2026-03 형식)
+                            const [year, month] = record.month.split('-').map(Number);
+                            
+                            // 신고 기한: 급여월 다음달 10일
+                            const reportDeadline = new Date(year, month, 10); // month는 0-based이므로 다음달이 됨
+                            const isOverdue = today > reportDeadline;
+                            
+                            // 다음 신고일: 다음달 10일
+                            let nextReportDate;
+                            if (isOverdue) {
+                              // 이미 지났으면 다음달 10일
+                              nextReportDate = new Date(currentYear, currentMonth, 10);
+                              if (nextReportDate <= today) {
+                                // 이번달 10일도 지났으면 다다음달
+                                nextReportDate = new Date(currentYear, currentMonth + 1, 10);
+                              }
+                            } else {
+                              nextReportDate = reportDeadline;
+                            }
+                            
+                            return {
+                              record,
+                              employee,
+                              overpaid,
+                              month: record.month,
+                              reportDeadline,
+                              nextReportDate,
+                              isOverdue
+                            };
+                          }
+                          return null;
+                        }).filter(Boolean);
+                        
+                        if (unreportedBonus.length === 0) {
+                          return (
+                            <div className="bg-white/20 backdrop-blur rounded-2xl p-6 text-center">
+                              <p className="text-2xl font-bold text-white">✅ 모든 상여금 신고 완료!</p>
+                              <p className="text-white/80 mt-2">미신고 상여금이 없습니다.</p>
+                            </div>
+                          );
+                        }
+                        
+                        // 총 미신고 상여금
+                        const totalUnreported = unreportedBonus.reduce((sum, item) => sum + item.overpaid, 0);
+                        
+                        // 기한별 그룹핑
+                        const overdueItems = unreportedBonus.filter(item => item.isOverdue);
+                        const upcomingItems = unreportedBonus.filter(item => !item.isOverdue);
+                        
+                        return (
+                          <>
+                            {/* 총 미신고 금액 */}
+                            <div className="bg-white rounded-2xl p-8 mb-6 border-4 border-yellow-400 shadow-2xl">
+                              <div className="text-center">
+                                <p className="text-sm font-semibold text-red-600 mb-2">⚠️ 총 미신고 상여금</p>
+                                <p className="text-5xl font-bold text-red-600 mb-2">{totalUnreported.toLocaleString()}원</p>
+                                <p className="text-sm text-slate-600">{unreportedBonus.length}건</p>
+                              </div>
+                            </div>
+                            
+                            {/* 기한 경과 (긴급) */}
+                            {overdueItems.length > 0 && (
+                              <div className="bg-red-900 rounded-2xl p-6 mb-6 border-4 border-yellow-300">
+                                <div className="flex items-center justify-between mb-6">
+                                  <h3 className="text-xl font-bold text-yellow-300 flex items-center gap-2">
+                                    <span className="text-3xl">⏰</span>
+                                    신고 기한 경과 ({overdueItems.length}건)
+                                  </h3>
+                                  
+                                  {/* 누적 합계 */}
+                                  <div className="bg-yellow-300 rounded-xl px-6 py-3 border-4 border-yellow-500 shadow-xl">
+                                    <p className="text-xs font-semibold text-red-900">신고 기한 경과 누적 금액</p>
+                                    <p className="text-3xl font-bold text-red-900">
+                                      {overdueItems.reduce((s, i) => s + i.overpaid, 0).toLocaleString()}원
+                                    </p>
+                                  </div>
+                                </div>
+                                
+                                <div className="space-y-4">
+                                  {overdueItems.map((item, idx) => {
+                                    const nextDate = item.nextReportDate;
+                                    const daysUntilNext = Math.ceil((nextDate - today) / (1000 * 60 * 60 * 24));
+                                    
+                                    return (
+                                      <div key={idx} className="bg-white rounded-xl p-4 border-l-4 border-red-600">
+                                        {/* 신고 완료 체크박스 */}
+                                        <div className="mb-3 bg-yellow-50 rounded-lg p-3 border-2 border-yellow-300">
+                                          <label className="flex items-center gap-3 cursor-pointer group">
+                                            <input
+                                              type="checkbox"
+                                              className="w-5 h-5 cursor-pointer"
+                                              checked={item.record.bonusReported || false}
+                                              onChange={(e) => {
+                                                const reportMonth = prompt(
+                                                  `${item.employee.name}님의 ${item.month} 상여금 ${item.overpaid.toLocaleString()}원을\n` +
+                                                  `어느 달에 신고하셨습니까?\n\n` +
+                                                  `예: 2026-05 (5월 신고)`,
+                                                  new Date().toISOString().substring(0, 7)
+                                                );
+                                                
+                                                if (reportMonth) {
+                                                  const updated = salaryRecords.map(r => 
+                                                    r.id === item.record.id 
+                                                      ? { 
+                                                          ...r, 
+                                                          bonusReported: true,
+                                                          bonusReportMonth: reportMonth,
+                                                          bonusReportedAt: new Date().toISOString()
+                                                        }
+                                                      : r
+                                                  );
+                                                  saveSalaryRecords(updated);
+                                                  alert(`✅ ${item.month} 상여금을 ${reportMonth}에 신고 완료 처리했습니다!`);
+                                                } else if (reportMonth === null) {
+                                                  // 취소
+                                                } else if (!item.record.bonusReported) {
+                                                  e.target.checked = false;
+                                                }
+                                              }}
+                                            />
+                                            <div className="flex-1">
+                                              <span className="font-bold text-yellow-900 group-hover:text-yellow-700">
+                                                {item.record.bonusReported ? '✅ 신고 완료' : '⚠️ 미신고 - 클릭하여 신고 완료 처리'}
+                                              </span>
+                                              {item.record.bonusReportMonth && (
+                                                <div className="text-xs text-yellow-700 mt-1">
+                                                  📅 {item.record.bonusReportMonth} 신고됨
+                                                </div>
+                                              )}
+                                            </div>
+                                          </label>
+                                        </div>
+                                        
+                                        <div className="flex items-start justify-between gap-4 flex-wrap">
+                                          <div className="flex-1">
+                                            <div className="flex items-start gap-3">
+                                              {/* 신고 완료 체크박스 */}
+                                              <label className="flex items-start gap-2 cursor-pointer group mt-1">
+                                                <input
+                                                  type="checkbox"
+                                                  checked={item.record.bonusReported || false}
+                                                  onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                      if (confirm(`${item.employee.name}님의 ${item.month} 상여금 ${item.overpaid.toLocaleString()}원을 신고 완료 처리하시겠습니까?`)) {
+                                                        const updated = salaryRecords.map(r => 
+                                                          r.id === item.record.id 
+                                                            ? { ...r, bonusReported: true, bonusReportedAt: new Date().toISOString() }
+                                                            : r
+                                                        );
+                                                        saveSalaryRecords(updated);
+                                                      } else {
+                                                        e.target.checked = false;
+                                                      }
+                                                    } else {
+                                                      if (confirm('신고 완료를 취소하시겠습니까?')) {
+                                                        const updated = salaryRecords.map(r => 
+                                                          r.id === item.record.id 
+                                                            ? { ...r, bonusReported: false, bonusReportedAt: null }
+                                                            : r
+                                                        );
+                                                        saveSalaryRecords(updated);
+                                                      } else {
+                                                        e.target.checked = true;
+                                                      }
+                                                    }
+                                                  }}
+                                                  className="w-5 h-5 mt-0.5"
+                                                />
+                                                <span className="text-xs text-slate-500 group-hover:text-green-600 font-medium">
+                                                  신고완료
+                                                </span>
+                                              </label>
+                                              
+                                              <div className="flex-1">
+                                                <h4 className="font-bold text-lg text-slate-900">
+                                                  {item.employee.name} ({item.employee.position})
+                                                </h4>
+                                                <p className="text-sm text-slate-600 mt-1">
+                                                  급여월: <strong>{item.month}</strong>
+                                                </p>
+                                                <p className="text-xs text-red-600 mt-1">
+                                                  신고 기한: {item.reportDeadline.toLocaleDateString('ko-KR')} (경과)
+                                                </p>
+                                              </div>
+                                            </div>
+                                          </div>
+                                          
+                                          <div className="text-right">
+                                            <p className="text-2xl font-bold text-red-600">
+                                              {item.overpaid.toLocaleString()}원
+                                            </p>
+                                            <div className="mt-2 bg-yellow-100 rounded-lg px-3 py-2">
+                                              <p className="text-xs font-semibold text-yellow-900">
+                                                다음 신고일
+                                              </p>
+                                              <p className="text-sm font-bold text-yellow-900">
+                                                {nextDate.toLocaleDateString('ko-KR')}
+                                              </p>
+                                              <p className="text-xs text-yellow-700">
+                                                (D-{daysUntilNext})
+                                              </p>
+                                            </div>
+                                          </div>
+                                        </div>
+                                        
+                                        <div className="mt-3 bg-yellow-50 rounded-lg p-3 border-l-4 border-yellow-500">
+                                          <p className="text-sm font-semibold text-yellow-900">
+                                            💡 조치 필요: 다음 급여 신고 시 합산하여 신고하세요!
+                                          </p>
+                                        </div>
+                                        
+                                        {/* 신고 완료 체크 버튼 */}
+                                        <div className="mt-3 flex gap-2">
+                                          <button
+                                            onClick={() => {
+                                              if (confirm(`${item.employee.name}님의 ${item.month} 상여금 ${item.overpaid.toLocaleString()}원을 신고 완료 처리하시겠습니까?\n\n이 작업은 급여 기록에 상여금을 추가합니다.`)) {
+                                                // 급여 기록 업데이트 - breakdown에 상여금 추가
+                                                const updatedRecords = salaryRecords.map(r => {
+                                                  if (r.id === item.record.id) {
+                                                    return {
+                                                      ...r,
+                                                      breakdown: {
+                                                        ...r.breakdown,
+                                                        bonus: item.overpaid,
+                                                        note: (r.breakdown?.note || '') + ` [신고완료 ${new Date().toLocaleDateString('ko-KR')}]`
+                                                      }
+                                                    };
+                                                  }
+                                                  return r;
+                                                });
+                                                
+                                                saveSalaryRecords(updatedRecords);
+                                                alert('✅ 상여금 신고 완료 처리되었습니다!');
+                                              }
+                                            }}
+                                            className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-semibold text-sm transition-all"
+                                          >
+                                            ✓ 신고 완료 처리
+                                          </button>
+                                          
+                                          <button
+                                            onClick={() => {
+                                              const newBonus = prompt(`${item.employee.name}님의 ${item.month} 상여금을 직접 입력하세요.\n\n현재 초과 지급액: ${item.overpaid.toLocaleString()}원`, item.overpaid);
+                                              
+                                              if (newBonus && !isNaN(newBonus)) {
+                                                const bonusAmount = parseInt(newBonus);
+                                                
+                                                const updatedRecords = salaryRecords.map(r => {
+                                                  if (r.id === item.record.id) {
+                                                    return {
+                                                      ...r,
+                                                      breakdown: {
+                                                        ...r.breakdown,
+                                                        bonus: bonusAmount,
+                                                        note: (r.breakdown?.note || '') + ` [신고완료 ${new Date().toLocaleDateString('ko-KR')}]`
+                                                      }
+                                                    };
+                                                  }
+                                                  return r;
+                                                });
+                                                
+                                                saveSalaryRecords(updatedRecords);
+                                                alert(`✅ 상여금 ${bonusAmount.toLocaleString()}원으로 신고 완료 처리되었습니다!`);
+                                              }
+                                            }}
+                                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold text-sm transition-all"
+                                          >
+                                            ✎ 수정 후 처리
+                                          </button>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                                
+                                {/* 합산 안내 */}
+                                {overdueItems.length > 1 && (
+                                  <div className="mt-6 bg-yellow-300 rounded-xl p-4 border-2 border-yellow-500">
+                                    <p className="font-bold text-yellow-900 text-center">
+                                      📋 다음 신고 시 총 {overdueItems.reduce((s, i) => s + i.overpaid, 0).toLocaleString()}원 합산 신고
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            
+                            {/* 당월/이번 신고 예정 */}
+                            {upcomingItems.length > 0 && (
+                              <div className="bg-orange-100 rounded-2xl p-6 border-2 border-orange-400">
+                                <h3 className="text-lg font-bold text-orange-900 mb-4">
+                                  📅 이번 신고 예정 ({upcomingItems.length}건)
+                                </h3>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  {upcomingItems.map((item, idx) => {
+                                    const daysUntil = Math.ceil((item.reportDeadline - today) / (1000 * 60 * 60 * 24));
+                                    
+                                    return (
+                                      <div key={idx} className="bg-white rounded-xl p-4 border-l-4 border-orange-500">
+                                        <h4 className="font-bold text-slate-900">
+                                          {item.employee.name} ({item.employee.position})
+                                        </h4>
+                                        <p className="text-sm text-slate-600 mt-1">
+                                          급여월: {item.month}
+                                        </p>
+                                        <p className="text-xl font-bold text-orange-600 mt-2">
+                                          {item.overpaid.toLocaleString()}원
+                                        </p>
+                                        <div className="mt-2 bg-orange-50 rounded px-2 py-1">
+                                          <p className="text-xs text-orange-700">
+                                            신고 기한: {item.reportDeadline.toLocaleDateString('ko-KR')} (D-{daysUntil})
+                                          </p>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
 
                     {/* 미지급 현황 */}
