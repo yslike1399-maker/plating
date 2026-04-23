@@ -449,6 +449,65 @@ ${list}` }]
               localStorage.setItem('plating_products', JSON.stringify(data));
             } catch (e) {
               console.error('저장 오류:', e);
+              if (e.name === 'QuotaExceededError' || /quota/i.test(e.message)) {
+                alert('💾 저장 공간 초과!\n\n이미지 용량이 너무 큽니다.\n9-1 상품관리에서 이미지를 다시 업로드해주세요.\n(자동 압축 적용)');
+              }
+            }
+          };
+
+          // 🖼️ 이미지 자동 압축 함수 (최대 600x600, JPEG 75%)
+          const compressImage = (file, maxSize = 600, quality = 0.75) => {
+            return new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                  let { width, height } = img;
+                  // 비율 유지하며 최대 크기에 맞추기
+                  if (width > maxSize || height > maxSize) {
+                    if (width > height) {
+                      height = Math.round((height * maxSize) / width);
+                      width = maxSize;
+                    } else {
+                      width = Math.round((width * maxSize) / height);
+                      height = maxSize;
+                    }
+                  }
+                  const canvas = document.createElement('canvas');
+                  canvas.width = width;
+                  canvas.height = height;
+                  const ctx = canvas.getContext('2d');
+                  ctx.fillStyle = '#FFFFFF'; // PNG 투명배경 -> 흰색
+                  ctx.fillRect(0, 0, width, height);
+                  ctx.drawImage(img, 0, 0, width, height);
+                  // JPEG로 변환 (PNG보다 훨씬 작음)
+                  const compressed = canvas.toDataURL('image/jpeg', quality);
+                  const originalKB = Math.round(file.size / 1024);
+                  const compressedKB = Math.round((compressed.length * 0.75) / 1024);
+                  console.log(`이미지 압축: ${originalKB}KB → ${compressedKB}KB (${Math.round(100 - (compressedKB/originalKB)*100)}% 감소)`);
+                  resolve(compressed);
+                };
+                img.onerror = () => reject(new Error('이미지 로드 실패'));
+                img.src = e.target.result;
+              };
+              reader.onerror = () => reject(new Error('파일 읽기 실패'));
+              reader.readAsDataURL(file);
+            });
+          };
+
+          // 안전한 localStorage 저장 (용량 초과 시 알림)
+          const safeSetItem = (key, value) => {
+            try {
+              localStorage.setItem(key, value);
+              return true;
+            } catch (e) {
+              if (e.name === 'QuotaExceededError' || /quota/i.test(e.message)) {
+                const sizeMB = (value.length / 1024 / 1024).toFixed(2);
+                alert(`💾 저장 공간 초과! (${sizeMB}MB)\n\n원인: 이미지가 너무 많거나 큼\n해결: 9-1에서 이미지 다시 업로드 (자동 압축됨)\n또는 일부 데이터 삭제`);
+              } else {
+                console.error('저장 오류:', e);
+              }
+              return false;
             }
           };
 
@@ -1559,7 +1618,7 @@ ${list}` }]
                 <div className="px-4 py-4 border-b border-slate-100">
                   <div>
                     <div className="text-sm font-bold text-slate-900 leading-tight">LACEROOM통합관리</div>
-                    <div className="text-xs text-slate-400">v20260421.100</div>
+                    <div className="text-xs text-slate-400">v20260421.101</div>
                   </div>
                 </div>
 
@@ -1638,9 +1697,57 @@ ${list}` }]
                         const file = e.target.files[0];
                         if (!file) return;
                         const reader = new FileReader();
-                        reader.onload = (evt) => {
+                        reader.onload = async (evt) => {
                           try {
                             const data = JSON.parse(evt.target.result);
+
+                            // 🖼️ Base64 이미지 자동 재압축 (브라우저에서)
+                            const recompressBase64 = (base64Str) => {
+                              return new Promise((resolve) => {
+                                if (!base64Str || !base64Str.startsWith('data:image')) return resolve(base64Str);
+                                const img = new Image();
+                                img.onload = () => {
+                                  const maxSize = 600;
+                                  let { width, height } = img;
+                                  if (width > maxSize || height > maxSize) {
+                                    if (width > height) {
+                                      height = Math.round((height * maxSize) / width);
+                                      width = maxSize;
+                                    } else {
+                                      width = Math.round((width * maxSize) / height);
+                                      height = maxSize;
+                                    }
+                                  }
+                                  const canvas = document.createElement('canvas');
+                                  canvas.width = width;
+                                  canvas.height = height;
+                                  const ctx = canvas.getContext('2d');
+                                  ctx.fillStyle = '#FFFFFF';
+                                  ctx.fillRect(0, 0, width, height);
+                                  ctx.drawImage(img, 0, 0, width, height);
+                                  resolve(canvas.toDataURL('image/jpeg', 0.75));
+                                };
+                                img.onerror = () => resolve(base64Str); // 실패 시 원본 유지
+                                img.src = base64Str;
+                              });
+                            };
+
+                            // masterProducts와 products의 이미지 압축
+                            if (data.masterProducts && Array.isArray(data.masterProducts)) {
+                              for (let i = 0; i < data.masterProducts.length; i++) {
+                                if (data.masterProducts[i].image) {
+                                  data.masterProducts[i].image = await recompressBase64(data.masterProducts[i].image);
+                                }
+                              }
+                            }
+                            if (data.products && Array.isArray(data.products)) {
+                              for (let i = 0; i < data.products.length; i++) {
+                                if (data.products[i].image) {
+                                  data.products[i].image = await recompressBase64(data.products[i].image);
+                                }
+                              }
+                            }
+
                             if (data.products) saveProducts(data.products);
                             if (data.history) saveHistory(data.history);
                             if (data.receivables) saveReceivables(data.receivables);
@@ -1667,9 +1774,15 @@ ${list}` }]
                             if (data.polishStocks) savePolishStocks(data.polishStocks);
                             if (data.masterProducts) saveMasterProducts(data.masterProducts);
                             if (data.yocheokInput) saveYocheokInput(data.yocheokInput);
-                            alert('불러오기 완료!');
+                            alert('✅ 불러오기 완료!\n(이미지 자동 압축 적용됨)');
                             window.location.reload();
-                          } catch (err) { alert('파일 형식 오류: ' + err.message); }
+                          } catch (err) {
+                            if (err.name === 'QuotaExceededError' || /quota/i.test(err.message||'')) {
+                              alert('💾 저장 공간 초과!\n\n이미지 압축 후에도 용량이 큽니다.\n9-2/9-3 기록을 일부 삭제하거나,\n9-1에서 일부 상품 이미지를 삭제해주세요.');
+                            } else {
+                              alert('파일 형식 오류: ' + err.message);
+                            }
+                          }
                         };
                         reader.readAsText(file);
                       }}
@@ -7550,12 +7663,16 @@ ${list}` }]
                                                 <label className="text-xs text-blue-500 hover:bg-blue-50 px-2 py-1 rounded cursor-pointer border border-blue-200">
                                                   이미지 변경
                                                   <input type="file" accept="image/*" style={{display:'none'}}
-                                                    onChange={e=>{
+                                                    onChange={async e=>{
                                                       const file = e.target.files?.[0];
                                                       if(!file) return;
-                                                      const reader = new FileReader();
-                                                      reader.onloadend = ()=>setForm(p=>({...p, image: reader.result}));
-                                                      reader.readAsDataURL(file);
+                                                      try {
+                                                        const compressed = await compressImage(file);
+                                                        setForm(p=>({...p, image: compressed}));
+                                                      } catch (err) {
+                                                        console.error(err);
+                                                        alert('이미지 처리 실패');
+                                                      }
                                                     }}/>
                                                 </label>
                                                 <button onClick={()=>setForm(p=>({...p, image: null}))}
@@ -7564,14 +7681,18 @@ ${list}` }]
                                             </div>
                                           ) : (
                                             <label className="block w-full px-3 py-4 rounded-xl border-2 border-dashed border-slate-300 hover:border-blue-400 cursor-pointer text-center text-sm text-slate-500">
-                                              📁 이미지 파일 선택 (작업지시서·쇼핑몰에 활용)
+                                              📁 이미지 파일 선택 (자동 압축 · 작업지시서·쇼핑몰에 활용)
                                               <input type="file" accept="image/*" style={{display:'none'}}
-                                                onChange={e=>{
+                                                onChange={async e=>{
                                                   const file = e.target.files?.[0];
                                                   if(!file) return;
-                                                  const reader = new FileReader();
-                                                  reader.onloadend = ()=>setForm(p=>({...p, image: reader.result}));
-                                                  reader.readAsDataURL(file);
+                                                  try {
+                                                    const compressed = await compressImage(file);
+                                                    setForm(p=>({...p, image: compressed}));
+                                                  } catch (err) {
+                                                    console.error(err);
+                                                    alert('이미지 처리 실패');
+                                                  }
                                                 }}/>
                                             </label>
                                           )}
@@ -9471,7 +9592,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260421.100</p>
+                <p>© 2026 LACEROOM통합관리 v20260421.101</p>
               </footer>
             </div>
           </div>
