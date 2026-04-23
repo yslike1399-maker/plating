@@ -1618,7 +1618,7 @@ ${list}` }]
                 <div className="px-4 py-4 border-b border-slate-100">
                   <div>
                     <div className="text-sm font-bold text-slate-900 leading-tight">LACEROOM통합관리</div>
-                    <div className="text-xs text-slate-400">v20260421.103</div>
+                    <div className="text-xs text-slate-400">v20260421.104</div>
                   </div>
                 </div>
 
@@ -1697,56 +1697,9 @@ ${list}` }]
                         const file = e.target.files[0];
                         if (!file) return;
                         const reader = new FileReader();
-                        reader.onload = async (evt) => {
+                        reader.onload = (evt) => {
                           try {
                             const data = JSON.parse(evt.target.result);
-
-                            // 🖼️ Base64 이미지 자동 재압축 (브라우저에서)
-                            const recompressBase64 = (base64Str) => {
-                              return new Promise((resolve) => {
-                                if (!base64Str || !base64Str.startsWith('data:image')) return resolve(base64Str);
-                                const img = new Image();
-                                img.onload = () => {
-                                  const maxSize = 600;
-                                  let { width, height } = img;
-                                  if (width > maxSize || height > maxSize) {
-                                    if (width > height) {
-                                      height = Math.round((height * maxSize) / width);
-                                      width = maxSize;
-                                    } else {
-                                      width = Math.round((width * maxSize) / height);
-                                      height = maxSize;
-                                    }
-                                  }
-                                  const canvas = document.createElement('canvas');
-                                  canvas.width = width;
-                                  canvas.height = height;
-                                  const ctx = canvas.getContext('2d');
-                                  ctx.fillStyle = '#FFFFFF';
-                                  ctx.fillRect(0, 0, width, height);
-                                  ctx.drawImage(img, 0, 0, width, height);
-                                  resolve(canvas.toDataURL('image/jpeg', 0.75));
-                                };
-                                img.onerror = () => resolve(base64Str); // 실패 시 원본 유지
-                                img.src = base64Str;
-                              });
-                            };
-
-                            // masterProducts와 products의 이미지 압축
-                            if (data.masterProducts && Array.isArray(data.masterProducts)) {
-                              for (let i = 0; i < data.masterProducts.length; i++) {
-                                if (data.masterProducts[i].image) {
-                                  data.masterProducts[i].image = await recompressBase64(data.masterProducts[i].image);
-                                }
-                              }
-                            }
-                            if (data.products && Array.isArray(data.products)) {
-                              for (let i = 0; i < data.products.length; i++) {
-                                if (data.products[i].image) {
-                                  data.products[i].image = await recompressBase64(data.products[i].image);
-                                }
-                              }
-                            }
 
                             if (data.products) saveProducts(data.products);
                             if (data.history) saveHistory(data.history);
@@ -1774,11 +1727,11 @@ ${list}` }]
                             if (data.polishStocks) savePolishStocks(data.polishStocks);
                             if (data.masterProducts) saveMasterProducts(data.masterProducts);
                             if (data.yocheokInput) saveYocheokInput(data.yocheokInput);
-                            alert('✅ 불러오기 완료!\n(이미지 자동 압축 적용됨)');
+                            alert('✅ 불러오기 완료!');
                             window.location.reload();
                           } catch (err) {
                             if (err.name === 'QuotaExceededError' || /quota/i.test(err.message||'')) {
-                              alert('💾 저장 공간 초과!\n\n이미지 압축 후에도 용량이 큽니다.\n9-2/9-3 기록을 일부 삭제하거나,\n9-1에서 일부 상품 이미지를 삭제해주세요.');
+                              alert('💾 저장 공간 초과!\n\n9-1에서 일부 상품 이미지를 삭제 후\n다시 시도하세요.');
                             } else {
                               alert('파일 형식 오류: ' + err.message);
                             }
@@ -9697,7 +9650,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260421.103</p>
+                <p>© 2026 LACEROOM통합관리 v20260421.104</p>
               </footer>
             </div>
           </div>
