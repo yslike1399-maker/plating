@@ -1618,7 +1618,7 @@ ${list}` }]
                 <div className="px-4 py-4 border-b border-slate-100">
                   <div>
                     <div className="text-sm font-bold text-slate-900 leading-tight">LACEROOM통합관리</div>
-                    <div className="text-xs text-slate-400">v20260421.107</div>
+                    <div className="text-xs text-slate-400">v20260421.108</div>
                   </div>
                 </div>
 
@@ -5297,15 +5297,40 @@ ${list}` }]
                                   const hasSmall = sizes.includes('소') || sizes.includes('s');
                                   const hasLarge = sizes.includes('대') || sizes.includes('l');
 
+                                  // 원단 정보 없는 상품 → 공란 처리
+                                  if (mp.hasFabricInfo === false) {
+                                    saveYocheokInput({
+                                      ...f,
+                                      _selectedMasterProduct: e.target.value,
+                                      _selectedSupplier: '',
+                                      _selectedFabric: '',
+                                      _fabricName: '',
+                                      _productName: mp.name,
+                                      _noFabricInfo: true,
+                                      fabricWidth: 0,
+                                      pricePerYard: 0,
+                                      useSmall: hasSmall || (!hasSmall && !hasLarge),
+                                      useLarge: hasLarge || (!hasSmall && !hasLarge)
+                                    });
+                                    return;
+                                  }
+
+                                  // 거래처 + 원단 정보로부터 폭 직접 조회 (정확)
+                                  const supplier = fabricSuppliersState.find(s => String(s.id) === String(mp.fabricSupplierId));
+                                  const fabric = supplier?.fabrics?.find(fb => String(fb.id) === String(mp.fabricId));
+                                  const widthFromFabric = fabric ? parseFloat(fabric.width) : 0;
+                                  const priceFromFabric = fabric ? parseFloat(fabric.price) : 0;
+
                                   saveYocheokInput({
                                     ...f,
                                     _selectedMasterProduct: e.target.value,
-                                    _selectedSupplier: mp.fabricSupplierId || f._selectedSupplier,
-                                    _selectedFabric: mp.fabricId || f._selectedFabric,
-                                    _fabricName: mp.fabricName || '',
+                                    _selectedSupplier: mp.fabricSupplierId || '',
+                                    _selectedFabric: mp.fabricId || '',
+                                    _fabricName: mp.fabricName || (fabric?.name) || '',
                                     _productName: mp.name,
-                                    fabricWidth: mp.fabricWidth || f.fabricWidth,
-                                    pricePerYard: mp.fabricPrice || f.pricePerYard,
+                                    _noFabricInfo: false,
+                                    fabricWidth: widthFromFabric || mp.fabricWidth || 0,
+                                    pricePerYard: priceFromFabric || mp.fabricPrice || 0,
                                     useSmall: hasSmall || (!hasSmall && !hasLarge),
                                     useLarge: hasLarge || (!hasSmall && !hasLarge)
                                   });
@@ -5314,15 +5339,19 @@ ${list}` }]
                                 <option value="">-- 곱창밴드 상품 선택 (선택사항) --</option>
                                 {masterProducts.filter(p=>p.type==='gocchang').map(p => (
                                   <option key={p.id} value={p.id}>
-                                    {p.name}{p.fabricName?` · 🧵 ${p.fabricName}`:''}{p.sizes?` · ${p.sizes}`:''}
+                                    {p.name}{p.hasFabricInfo === false ? ' · ⚠️ 원단정보 없음' : (p.fabricName?` · 🧵 ${p.fabricName}`:'')}{p.sizes?` · ${p.sizes}`:''}
                                   </option>
                                 ))}
                               </select>
                               {f._productName && (
-                                <div className="mt-2 bg-white border border-purple-200 rounded-lg px-3 py-2 text-xs">
-                                  <strong className="text-purple-700">✓ {f._productName}</strong>
+                                <div className={`mt-2 rounded-lg px-3 py-2 text-xs border ${
+                                  f._noFabricInfo ? 'bg-amber-50 border-amber-300' : 'bg-white border-purple-200'
+                                }`}>
+                                  <strong className={f._noFabricInfo ? 'text-amber-700' : 'text-purple-700'}>
+                                    {f._noFabricInfo ? '⚠️' : '✓'} {f._productName}
+                                  </strong>
                                   {f._fabricName && <span className="text-slate-500"> · 🧵 {f._fabricName}</span>}
-                                  <span className="text-slate-400"> 정보가 자동 입력되었습니다</span>
+                                  <span className="text-slate-400"> {f._noFabricInfo ? '— 원단 정보가 없는 상품입니다. 직접 입력해주세요.' : '정보가 자동 입력되었습니다'}</span>
                                 </div>
                               )}
                             </div>
@@ -9745,7 +9774,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260421.107</p>
+                <p>© 2026 LACEROOM통합관리 v20260421.108</p>
               </footer>
             </div>
           </div>
