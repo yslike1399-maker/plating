@@ -1618,7 +1618,7 @@ ${list}` }]
                 <div className="px-4 py-4 border-b border-slate-100">
                   <div>
                     <div className="text-sm font-bold text-slate-900 leading-tight">LACEROOM통합관리</div>
-                    <div className="text-xs text-slate-400">v20260421.106</div>
+                    <div className="text-xs text-slate-400">v20260421.107</div>
                   </div>
                 </div>
 
@@ -7356,15 +7356,6 @@ ${list}` }]
                                   <option value={soldoutItem.reason}>{soldoutItem.reason} (기존)</option>
                                 )}
                               </select>
-                              {isOff && offItem.reason === '품절' && (
-                                <div className="bg-amber-50 border border-amber-300 rounded-lg p-2 mt-2 text-[10px] text-amber-800 flex items-center gap-1.5">
-                                  <span className="text-base">🔗</span>
-                                  <div>
-                                    <div className="font-bold">오늘출발OFF 자동연동 됨</div>
-                                    <div>품절 해제 시 OFF도 자동 해제됩니다</div>
-                                  </div>
-                                </div>
-                              )}
                             </>
                           )}
                           {!isSoldout && !isOff && (
@@ -7375,63 +7366,58 @@ ${list}` }]
                         </div>
 
                         {/* 🚚 오늘출발 상태 */}
-                        <div className={`rounded-xl border-2 p-3 mb-3 ${isOff?'bg-red-50 border-red-300':'bg-blue-50 border-blue-300'}`}>
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="font-bold text-sm flex items-center gap-2">
-                              <span className="text-base">🚚</span>
-                              <span className={isOff?'text-red-700':'text-blue-700'}>
-                                오늘출발 {isOff?'OFF (불가)':'ON (가능)'}
-                              </span>
-                              {isOff && offItem.reason === '품절' && (
-                                <span className="bg-amber-200 text-amber-800 text-[9px] px-1.5 py-0.5 rounded-full font-bold">🔗 품절연동</span>
-                              )}
-                            </div>
-                            <button onClick={()=>{
-                              if (isOff && offItem.reason === '품절' && isSoldout) {
-                                alert('⚠️ 이 색상은 품절 상태입니다.\n\n품절을 먼저 해제해야 오늘출발 ON으로 변경 가능합니다.');
-                                return;
-                              }
-                              toggleOff();
-                            }}
-                              disabled={isOff && offItem.reason === '품절' && isSoldout}
-                              className={`px-3 py-1.5 rounded-lg font-bold text-xs transition ${
-                                isOff && offItem.reason === '품절' && isSoldout
-                                  ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
-                                  : isOff
-                                  ? 'bg-blue-500 hover:bg-blue-600 text-white'
-                                  : 'bg-red-500 hover:bg-red-600 text-white'
-                              }`}>
-                              {isOff ? '✅ ON으로 변경' : '❌ OFF 처리'}
-                            </button>
-                          </div>
-                          {isOff && (
-                            <>
-                              <div className="text-[10px] text-red-600 mb-1">
-                                {offItem.date} · {Math.floor((new Date()-new Date(offItem.date))/(1000*60*60*24))}일째
+                        {/* 🚚 오늘출발 상태 */}
+                        {isOff && offItem.reason === '품절' && isSoldout ? (
+                          // 품절 연동 OFF - 단순 안내 (액션 불필요)
+                          <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-3 mb-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-xl">🔗</span>
+                              <div className="flex-1">
+                                <div className="font-bold text-sm text-amber-800">오늘출발 OFF (품절 자동연동)</div>
+                                <div className="text-[11px] text-amber-700">품절 해제 시 OFF도 자동으로 해제됩니다</div>
                               </div>
-                              {offItem.reason === '품절' && isSoldout ? (
-                                <div className="bg-amber-50 border border-amber-300 rounded-lg p-2 text-[10px] text-amber-800">
-                                  <div className="font-bold flex items-center gap-1 mb-0.5">
-                                    <span>🔗</span> 품절로 인한 자동 OFF
-                                  </div>
-                                  <div>품절 해제 시 OFF도 자동 해제됩니다.<br/>사유 변경 불가 (품절 고정)</div>
+                            </div>
+                            <div className="bg-white border border-amber-200 rounded-lg p-2 text-[11px] text-slate-600">
+                              💡 OFF를 ON으로 바꾸려면 위에서 <strong>품절 해제</strong>를 먼저 해주세요.
+                            </div>
+                          </div>
+                        ) : (
+                          // 일반 OFF 상태
+                          <div className={`rounded-xl border-2 p-3 mb-3 ${isOff?'bg-red-50 border-red-300':'bg-blue-50 border-blue-300'}`}>
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="font-bold text-sm flex items-center gap-2">
+                                <span className="text-base">🚚</span>
+                                <span className={isOff?'text-red-700':'text-blue-700'}>
+                                  오늘출발 {isOff?'OFF (불가)':'ON (가능)'}
+                                </span>
+                              </div>
+                              <button onClick={()=>toggleOff()}
+                                className={`px-3 py-1.5 rounded-lg font-bold text-xs transition ${
+                                  isOff
+                                    ? 'bg-blue-500 hover:bg-blue-600 text-white'
+                                    : 'bg-red-500 hover:bg-red-600 text-white'
+                                }`}>
+                                {isOff ? '✅ ON으로 변경' : '❌ OFF 처리'}
+                              </button>
+                            </div>
+                            {isOff && (
+                              <>
+                                <div className="text-[10px] text-red-600 mb-1">
+                                  {offItem.date} · {Math.floor((new Date()-new Date(offItem.date))/(1000*60*60*24))}일째
                                 </div>
-                              ) : (
-                                <>
-                                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">OFF 사유</label>
-                                  <select value={offItem.reason||''}
-                                    onChange={e=>updateReason('off', e.target.value)}
-                                    className="w-full px-2 py-1.5 rounded-lg border border-red-200 text-xs bg-white">
-                                    {offReasons.map(r=><option key={r} value={r}>{r}</option>)}
-                                    {!offReasons.includes(offItem.reason) && offItem.reason && (
-                                      <option value={offItem.reason}>{offItem.reason} (기존)</option>
-                                    )}
-                                  </select>
-                                </>
-                              )}
-                            </>
-                          )}
-                        </div>
+                                <label className="block text-[11px] font-semibold text-slate-600 mb-1">OFF 사유</label>
+                                <select value={offItem.reason||''}
+                                  onChange={e=>updateReason('off', e.target.value)}
+                                  className="w-full px-2 py-1.5 rounded-lg border border-red-200 text-xs bg-white">
+                                  {offReasons.map(r=><option key={r} value={r}>{r}</option>)}
+                                  {!offReasons.includes(offItem.reason) && offItem.reason && (
+                                    <option value={offItem.reason}>{offItem.reason} (기존)</option>
+                                  )}
+                                </select>
+                              </>
+                            )}
+                          </div>
+                        )}
 
                         <button onClick={()=>setColorStatusPopup(null)}
                           className="w-full py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold text-sm">완료</button>
@@ -9759,7 +9745,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260421.106</p>
+                <p>© 2026 LACEROOM통합관리 v20260421.107</p>
               </footer>
             </div>
           </div>
