@@ -151,6 +151,9 @@
             } catch { return []; }
           });
           const [masterPopup, setMasterPopup] = useState(null);
+          const [quickSoldoutPopup, setQuickSoldoutPopup] = useState(null); // {product, reason}
+          const [quickOffPopup, setQuickOffPopup] = useState(null); // {product, reason, estimatedDate}
+          const [colorStatusPopup, setColorStatusPopup] = useState(null); // {product, color}
           const [form_masterSearch, setForm_masterSearch] = useState('');
           const [form_masterFilter, setForm_masterFilter] = useState('all');
           const saveMasterProducts = (d) => { setMasterProducts(d); localStorage.setItem('master_products', JSON.stringify(d)); };
@@ -1556,7 +1559,7 @@ ${list}` }]
                 <div className="px-4 py-4 border-b border-slate-100">
                   <div>
                     <div className="text-sm font-bold text-slate-900 leading-tight">LACEROOM통합관리</div>
-                    <div className="text-xs text-slate-400">v20260421.94</div>
+                    <div className="text-xs text-slate-400">v20260421.96</div>
                   </div>
                 </div>
 
@@ -7090,6 +7093,329 @@ ${list}` }]
                   </div>
                 )}
 
+                {/* 🚫 빠른 품절 토글 팝업 */}
+                {/* 🎨 색상별 상태 설정 팝업 (9-1 카드 색상 클릭 시) */}
+                {colorStatusPopup && (() => {
+                  const p = colorStatusPopup.product;
+                  const c = colorStatusPopup.color;
+                  const soldoutItem = soldoutItems.find(i => i.name===p.name && i.color===c);
+                  const offItem = todayOffItems.find(i => i.name===p.name && i.color===c);
+                  const isSoldout = !!soldoutItem;
+                  const isOff = !!offItem;
+
+                  const soldoutReasons = p.type==='gocchang'
+                    ? ['원단품절 - 원단주문전','원단품절 - 원단주문완료','미싱작업중','도금중']
+                    : ['메인재료 품절 - 중국발주 필요','원자재 품절 - 핀대','중국 제작중','도금중'];
+                  const offReasons = ['재고 부족','도금 대기','제작 중','출고 마감 이후'];
+
+                  const toggleSoldout = (reason) => {
+                    if (isSoldout) {
+                      saveSoldoutItems(soldoutItems.filter(i => !(i.name===p.name && i.color===c)));
+                    } else {
+                      saveSoldoutItems([...soldoutItems, {
+                        id: Date.now()+Math.random(),
+                        type: p.type, name: p.name, color: c, size: p.sizes||'',
+                        date: new Date().toISOString().split('T')[0],
+                        reason: reason || soldoutReasons[0],
+                        createdAt: new Date().toISOString()
+                      }]);
+                    }
+                  };
+
+                  const toggleOff = (reason) => {
+                    if (isOff) {
+                      saveTodayOffItems(todayOffItems.filter(i => !(i.name===p.name && i.color===c)));
+                    } else {
+                      saveTodayOffItems([...todayOffItems, {
+                        id: Date.now()+Math.random(),
+                        type: p.type, name: p.name, color: c, size: p.sizes||'',
+                        date: new Date().toISOString().split('T')[0],
+                        reason: reason || offReasons[0],
+                        createdAt: new Date().toISOString()
+                      }]);
+                    }
+                  };
+
+                  const updateReason = (type, newReason) => {
+                    if (type==='soldout') {
+                      saveSoldoutItems(soldoutItems.map(i =>
+                        (i.name===p.name && i.color===c) ? {...i, reason: newReason} : i
+                      ));
+                    } else {
+                      saveTodayOffItems(todayOffItems.map(i =>
+                        (i.name===p.name && i.color===c) ? {...i, reason: newReason} : i
+                      ));
+                    }
+                  };
+
+                  return (
+                    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.5)'}}
+                      onClick={()=>setColorStatusPopup(null)}>
+                      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-5 max-h-[90vh] overflow-y-auto"
+                        onClick={e=>e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-base font-bold text-slate-900">🎨 색상 설정</h3>
+                          <button onClick={()=>setColorStatusPopup(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
+                        </div>
+
+                        {/* 상품 정보 */}
+                        <div className="flex items-center gap-3 bg-slate-50 rounded-xl p-3 mb-4">
+                          {p.image ? (
+                            <img src={p.image} className="w-12 h-12 rounded-lg object-cover border" alt=""/>
+                          ) : (
+                            <div className="w-12 h-12 rounded-lg bg-white border flex items-center justify-center text-xl">{p.type==='hairpin'?'📌':'🎀'}</div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="font-bold text-slate-900 text-sm truncate">{p.name}</div>
+                            <div className="text-sm font-black text-purple-700 mt-0.5">🎨 {c}</div>
+                          </div>
+                        </div>
+
+                        {/* 🚫 품절 상태 */}
+                        <div className={`rounded-xl border-2 p-3 mb-3 ${isSoldout?'bg-red-50 border-red-300':'bg-white border-slate-200'}`}>
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="font-bold text-sm flex items-center gap-2">
+                              <span className="text-base">🚫</span>
+                              <span className={isSoldout?'text-red-700':'text-slate-700'}>품절 상태</span>
+                            </div>
+                            <button onClick={()=>toggleSoldout()}
+                              className={`px-3 py-1.5 rounded-lg font-bold text-xs transition ${
+                                isSoldout
+                                  ? 'bg-green-500 hover:bg-green-600 text-white'
+                                  : 'bg-red-500 hover:bg-red-600 text-white'
+                              }`}>
+                              {isSoldout ? '✅ 품절 해제' : '🚫 품절 처리'}
+                            </button>
+                          </div>
+                          {isSoldout && (
+                            <>
+                              <div className="text-[10px] text-red-600 mb-1">
+                                {soldoutItem.date} · {Math.floor((new Date()-new Date(soldoutItem.date))/(1000*60*60*24))}일째
+                              </div>
+                              <label className="block text-[11px] font-semibold text-slate-600 mb-1">품절 사유</label>
+                              <select value={soldoutItem.reason||''}
+                                onChange={e=>updateReason('soldout', e.target.value)}
+                                className="w-full px-2 py-1.5 rounded-lg border border-red-200 text-xs bg-white">
+                                {soldoutReasons.map(r=><option key={r} value={r}>{r}</option>)}
+                                {!soldoutReasons.includes(soldoutItem.reason) && soldoutItem.reason && (
+                                  <option value={soldoutItem.reason}>{soldoutItem.reason} (기존)</option>
+                                )}
+                              </select>
+                            </>
+                          )}
+                        </div>
+
+                        {/* 🚚 오늘출발 상태 */}
+                        <div className={`rounded-xl border-2 p-3 mb-3 ${isOff?'bg-red-50 border-red-300':'bg-blue-50 border-blue-300'}`}>
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="font-bold text-sm flex items-center gap-2">
+                              <span className="text-base">🚚</span>
+                              <span className={isOff?'text-red-700':'text-blue-700'}>
+                                오늘출발 {isOff?'OFF (불가)':'ON (가능)'}
+                              </span>
+                            </div>
+                            <button onClick={()=>toggleOff()}
+                              className={`px-3 py-1.5 rounded-lg font-bold text-xs transition ${
+                                isOff
+                                  ? 'bg-blue-500 hover:bg-blue-600 text-white'
+                                  : 'bg-red-500 hover:bg-red-600 text-white'
+                              }`}>
+                              {isOff ? '✅ ON으로 변경' : '❌ OFF 처리'}
+                            </button>
+                          </div>
+                          {isOff && (
+                            <>
+                              <div className="text-[10px] text-red-600 mb-1">
+                                {offItem.date} · {Math.floor((new Date()-new Date(offItem.date))/(1000*60*60*24))}일째
+                              </div>
+                              <label className="block text-[11px] font-semibold text-slate-600 mb-1">OFF 사유</label>
+                              <select value={offItem.reason||''}
+                                onChange={e=>updateReason('off', e.target.value)}
+                                className="w-full px-2 py-1.5 rounded-lg border border-red-200 text-xs bg-white">
+                                {offReasons.map(r=><option key={r} value={r}>{r}</option>)}
+                                {!offReasons.includes(offItem.reason) && offItem.reason && (
+                                  <option value={offItem.reason}>{offItem.reason} (기존)</option>
+                                )}
+                              </select>
+                            </>
+                          )}
+                        </div>
+
+                        <button onClick={()=>setColorStatusPopup(null)}
+                          className="w-full py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold text-sm">완료</button>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {quickSoldoutPopup && (() => {
+                  const p = quickSoldoutPopup.product;
+                  const currentSoldout = soldoutItems.filter(i => i.name === p.name);
+                  const soldoutColorSet = new Set(currentSoldout.map(i => i.color));
+                  const allColors = p.colors || [];
+                  return (
+                    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.5)'}}>
+                      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">🚫 품절 관리</h3>
+                          <button onClick={()=>setQuickSoldoutPopup(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
+                        </div>
+
+                        <div className="flex items-center gap-3 bg-slate-50 rounded-xl p-3 mb-4">
+                          {p.image ? (
+                            <img src={p.image} className="w-14 h-14 rounded-lg object-cover border" alt=""/>
+                          ) : (
+                            <div className="w-14 h-14 rounded-lg bg-white border flex items-center justify-center text-2xl">{p.type==='hairpin'?'📌':'🎀'}</div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="font-bold text-slate-900 text-sm truncate">{p.name}</div>
+                            <div className="text-xs text-slate-500">전체 {allColors.length}색 · 품절 {soldoutColorSet.size}색</div>
+                          </div>
+                        </div>
+
+                        {allColors.length === 0 ? (
+                          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700">
+                            ⚠️ 이 상품에 등록된 색상이 없습니다. 먼저 ✏️ 수정에서 색상을 등록해주세요.
+                          </div>
+                        ) : (
+                          <>
+                            <div className="text-xs font-bold text-slate-600 mb-2">색상별 품절 상태 (클릭하여 토글)</div>
+                            <div className="space-y-1.5 mb-4 max-h-64 overflow-y-auto">
+                              {allColors.map(color => {
+                                const isSoldout = soldoutColorSet.has(color);
+                                const item = currentSoldout.find(i => i.color === color);
+                                const days = item ? Math.floor((new Date()-new Date(item.date))/(1000*60*60*24)) : 0;
+                                return (
+                                  <label key={color} className={`flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition ${isSoldout?'bg-red-50 border-2 border-red-300':'bg-slate-50 border-2 border-slate-200 hover:border-red-200'}`}>
+                                    <input type="checkbox" checked={isSoldout}
+                                      onChange={()=>{
+                                        if (isSoldout) {
+                                          // 품절 해제
+                                          saveSoldoutItems(soldoutItems.filter(i => !(i.name===p.name && i.color===color)));
+                                        } else {
+                                          // 품절 등록 (기본 이유)
+                                          const newItem = {
+                                            id: Date.now() + Math.random(),
+                                            type: p.type,
+                                            name: p.name,
+                                            color,
+                                            size: p.sizes || '',
+                                            date: new Date().toISOString().split('T')[0],
+                                            reason: p.type==='gocchang' ? '원단품절 - 원단주문전' : '중국 제작중',
+                                            createdAt: new Date().toISOString()
+                                          };
+                                          saveSoldoutItems([...soldoutItems, newItem]);
+                                        }
+                                      }}
+                                      className="w-5 h-5 accent-red-500"/>
+                                    <div className="flex-1 min-w-0">
+                                      <div className={`text-sm font-semibold ${isSoldout?'text-red-700':'text-slate-700'}`}>{color}</div>
+                                      {isSoldout && (
+                                        <div className="text-[10px] text-red-500">🚫 품절 {days}일째 · {item.reason}</div>
+                                      )}
+                                      {!isSoldout && <div className="text-[10px] text-slate-400">✅ 판매 가능</div>}
+                                    </div>
+                                  </label>
+                                );
+                              })}
+                            </div>
+
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 text-[11px] text-blue-700">
+                              💡 체크 = 즉시 품절 / 체크 해제 = 즉시 해제<br/>
+                              상세 이유·날짜 변경은 9-2 품절 탭에서 가능합니다.
+                            </div>
+                          </>
+                        )}
+
+                        <button onClick={()=>setQuickSoldoutPopup(null)}
+                          className="w-full mt-4 py-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold text-sm">완료</button>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* 🚚 빠른 오늘출발OFF 토글 팝업 */}
+                {quickOffPopup && (() => {
+                  const p = quickOffPopup.product;
+                  const currentOff = todayOffItems.filter(i => i.name === p.name);
+                  const offColorSet = new Set(currentOff.map(i => i.color));
+                  const allColors = p.colors || [];
+                  return (
+                    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.5)'}}>
+                      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">🚚 오늘출발OFF 관리</h3>
+                          <button onClick={()=>setQuickOffPopup(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
+                        </div>
+
+                        <div className="flex items-center gap-3 bg-slate-50 rounded-xl p-3 mb-4">
+                          {p.image ? (
+                            <img src={p.image} className="w-14 h-14 rounded-lg object-cover border" alt=""/>
+                          ) : (
+                            <div className="w-14 h-14 rounded-lg bg-white border flex items-center justify-center text-2xl">{p.type==='hairpin'?'📌':'🎀'}</div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="font-bold text-slate-900 text-sm truncate">{p.name}</div>
+                            <div className="text-xs text-slate-500">전체 {allColors.length}색 · 오늘출발OFF {offColorSet.size}색</div>
+                          </div>
+                        </div>
+
+                        {allColors.length === 0 ? (
+                          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700">
+                            ⚠️ 이 상품에 등록된 색상이 없습니다. 먼저 ✏️ 수정에서 색상을 등록해주세요.
+                          </div>
+                        ) : (
+                          <>
+                            <div className="text-xs font-bold text-slate-600 mb-2">색상별 오늘출발OFF 상태 (클릭하여 토글)</div>
+                            <div className="space-y-1.5 mb-4 max-h-64 overflow-y-auto">
+                              {allColors.map(color => {
+                                const isOff = offColorSet.has(color);
+                                const item = currentOff.find(i => i.color === color);
+                                return (
+                                  <label key={color} className={`flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition ${isOff?'bg-blue-50 border-2 border-blue-300':'bg-slate-50 border-2 border-slate-200 hover:border-blue-200'}`}>
+                                    <input type="checkbox" checked={isOff}
+                                      onChange={()=>{
+                                        if (isOff) {
+                                          saveTodayOffItems(todayOffItems.filter(i => !(i.name===p.name && i.color===color)));
+                                        } else {
+                                          const newItem = {
+                                            id: Date.now() + Math.random(),
+                                            type: p.type,
+                                            name: p.name,
+                                            color,
+                                            size: p.sizes || '',
+                                            date: new Date().toISOString().split('T')[0],
+                                            reason: '재고 부족',
+                                            createdAt: new Date().toISOString()
+                                          };
+                                          saveTodayOffItems([...todayOffItems, newItem]);
+                                        }
+                                      }}
+                                      className="w-5 h-5 accent-blue-500"/>
+                                    <div className="flex-1 min-w-0">
+                                      <div className={`text-sm font-semibold ${isOff?'text-blue-700':'text-slate-700'}`}>{color}</div>
+                                      {isOff && <div className="text-[10px] text-blue-500">🚚 오늘출발 OFF · {item.date}</div>}
+                                      {!isOff && <div className="text-[10px] text-slate-400">✅ 오늘출발 가능</div>}
+                                    </div>
+                                  </label>
+                                );
+                              })}
+                            </div>
+
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 text-[11px] text-blue-700">
+                              💡 체크 = 오늘출발 OFF / 체크 해제 = 오늘출발 가능<br/>
+                              상세 설정은 9-3 오늘출발OFF 탭에서 가능합니다.
+                            </div>
+                          </>
+                        )}
+
+                        <button onClick={()=>setQuickOffPopup(null)}
+                          className="w-full mt-4 py-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold text-sm">완료</button>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* 상품관리 탭 */}
                 {activeMainTab === 'productMgmt' && (
                   <div className="flex-1 px-6 py-8">
@@ -7682,28 +8008,41 @@ ${list}` }]
                                               </div>
                                             )}
 
-                                            {/* 품절 색상 리스트 (부분 품절일 때만) */}
-                                            {isPartialSoldout && (
-                                              <div className="bg-orange-50 border-t border-orange-200 px-2 py-1">
-                                                <div className="text-[9px] text-orange-600 font-bold mb-0.5">품절 색상:</div>
-                                                <div className="flex flex-wrap gap-0.5">
-                                                  {soldoutColors.slice(0,5).map((c,i)=>(
-                                                    <span key={i} className="text-[9px] bg-white border border-orange-300 text-orange-700 px-1 py-0.5 rounded font-semibold">{c}</span>
-                                                  ))}
-                                                  {soldoutColors.length>5 && <span className="text-[9px] text-orange-400">+{soldoutColors.length-5}</span>}
-                                                </div>
-                                              </div>
-                                            )}
-
                                             {/* 정보 영역 */}
                                             <div className="p-2.5 space-y-1">
                                               <div className="font-bold text-slate-900 text-xs truncate" title={p.name}>{p.name}</div>
-                                              <div className="flex flex-wrap gap-1">
-                                                {p.colors.slice(0,3).map(c=>(
-                                                  <span key={c} className="text-[9px] bg-slate-100 text-slate-600 px-1 py-0.5 rounded">{c}</span>
-                                                ))}
-                                                {p.colors.length>3 && <span className="text-[9px] text-slate-400">+{p.colors.length-3}</span>}
-                                              </div>
+
+                                              {/* 전체 색상 리스트 (품절/오늘출발 상태 포함 · 클릭으로 토글) */}
+                                              {p.colors && p.colors.length > 0 && (
+                                                <div className="flex flex-wrap gap-1 py-1">
+                                                  {p.colors.map(c=>{
+                                                    const isColorSoldout = soldoutColors.includes(c);
+                                                    const isColorOff = todayOffItems.some(i => i.name===p.name && i.color===c);
+                                                    return (
+                                                      <button key={c}
+                                                        onClick={()=>setColorStatusPopup({product: p, color: c})}
+                                                        className={`inline-flex items-stretch text-[10px] rounded border-2 overflow-hidden hover:shadow-md transition cursor-pointer ${
+                                                          isColorSoldout
+                                                            ? 'border-red-500 bg-red-50'
+                                                            : 'border-slate-800 bg-white'
+                                                        }`}>
+                                                        <span className={`px-1 flex flex-col items-center justify-center text-white font-black leading-none ${
+                                                          isColorOff ? 'bg-red-500' : 'bg-blue-500'
+                                                        }`} style={{fontSize:'8px', padding:'2px 3px'}}>
+                                                          <span>오늘</span>
+                                                          <span>{isColorOff ? '불가' : '출발'}</span>
+                                                        </span>
+                                                        <span className={`px-1.5 py-0.5 font-bold flex items-center ${
+                                                          isColorSoldout ? 'text-red-600 line-through decoration-2' : 'text-slate-900'
+                                                        }`}>
+                                                          {c}
+                                                        </span>
+                                                      </button>
+                                                    );
+                                                  })}
+                                                </div>
+                                              )}
+
                                               {p.sizes && <div className="text-[10px] text-slate-400 truncate">사이즈: {p.sizes}</div>}
                                               {p.fabricName && (
                                                 <div className="bg-blue-50 border border-blue-200 rounded px-1.5 py-0.5 text-[10px]">
@@ -7719,17 +8058,36 @@ ${list}` }]
                                             </div>
 
                                             {/* 액션 버튼 */}
-                                            <div className="border-t border-slate-100 p-1.5 flex gap-1">
-                                              <button onClick={()=>setMasterPopup({...p, _colorMapping: p.colorMapping||{}})}
-                                                className="flex-1 bg-blue-500 hover:bg-blue-600 text-white rounded py-1 text-[11px] font-bold flex items-center justify-center gap-0.5">
-                                                ✏️ 수정
-                                              </button>
-                                              <button onClick={()=>{
-                                                if(soldoutCount>0||offCount>0) return alert('이 상품으로 등록된 품절/OFF 기록이 있어 삭제할 수 없습니다.\\n먼저 해당 기록을 정리해주세요.');
-                                                if(confirm(`[${p.name}] 삭제?`)) saveMasterProducts(masterProducts.filter(x=>x.id!==p.id));
-                                              }} className="bg-red-50 hover:bg-red-100 text-red-500 border border-red-200 rounded px-2 py-1 text-[11px] font-bold">
-                                                🗑️
-                                              </button>
+                                            <div className="border-t border-slate-100 p-1.5 space-y-1">
+                                              <div className="flex gap-1">
+                                                <button onClick={()=>setQuickSoldoutPopup({product: p})}
+                                                  className={`flex-1 rounded py-1 text-[11px] font-bold transition flex items-center justify-center gap-0.5 ${
+                                                    isFullSoldout ? 'bg-red-600 hover:bg-red-700 text-white' :
+                                                    isPartialSoldout ? 'bg-orange-500 hover:bg-orange-600 text-white' :
+                                                    'bg-slate-100 hover:bg-red-100 text-slate-600 hover:text-red-600'
+                                                  }`}>
+                                                  🚫 품절{soldoutCount>0?` ${soldoutCount}`:''}
+                                                </button>
+                                                <button onClick={()=>setQuickOffPopup({product: p})}
+                                                  className={`flex-1 rounded py-1 text-[11px] font-bold transition flex items-center justify-center gap-0.5 ${
+                                                    isOff ? 'bg-blue-500 hover:bg-blue-600 text-white' :
+                                                    'bg-slate-100 hover:bg-blue-100 text-slate-600 hover:text-blue-600'
+                                                  }`}>
+                                                  🚚 오늘출발{offCount>0?` ${offCount}`:''}
+                                                </button>
+                                              </div>
+                                              <div className="flex gap-1">
+                                                <button onClick={()=>setMasterPopup({...p, _colorMapping: p.colorMapping||{}})}
+                                                  className="flex-1 bg-blue-500 hover:bg-blue-600 text-white rounded py-1 text-[11px] font-bold flex items-center justify-center gap-0.5">
+                                                  ✏️ 수정
+                                                </button>
+                                                <button onClick={()=>{
+                                                  if(soldoutCount>0||offCount>0) return alert('이 상품으로 등록된 품절/OFF 기록이 있어 삭제할 수 없습니다.\\n먼저 해당 기록을 정리해주세요.');
+                                                  if(confirm(`[${p.name}] 삭제?`)) saveMasterProducts(masterProducts.filter(x=>x.id!==p.id));
+                                                }} className="bg-red-50 hover:bg-red-100 text-red-500 border border-red-200 rounded px-2 py-1 text-[11px] font-bold">
+                                                  🗑️
+                                                </button>
+                                              </div>
                                             </div>
                                           </div>
                                         );
@@ -8884,7 +9242,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260421.94</p>
+                <p>© 2026 LACEROOM통합관리 v20260421.96</p>
               </footer>
             </div>
           </div>
