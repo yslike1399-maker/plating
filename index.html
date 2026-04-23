@@ -1559,7 +1559,7 @@ ${list}` }]
                 <div className="px-4 py-4 border-b border-slate-100">
                   <div>
                     <div className="text-sm font-bold text-slate-900 leading-tight">LACEROOM통합관리</div>
-                    <div className="text-xs text-slate-400">v20260421.96</div>
+                    <div className="text-xs text-slate-400">v20260421.99</div>
                   </div>
                 </div>
 
@@ -7446,7 +7446,7 @@ ${list}` }]
                             const isEdit = !!masterPopup.id;
                             const form = masterPopup;
                             const setForm = (updater) => setMasterPopup(prev => typeof updater==='function'?updater(prev):updater);
-                            const hairpinColors = [{base:'골드',f:['유광','반광']},{base:'실버',f:['유광','반광']},{base:'블랙',f:['유광','반광']},{base:'로즈골드',f:['유광','반광']},{base:'다크골드',f:['유광','반광']},{base:'14K도금',f:['']},{base:'은',f:['']}];
+                            const hairpinColors = [{base:'골드',f:['유광','반광']},{base:'실버',f:['유광','반광']},{base:'블랙',f:['유광','반광']},{base:'흑무광',f:['']},{base:'로즈골드',f:['유광','반광']},{base:'다크골드',f:['유광','반광']},{base:'14K도금',f:['']},{base:'은',f:['']}];
                             const gocchangColors = ['블랙','화이트','베이지','그레이','아이보리','브라운','네이비','와인','카키','핑크','라벤더','민트','옐로우','기타'];
                             const toggleColor = (c) => setForm(p=>({...p,colors:p.colors.includes(c)?p.colors.filter(x=>x!==c):[...p.colors,c]}));
                             return (
@@ -7934,6 +7934,110 @@ ${list}` }]
                               </div>
 
                             <div className="space-y-3">
+                              {/* ⭐ 집중관리 상품 섹션 (최상단) */}
+                              {(() => {
+                                const filter = form_masterFilter || 'all';
+                                const search = (form_masterSearch||'').toLowerCase().trim();
+                                let featuredItems = masterProducts.filter(p => p.isFeatured && (!search || p.name.toLowerCase().includes(search)));
+                                if (filter === 'hairpin') featuredItems = featuredItems.filter(p => p.type==='hairpin');
+                                if (filter === 'gocchang') featuredItems = featuredItems.filter(p => p.type==='gocchang');
+                                if (!featuredItems.length) return null;
+
+                                return (
+                                  <div className="bg-gradient-to-br from-yellow-50 to-amber-50 rounded-2xl border-2 border-yellow-300 overflow-hidden shadow">
+                                    <div className="bg-gradient-to-r from-yellow-400 to-amber-400 px-5 py-3 flex items-center justify-between">
+                                      <span className="font-black text-white text-sm flex items-center gap-2">
+                                        ⭐ 집중관리 상품
+                                        <span className="text-[10px] bg-white/30 px-2 py-0.5 rounded-full">MAIN</span>
+                                      </span>
+                                      <span className="text-xs text-white font-bold bg-white/20 px-2 py-0.5 rounded-full">{featuredItems.length}개</span>
+                                    </div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 p-4">
+                                      {featuredItems.sort((a,b)=>a.name.localeCompare(b.name)).map(p=>{
+                                        const soldoutColors = soldoutItems.filter(i=>i.name===p.name).map(i=>i.color);
+                                        const soldoutCount = soldoutColors.length;
+                                        const offCount = todayOffItems.filter(i=>i.name===p.name).length;
+                                        const totalColors = (p.colors||[]).length;
+                                        const isSoldout = soldoutCount > 0;
+                                        const isFullSoldout = isSoldout && totalColors > 0 && soldoutCount >= totalColors;
+                                        const isPartialSoldout = isSoldout && !isFullSoldout;
+                                        const isOff = offCount > 0;
+                                        const type = p.type;
+                                        return (
+                                          <div key={`featured-${p.id}`} className="bg-white rounded-xl border-2 border-yellow-400 hover:border-yellow-500 hover:shadow-lg shadow-yellow-100 transition-all overflow-hidden">
+                                            {p.image ? (
+                                              <div className="relative aspect-square bg-slate-50 overflow-hidden flex items-center justify-center">
+                                                <img src={p.image} alt={p.name} className={`max-w-full max-h-full object-contain ${isFullSoldout?'opacity-50 grayscale':isPartialSoldout?'opacity-80':''}`}/>
+                                                <div className="absolute top-1.5 left-1.5 flex flex-col gap-1 items-start">
+                                                  <button onClick={()=>saveMasterProducts(masterProducts.map(x=>x.id===p.id?{...x, isFeatured: false}:x))}
+                                                    title="집중관리 해제"
+                                                    className="text-base px-1.5 py-0.5 rounded-full shadow font-bold bg-yellow-400 text-white hover:bg-yellow-500 transition">
+                                                    ⭐
+                                                  </button>
+                                                  {p.type==='hairpin' && p.grindRequired && (
+                                                    <span className="bg-orange-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold shadow">연마</span>
+                                                  )}
+                                                </div>
+                                                <div className="absolute top-1.5 right-1.5 flex flex-col gap-1 items-end">
+                                                  {isFullSoldout && <span className="bg-red-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow animate-pulse">🚫 전체품절</span>}
+                                                  {isPartialSoldout && <span className="bg-orange-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow">🚫 {soldoutCount}/{totalColors} 품절</span>}
+                                                  {isOff && <span className="bg-blue-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow">🚚 오늘출발OFF {offCount}</span>}
+                                                </div>
+                                                {isFullSoldout && <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><div className="bg-red-600 text-white px-5 py-1.5 font-black text-sm rotate-[-20deg] border-2 border-white shadow-lg tracking-wider">SOLD OUT</div></div>}
+                                                {isPartialSoldout && <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><div className="bg-orange-400/90 text-white px-3 py-1 font-bold text-[11px] rotate-[-20deg] border-2 border-white shadow tracking-wide">Partial Sold</div></div>}
+                                              </div>
+                                            ) : (
+                                              <div className={`relative aspect-square flex items-center justify-center ${type==='hairpin'?'bg-orange-50':'bg-purple-50'}`}>
+                                                <span className="text-3xl opacity-40">{type==='hairpin'?'📌':'🎀'}</span>
+                                                <button onClick={()=>saveMasterProducts(masterProducts.map(x=>x.id===p.id?{...x, isFeatured: false}:x))}
+                                                  className="absolute top-1.5 left-1.5 text-base px-1.5 py-0.5 rounded-full shadow font-bold bg-yellow-400 text-white">⭐</button>
+                                              </div>
+                                            )}
+                                            <div className="p-2.5 space-y-1">
+                                              <div className="font-bold text-slate-900 text-xs truncate flex items-center gap-1" title={p.name}>
+                                                <span className="text-yellow-500">⭐</span>{p.name}
+                                              </div>
+                                              {p.colors && p.colors.length > 0 && (
+                                                <div className="flex flex-wrap gap-1 py-1">
+                                                  {p.colors.map(c=>{
+                                                    const isColorSoldout = soldoutColors.includes(c);
+                                                    const isColorOff = todayOffItems.some(i => i.name===p.name && i.color===c);
+                                                    return (
+                                                      <button key={c} onClick={()=>setColorStatusPopup({product: p, color: c})}
+                                                        className={`inline-flex items-stretch text-[10px] rounded overflow-hidden hover:shadow-sm transition cursor-pointer ${isColorSoldout?'border border-red-400 bg-red-50':'border border-slate-300 bg-white'}`}>
+                                                        <span className={`flex flex-col items-center justify-center text-white font-bold leading-none ${isColorOff?'bg-red-500':'bg-blue-500'}`} style={{fontSize:'8px', padding:'2px 3px'}}>
+                                                          <span>오늘</span><span>{isColorOff?'불가':'출발'}</span>
+                                                        </span>
+                                                        <span className={`px-1.5 py-0.5 font-semibold flex items-center ${isColorSoldout?'text-red-600 line-through decoration-2':'text-slate-700'}`}>{c}</span>
+                                                      </button>
+                                                    );
+                                                  })}
+                                                </div>
+                                              )}
+                                              {p.sizes && <div className="text-[10px] text-slate-400 truncate">사이즈: {p.sizes}</div>}
+                                            </div>
+                                            <div className="border-t border-slate-100 p-1.5 space-y-1">
+                                              <div className="flex gap-1">
+                                                <button onClick={()=>setQuickSoldoutPopup({product: p})}
+                                                  className={`flex-1 rounded py-1 text-[11px] font-bold transition flex items-center justify-center gap-0.5 ${isFullSoldout?'bg-red-600 hover:bg-red-700 text-white':isPartialSoldout?'bg-orange-500 hover:bg-orange-600 text-white':'bg-slate-100 hover:bg-red-100 text-slate-600 hover:text-red-600'}`}>🚫 품절{soldoutCount>0?` ${soldoutCount}`:''}</button>
+                                                <button onClick={()=>setQuickOffPopup({product: p})}
+                                                  className={`flex-1 rounded py-1 text-[11px] font-bold transition flex items-center justify-center gap-0.5 ${isOff?'bg-blue-500 hover:bg-blue-600 text-white':'bg-slate-100 hover:bg-blue-100 text-slate-600 hover:text-blue-600'}`}>🚚 오늘출발{offCount>0?` ${offCount}`:''}</button>
+                                              </div>
+                                              <div className="flex gap-1">
+                                                <button onClick={()=>setMasterPopup({...p, _colorMapping: p.colorMapping||{}})}
+                                                  className="flex-1 bg-blue-500 hover:bg-blue-600 text-white rounded py-1 text-[11px] font-bold">✏️ 수정</button>
+                                                <button onClick={()=>{if(soldoutCount>0||offCount>0) return alert('품절/OFF 기록이 있어 삭제할 수 없습니다'); if(confirm(`[${p.name}] 삭제?`)) saveMasterProducts(masterProducts.filter(x=>x.id!==p.id));}}
+                                                  className="bg-red-50 hover:bg-red-100 text-red-500 border border-red-200 rounded px-2 py-1 text-[11px] font-bold">🗑️</button>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+
                               {/* 타입별 그룹핑 */}
                               {[['hairpin','📌 헤어핀'],['gocchang','🎀 곱창밴드']].map(([type,label])=>{
                                 const filter = form_masterFilter || 'all';
@@ -7961,6 +8065,7 @@ ${list}` }]
                                         const isOff = offCount > 0;
                                         return (
                                           <div key={p.id} className={`bg-white rounded-xl border-2 transition-all overflow-hidden ${
+                                            p.isFeatured ? 'border-yellow-400 hover:border-yellow-500 hover:shadow-lg shadow-yellow-100' :
                                             isFullSoldout ? 'border-red-500 hover:border-red-700 hover:shadow-lg bg-red-50/30' :
                                             isPartialSoldout ? 'border-orange-300 hover:border-orange-500 hover:shadow-lg' :
                                             isOff ? 'border-blue-300 hover:border-blue-500 hover:shadow-lg' :
@@ -7970,9 +8075,19 @@ ${list}` }]
                                             {p.image ? (
                                               <div className="relative aspect-square bg-slate-50 overflow-hidden flex items-center justify-center">
                                                 <img src={p.image} alt={p.name} className={`max-w-full max-h-full object-contain ${isFullSoldout?'opacity-50 grayscale':isPartialSoldout?'opacity-80':''}`}/>
-                                                {p.type==='hairpin' && p.grindRequired && (
-                                                  <span className="absolute top-1.5 left-1.5 bg-orange-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold shadow">연마</span>
-                                                )}
+                                                {/* 좌측 상단: 별표 + 연마 */}
+                                                <div className="absolute top-1.5 left-1.5 flex flex-col gap-1 items-start">
+                                                  <button onClick={(e)=>{e.stopPropagation(); saveMasterProducts(masterProducts.map(x=>x.id===p.id?{...x, isFeatured: !p.isFeatured}:x));}}
+                                                    title={p.isFeatured ? '집중관리 해제' : '집중관리로 설정'}
+                                                    className={`text-base px-1.5 py-0.5 rounded-full shadow font-bold transition ${
+                                                      p.isFeatured ? 'bg-yellow-400 text-white hover:bg-yellow-500' : 'bg-white/90 text-slate-300 hover:bg-yellow-50 hover:text-yellow-500 border border-slate-200'
+                                                    }`}>
+                                                    ⭐
+                                                  </button>
+                                                  {p.type==='hairpin' && p.grindRequired && (
+                                                    <span className="bg-orange-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold shadow">연마</span>
+                                                  )}
+                                                </div>
                                                 {/* 우측 상단 상태 배지 */}
                                                 <div className="absolute top-1.5 right-1.5 flex flex-col gap-1 items-end">
                                                   {isFullSoldout && (
@@ -8000,6 +8115,15 @@ ${list}` }]
                                             ) : (
                                               <div className={`relative aspect-square flex items-center justify-center ${type==='hairpin'?'bg-orange-50':'bg-purple-50'}`}>
                                                 <span className="text-3xl opacity-40">{type==='hairpin'?'📌':'🎀'}</span>
+                                                <div className="absolute top-1.5 left-1.5">
+                                                  <button onClick={(e)=>{e.stopPropagation(); saveMasterProducts(masterProducts.map(x=>x.id===p.id?{...x, isFeatured: !p.isFeatured}:x));}}
+                                                    title={p.isFeatured ? '집중관리 해제' : '집중관리로 설정'}
+                                                    className={`text-base px-1.5 py-0.5 rounded-full shadow font-bold transition ${
+                                                      p.isFeatured ? 'bg-yellow-400 text-white hover:bg-yellow-500' : 'bg-white/90 text-slate-300 hover:bg-yellow-50 hover:text-yellow-500 border border-slate-200'
+                                                    }`}>
+                                                    ⭐
+                                                  </button>
+                                                </div>
                                                 <div className="absolute top-1.5 right-1.5 flex flex-col gap-1 items-end">
                                                   {isFullSoldout && <span className="bg-red-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow animate-pulse">🚫 전체품절</span>}
                                                   {isPartialSoldout && <span className="bg-orange-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow">🚫 {soldoutCount}/{totalColors}</span>}
@@ -8021,19 +8145,19 @@ ${list}` }]
                                                     return (
                                                       <button key={c}
                                                         onClick={()=>setColorStatusPopup({product: p, color: c})}
-                                                        className={`inline-flex items-stretch text-[10px] rounded border-2 overflow-hidden hover:shadow-md transition cursor-pointer ${
+                                                        className={`inline-flex items-stretch text-[10px] rounded overflow-hidden hover:shadow-sm transition cursor-pointer ${
                                                           isColorSoldout
-                                                            ? 'border-red-500 bg-red-50'
-                                                            : 'border-slate-800 bg-white'
+                                                            ? 'border border-red-400 bg-red-50'
+                                                            : 'border border-slate-300 bg-white'
                                                         }`}>
-                                                        <span className={`px-1 flex flex-col items-center justify-center text-white font-black leading-none ${
+                                                        <span className={`flex flex-col items-center justify-center text-white font-bold leading-none ${
                                                           isColorOff ? 'bg-red-500' : 'bg-blue-500'
                                                         }`} style={{fontSize:'8px', padding:'2px 3px'}}>
                                                           <span>오늘</span>
                                                           <span>{isColorOff ? '불가' : '출발'}</span>
                                                         </span>
-                                                        <span className={`px-1.5 py-0.5 font-bold flex items-center ${
-                                                          isColorSoldout ? 'text-red-600 line-through decoration-2' : 'text-slate-900'
+                                                        <span className={`px-1.5 py-0.5 font-semibold flex items-center ${
+                                                          isColorSoldout ? 'text-red-600 line-through decoration-2' : 'text-slate-700'
                                                         }`}>
                                                           {c}
                                                         </span>
@@ -8342,6 +8466,15 @@ ${list}` }]
                                             <div className="text-lg font-black leading-none">{daysSince}</div>
                                             <div className="text-xs font-bold leading-none mt-0.5">일째</div>
                                           </div>
+                                          {/* 9-1 이미지 - 연동된 경우만 표시 */}
+                                          {(() => {
+                                            const linked = masterProducts.find(mp => mp.name === name);
+                                            if (!linked || !linked.image) return null;
+                                            return (
+                                              <img src={linked.image} alt={name}
+                                                className="shrink-0 w-14 h-14 rounded-lg object-cover border-2 border-red-200 shadow-sm"/>
+                                            );
+                                          })()}
                                           <span className={`text-slate-400 text-xs transition-transform ${isExpanded?'rotate-90':''} shrink-0`} style={{display:'inline-block'}}>▶</span>
                                           <span className="text-xs font-bold text-red-600 shrink-0">🚫 품절</span>
                                           <span className="font-bold text-slate-900 text-sm truncate">{name}</span>
@@ -8620,10 +8753,31 @@ ${list}` }]
                                             <div className="text-lg font-black leading-none">{daysSince}</div>
                                             <div className="text-xs font-bold leading-none mt-0.5">일째</div>
                                           </div>
+                                          {/* 9-1 이미지 - 연동된 경우만 표시 */}
+                                          {(() => {
+                                            const linked = masterProducts.find(mp => mp.name === name);
+                                            if (!linked || !linked.image) return null;
+                                            return (
+                                              <img src={linked.image} alt={name}
+                                                className="shrink-0 w-14 h-14 rounded-lg object-cover border-2 border-blue-200 shadow-sm"/>
+                                            );
+                                          })()}
                                           <span className={`text-slate-400 text-xs transition-transform ${isExpanded?'rotate-90':''} shrink-0`} style={{display:'inline-block'}}>▶</span>
                                           <span className="text-xs font-bold text-blue-600 shrink-0">🚚 오늘출발OFF</span>
                                           <span className="font-bold text-slate-900 text-sm truncate">{name}</span>
                                           <span className="bg-blue-100 text-blue-600 text-xs px-2 py-0.5 rounded-full font-bold shrink-0">{items.length}가지</span>
+                                          {(() => {
+                                            const linked = masterProducts.find(mp => mp.name === name);
+                                            return linked ? (
+                                              <span className="bg-green-100 text-green-700 text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0 border border-green-300">
+                                                ✅ 9-1 연동됨
+                                              </span>
+                                            ) : (
+                                              <span className="bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0 border border-amber-300">
+                                                ⚠️ 9-1 미등록 (참고용)
+                                              </span>
+                                            );
+                                          })()}
                                         </div>
                                         <div className="flex items-center gap-3 shrink-0">
                                           {!isExpanded && (
@@ -9242,7 +9396,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260421.96</p>
+                <p>© 2026 LACEROOM통합관리 v20260421.99</p>
               </footer>
             </div>
           </div>
