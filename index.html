@@ -1618,7 +1618,7 @@ ${list}` }]
                 <div className="px-4 py-4 border-b border-slate-100">
                   <div>
                     <div className="text-sm font-bold text-slate-900 leading-tight">LACEROOM통합관리</div>
-                    <div className="text-xs text-slate-400">v20260421.109</div>
+                    <div className="text-xs text-slate-400">v20260421.110</div>
                   </div>
                 </div>
 
@@ -5583,11 +5583,11 @@ ${list}` }]
                                             </>
                                           )}
 
-                                          {/* 재단물 (딱 붙여서 배치) */}
+                                          {/* 재단물 (우측 손실 옆부터 좌측으로 딱 붙여 배치) */}
                                           {Array.from({length: stackCount}).map((_, rowIdx) =>
                                             Array.from({length: cols}).map((_, colIdx) => (
                                               <rect key={`${rowIdx}-${colIdx}`}
-                                                x={ox + colIdx * itemW * scale}
+                                                x={ox + (totalDrawW - lossR - (colIdx + 1) * itemW) * scale}
                                                 y={oy + (lossT + rowIdx * itemH) * scale}
                                                 width={itemW * scale}
                                                 height={itemH * scale}
@@ -5596,6 +5596,9 @@ ${list}` }]
                                                 strokeWidth="0.5"/>
                                             ))
                                           )}
+
+                                          {/* ← 진행방향 표시 */}
+                                          <text x={ox + (totalDrawW - lossR) * scale / 2 + (cols * itemW * scale / 2)} y={oy + (lossT + itemH * stackCount) * scale - 4} fontSize="9" fill="#16a34a" textAnchor="middle" fontWeight="bold">← 진행방향</text>
 
                                           {/* 폭 화살표 (위) */}
                                           <line x1={ox} y1={oy - 10} x2={ox + totalDrawW * scale} y2={oy - 10} stroke="#475569" strokeWidth="1"/>
@@ -5675,11 +5678,11 @@ ${list}` }]
                                             </>
                                           )}
 
-                                          {/* 재단물 (딱 붙여서) */}
+                                          {/* 재단물 (우측 손실 옆부터 좌측으로 딱 붙여) */}
                                           {Array.from({length: stackCount}).map((_, rowIdx) =>
                                             Array.from({length: cols}).map((_, colIdx) => (
                                               <rect key={`${rowIdx}-${colIdx}`}
-                                                x={ox + colIdx * itemW * scale}
+                                                x={ox + (totalDrawW - lossR - (colIdx + 1) * itemW) * scale}
                                                 y={oy + (lossT + rowIdx * itemH) * scale}
                                                 width={itemW * scale}
                                                 height={itemH * scale}
@@ -5688,6 +5691,9 @@ ${list}` }]
                                                 strokeWidth="0.5"/>
                                             ))
                                           )}
+
+                                          {/* ← 진행방향 표시 */}
+                                          <text x={ox + (totalDrawW - lossR) * scale / 2 + (cols * itemW * scale / 2)} y={oy + (lossT + itemH * stackCount) * scale - 4} fontSize="9" fill="#e11d48" textAnchor="middle" fontWeight="bold">← 진행방향</text>
 
                                           {/* 폭 화살표 */}
                                           <line x1={ox} y1={oy - 10} x2={ox + totalDrawW * scale} y2={oy - 10} stroke="#475569" strokeWidth="1"/>
@@ -9922,7 +9928,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260421.109</p>
+                <p>© 2026 LACEROOM통합관리 v20260421.110</p>
               </footer>
             </div>
           </div>
