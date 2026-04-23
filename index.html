@@ -1618,7 +1618,7 @@ ${list}` }]
                 <div className="px-4 py-4 border-b border-slate-100">
                   <div>
                     <div className="text-sm font-bold text-slate-900 leading-tight">LACEROOM통합관리</div>
-                    <div className="text-xs text-slate-400">v20260421.110</div>
+                    <div className="text-xs text-slate-400">v20260421.111</div>
                   </div>
                 </div>
 
@@ -5583,18 +5583,28 @@ ${list}` }]
                                             </>
                                           )}
 
-                                          {/* 재단물 (우측 손실 옆부터 좌측으로 딱 붙여 배치) */}
+                                          {/* 재단물 (우측 손실 옆부터 좌측으로 딱 붙여 배치) + 번호 표시 */}
                                           {Array.from({length: stackCount}).map((_, rowIdx) =>
-                                            Array.from({length: cols}).map((_, colIdx) => (
-                                              <rect key={`${rowIdx}-${colIdx}`}
-                                                x={ox + (totalDrawW - lossR - (colIdx + 1) * itemW) * scale}
-                                                y={oy + (lossT + rowIdx * itemH) * scale}
-                                                width={itemW * scale}
-                                                height={itemH * scale}
-                                                fill={(rowIdx + colIdx) % 2 === 0 ? '#86efac' : '#bbf7d0'}
-                                                stroke="#16a34a"
-                                                strokeWidth="0.5"/>
-                                            ))
+                                            Array.from({length: cols}).map((_, colIdx) => {
+                                              const rectX = ox + (totalDrawW - lossR - (colIdx + 1) * itemW) * scale;
+                                              const rectY = oy + (lossT + rowIdx * itemH) * scale;
+                                              const rectW = itemW * scale;
+                                              const rectH = itemH * scale;
+                                              // 번호: 1단은 1부터 cols까지, 2단은 cols+1부터 cols*2까지
+                                              const itemNum = rowIdx * cols + colIdx + 1;
+                                              // 폰트 크기 (재단물 크기에 비례)
+                                              const fontSize = Math.max(Math.min(rectW * 0.4, rectH * 0.5, 14), 6);
+                                              return (
+                                                <g key={`${rowIdx}-${colIdx}`}>
+                                                  <rect
+                                                    x={rectX} y={rectY} width={rectW} height={rectH}
+                                                    fill={(rowIdx + colIdx) % 2 === 0 ? '#86efac' : '#bbf7d0'}
+                                                    stroke="#16a34a" strokeWidth="0.5"/>
+                                                  <text x={rectX + rectW/2} y={rectY + rectH/2 + fontSize/3}
+                                                    fontSize={fontSize} fill="#14532d" textAnchor="middle" fontWeight="bold">{itemNum}</text>
+                                                </g>
+                                              );
+                                            })
                                           )}
 
                                           {/* ← 진행방향 표시 */}
@@ -5678,18 +5688,26 @@ ${list}` }]
                                             </>
                                           )}
 
-                                          {/* 재단물 (우측 손실 옆부터 좌측으로 딱 붙여) */}
+                                          {/* 재단물 (우측 손실 옆부터 좌측으로 딱 붙여) + 번호 표시 */}
                                           {Array.from({length: stackCount}).map((_, rowIdx) =>
-                                            Array.from({length: cols}).map((_, colIdx) => (
-                                              <rect key={`${rowIdx}-${colIdx}`}
-                                                x={ox + (totalDrawW - lossR - (colIdx + 1) * itemW) * scale}
-                                                y={oy + (lossT + rowIdx * itemH) * scale}
-                                                width={itemW * scale}
-                                                height={itemH * scale}
-                                                fill={(rowIdx + colIdx) % 2 === 0 ? '#fda4af' : '#fecdd3'}
-                                                stroke="#e11d48"
-                                                strokeWidth="0.5"/>
-                                            ))
+                                            Array.from({length: cols}).map((_, colIdx) => {
+                                              const rectX = ox + (totalDrawW - lossR - (colIdx + 1) * itemW) * scale;
+                                              const rectY = oy + (lossT + rowIdx * itemH) * scale;
+                                              const rectW = itemW * scale;
+                                              const rectH = itemH * scale;
+                                              const itemNum = rowIdx * cols + colIdx + 1;
+                                              const fontSize = Math.max(Math.min(rectW * 0.4, rectH * 0.5, 14), 6);
+                                              return (
+                                                <g key={`${rowIdx}-${colIdx}`}>
+                                                  <rect
+                                                    x={rectX} y={rectY} width={rectW} height={rectH}
+                                                    fill={(rowIdx + colIdx) % 2 === 0 ? '#fda4af' : '#fecdd3'}
+                                                    stroke="#e11d48" strokeWidth="0.5"/>
+                                                  <text x={rectX + rectW/2} y={rectY + rectH/2 + fontSize/3}
+                                                    fontSize={fontSize} fill="#881337" textAnchor="middle" fontWeight="bold">{itemNum}</text>
+                                                </g>
+                                              );
+                                            })
                                           )}
 
                                           {/* ← 진행방향 표시 */}
@@ -9928,7 +9946,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260421.110</p>
+                <p>© 2026 LACEROOM통합관리 v20260421.111</p>
               </footer>
             </div>
           </div>
