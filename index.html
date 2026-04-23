@@ -1618,7 +1618,7 @@ ${list}` }]
                 <div className="px-4 py-4 border-b border-slate-100">
                   <div>
                     <div className="text-sm font-bold text-slate-900 leading-tight">LACEROOM통합관리</div>
-                    <div className="text-xs text-slate-400">v20260421.101</div>
+                    <div className="text-xs text-slate-400">v20260421.103</div>
                   </div>
                 </div>
 
@@ -1799,6 +1799,76 @@ ${list}` }]
                   <main className="flex-1 px-6 py-8">
                     <div className="space-y-6">
                       <h1 className="text-2xl font-bold text-slate-900">대시보드</h1>
+
+                      {/* 🚨 고정지출 연체 알림 */}
+                      {(() => {
+                        const today = new Date();
+                        today.setHours(0,0,0,0);
+                        const monthKey = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+
+                        const checkOverdue = (expense) => {
+                          const isCompleted = (expense.completedMonths||[]).includes(monthKey);
+                          if (isCompleted) return null;
+                          const thisMonth = new Date(today.getFullYear(), today.getMonth(), expense.payDay);
+                          const diff = Math.ceil((thisMonth - today) / (1000*60*60*24));
+                          if (diff >= 0) return null;
+                          return { ...expense, overdueDays: Math.abs(diff) };
+                        };
+
+                        const overdueLife = fixedExpenses.map(checkOverdue).filter(Boolean);
+                        const overdueBiz = bizExpenses.map(checkOverdue).filter(Boolean);
+                        const allOverdue = [...overdueLife.map(e=>({...e, _type:'생활비'})), ...overdueBiz.map(e=>({...e, _type:'사업비'}))];
+
+                        if (allOverdue.length === 0) return null;
+
+                        const totalAmount = allOverdue.reduce((s,e)=>s+(e.amount||0), 0);
+
+                        return (
+                          <div className="bg-gradient-to-r from-red-500 to-red-600 rounded-2xl shadow-2xl border-4 border-red-300 p-5 animate-pulse">
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-3">
+                                <span className="text-3xl">🚨</span>
+                                <div>
+                                  <h2 className="text-white font-black text-lg">고정지출 연체 알림</h2>
+                                  <p className="text-red-100 text-xs">결제일이 지났는데 완료 처리되지 않은 항목이 있습니다</p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-white font-black text-2xl">{allOverdue.length}건</div>
+                                <div className="text-red-100 text-xs font-bold">{totalAmount.toLocaleString()}원</div>
+                              </div>
+                            </div>
+                            <div className="bg-white/95 rounded-xl p-3 space-y-1.5 max-h-60 overflow-y-auto">
+                              {allOverdue.sort((a,b)=>b.overdueDays-a.overdueDays).map(e => (
+                                <div key={e.id} className="flex items-center justify-between bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                                    <span className="bg-red-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full shrink-0">🚨 {e.overdueDays}일 연체</span>
+                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${e._type==='생활비'?'bg-rose-100 text-rose-600':'bg-blue-100 text-blue-600'}`}>{e._type}</span>
+                                    <span className="text-sm font-bold text-slate-800 truncate">{e.content}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <span className="text-sm font-black text-red-700">{e.amount.toLocaleString()}원</span>
+                                    <button onClick={()=>{
+                                      const completedMonths = e.completedMonths || [];
+                                      if (e._type === '생활비') {
+                                        saveFixedExpenses(fixedExpenses.map(x=>x.id===e.id?{...x, completedMonths: [...completedMonths, monthKey]}:x));
+                                      } else {
+                                        saveBizExpenses(bizExpenses.map(x=>x.id===e.id?{...x, completedMonths: [...completedMonths, monthKey]}:x));
+                                      }
+                                    }} className="bg-green-500 hover:bg-green-600 text-white text-xs font-bold px-2 py-1 rounded-lg shadow">
+                                      ✅ 완료
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                            <button onClick={()=>setActiveMainTab('fixedExpense')}
+                              className="w-full mt-3 py-2 bg-white hover:bg-red-50 text-red-700 rounded-xl font-bold text-sm shadow">
+                              📋 10. 고정지출 탭으로 이동 →
+                            </button>
+                          </div>
+                        );
+                      })()}
 
                       {/* 중요 메모 */}
                       {(() => {
@@ -7614,17 +7684,20 @@ ${list}` }]
                                           ) : form.hasFabricInfo === false ? (
                                             // 원단 정보 없음 - 직접 입력
                                             <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
-                                              <div className="text-xs text-amber-700 mb-2">📝 색상을 직접 입력해주세요 (쉼표로 구분)</div>
-                                              <input type="text"
-                                                value={(form.colors||[]).join(', ')}
+                                              <div className="text-xs text-amber-700 mb-2">📝 색상을 직접 입력해주세요 (쉼표 또는 엔터로 구분)</div>
+                                              <textarea
+                                                value={form._colorsText !== undefined ? form._colorsText : (form.colors||[]).join(', ')}
                                                 onChange={e=>{
-                                                  const colors = e.target.value.split(',').map(c=>c.trim()).filter(c=>c);
-                                                  setForm(p=>({...p, colors}));
+                                                  const text = e.target.value;
+                                                  const colors = text.split(/[,\n]/).map(c=>c.trim()).filter(c=>c);
+                                                  setForm(p=>({...p, _colorsText: text, colors}));
                                                 }}
-                                                placeholder="예: 네이비, 블랙, 화이트"
-                                                className="w-full px-3 py-2 rounded-lg border-2 border-amber-200 focus:border-amber-400 outline-none text-sm bg-white"/>
+                                                placeholder="예: 네이비, 블랙, 화이트&#10;또는 한 줄에 하나씩"
+                                                rows={2}
+                                                className="w-full px-3 py-2 rounded-lg border-2 border-amber-200 focus:border-amber-400 outline-none text-sm bg-white resize-none"/>
                                               {(form.colors||[]).length > 0 && (
                                                 <div className="mt-2 flex flex-wrap gap-1">
+                                                  <span className="text-[10px] text-amber-600 font-bold">✓ 인식된 색상 {form.colors.length}개:</span>
                                                   {form.colors.map(c=>(
                                                     <span key={c} className="bg-white border border-amber-300 text-amber-700 text-xs px-2 py-0.5 rounded-full">{c}</span>
                                                   ))}
@@ -9317,21 +9390,37 @@ ${list}` }]
                                       const thisMonth=new Date(today.getFullYear(),today.getMonth(),expense.payDay);
                                       const diff=Math.ceil((thisMonth-today)/(1000*60*60*24));
                                       const isUrgent=diff>=0&&diff<=2; const isWarning=diff>=0&&diff<=5;
+                                      const monthKey = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+                                      const isCompleted = (expense.completedMonths||[]).includes(monthKey);
+                                      const isOverdue = !isCompleted && diff < 0;
+                                      const overdueDays = isOverdue ? Math.abs(diff) : 0;
                                       return (
-                                        <tr key={expense.id} className={`border-b border-slate-100 ${idx%2===0?'bg-white':'bg-slate-50'} ${isUrgent?'!bg-red-50':''} hover:bg-rose-50`}>
+                                        <tr key={expense.id} className={`border-b border-slate-100 ${idx%2===0?'bg-white':'bg-slate-50'} ${isOverdue?'!bg-red-100 animate-pulse':isCompleted?'!bg-green-50':isUrgent?'!bg-red-50':''} hover:bg-rose-50`}>
                                           <td className="py-3 px-4"><span className="bg-rose-100 text-rose-600 text-xs px-2 py-0.5 rounded-full font-semibold">
                                             {expense.category==='카드'?'💳':expense.category==='보험료'?'🛡️':expense.category==='자동차'?'🚗':expense.category==='대출이자'?'🏦':expense.category==='통신비'?'📱':expense.category==='임대료'?'🏠':expense.category==='리스/렌탈'?'🔑':expense.category==='구독서비스'?'📺':'💰'} {expense.category}
                                           </span></td>
-                                          <td className="py-3 px-4 font-medium text-slate-900">{expense.content}</td>
-                                          <td className={`py-3 px-4 text-right font-bold ${expense.amount>=1000000?'text-red-600':'text-slate-800'}`}>{expense.amount.toLocaleString()}원{expense.amount>=1000000&&<span className="ml-1 text-xs">🚨</span>}</td>
+                                          <td className={`py-3 px-4 font-medium ${isCompleted?'text-slate-400 line-through':isOverdue?'text-red-700 font-bold':'text-slate-900'}`}>{expense.content}</td>
+                                          <td className={`py-3 px-4 text-right font-bold ${isCompleted?'text-slate-400':isOverdue?'text-red-700':expense.amount>=1000000?'text-red-600':'text-slate-800'}`}>{expense.amount.toLocaleString()}원{!isCompleted&&expense.amount>=1000000&&<span className="ml-1 text-xs">🚨</span>}</td>
                                           <td className="py-3 px-4 text-center text-slate-600">매월 {expense.payDay}일</td>
                                           <td className="py-3 px-4 text-center">
-                                            {diff<0?<span className="text-xs text-slate-300">완료</span>
-                                              :<span className={`text-xs font-bold px-2 py-0.5 rounded-full ${isUrgent?'bg-red-100 text-red-600':isWarning?'bg-amber-100 text-amber-600':'bg-slate-100 text-slate-500'}`}>{diff===0?'오늘!':`D-${diff}`}</span>}
+                                            {isCompleted ? <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full font-bold">✅ 결제완료</span>
+                                              : isOverdue ? <span className="text-xs bg-red-600 text-white px-2 py-0.5 rounded-full font-black animate-pulse shadow-lg">🚨 연체 {overdueDays}일</span>
+                                              : <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${isUrgent?'bg-red-100 text-red-600':isWarning?'bg-amber-100 text-amber-600':'bg-slate-100 text-slate-500'}`}>{diff===0?'오늘!':`D-${diff}`}</span>}
                                           </td>
                                           <td className="py-3 px-4 text-xs text-slate-400">{expense.note||'-'}</td>
                                           <td className="py-3 px-4 text-center">
                                             <div className="flex gap-1 justify-center">
+                                              <button onClick={()=>{
+                                                const completedMonths = expense.completedMonths || [];
+                                                const updated = isCompleted
+                                                  ? completedMonths.filter(m => m !== monthKey)
+                                                  : [...completedMonths, monthKey];
+                                                saveFixedExpenses(fixedExpenses.map(e=>e.id===expense.id?{...e, completedMonths: updated}:e));
+                                              }}
+                                                className={`p-1.5 rounded-lg text-xs font-bold ${isCompleted?'text-green-600 bg-green-50 hover:bg-green-100':isOverdue?'text-white bg-red-600 hover:bg-red-700 animate-pulse':'text-slate-500 bg-slate-100 hover:bg-green-100 hover:text-green-600'}`}
+                                                title={isCompleted?'완료 해제':'결제 완료 처리'}>
+                                                {isCompleted?'↩️':'✅'}
+                                              </button>
                                               <button onClick={()=>setEditExpensePopup({...expense,_type:'life'})} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg"><Edit /></button>
                                               <button onClick={()=>{if(confirm('삭제?'))saveFixedExpenses(fixedExpenses.filter(e=>e.id!==expense.id));}} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg"><Trash /></button>
                                             </div>
@@ -9418,21 +9507,37 @@ ${list}` }]
                                       const thisMonth=new Date(today.getFullYear(),today.getMonth(),expense.payDay);
                                       const diff=Math.ceil((thisMonth-today)/(1000*60*60*24));
                                       const isUrgent=diff>=0&&diff<=2; const isWarning=diff>=0&&diff<=5;
+                                      const monthKey = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+                                      const isCompleted = (expense.completedMonths||[]).includes(monthKey);
+                                      const isOverdue = !isCompleted && diff < 0;
+                                      const overdueDays = isOverdue ? Math.abs(diff) : 0;
                                       return (
-                                        <tr key={expense.id} className={`border-b border-slate-100 ${idx%2===0?'bg-white':'bg-slate-50'} hover:bg-blue-50`}>
+                                        <tr key={expense.id} className={`border-b border-slate-100 ${idx%2===0?'bg-white':'bg-slate-50'} ${isOverdue?'!bg-red-100 animate-pulse':isCompleted?'!bg-green-50':isUrgent?'!bg-red-50':''} hover:bg-blue-50`}>
                                           <td className="py-3 px-4"><span className="bg-blue-100 text-blue-600 text-xs px-2 py-0.5 rounded-full font-semibold">
                                             {expense.category==='카드'?'💳':expense.category==='보험료'?'🛡️':expense.category==='자동차'?'🚗':expense.category==='대출이자'?'🏦':expense.category==='통신비'?'📱':expense.category==='임대료'?'🏠':expense.category==='리스/렌탈'?'🔑':expense.category==='구독서비스'?'📺':'💰'} {expense.category}
                                           </span></td>
-                                          <td className="py-3 px-4 font-medium text-slate-900">{expense.content}</td>
-                                          <td className={`py-3 px-4 text-right font-bold ${expense.amount>=2000000?'text-red-600':'text-slate-800'}`}>{expense.amount.toLocaleString()}원{expense.amount>=2000000&&<span className="ml-1 text-xs">🚨</span>}</td>
+                                          <td className={`py-3 px-4 font-medium ${isCompleted?'text-slate-400 line-through':isOverdue?'text-red-700 font-bold':'text-slate-900'}`}>{expense.content}</td>
+                                          <td className={`py-3 px-4 text-right font-bold ${isCompleted?'text-slate-400':isOverdue?'text-red-700':expense.amount>=2000000?'text-red-600':'text-slate-800'}`}>{expense.amount.toLocaleString()}원{!isCompleted&&expense.amount>=2000000&&<span className="ml-1 text-xs">🚨</span>}</td>
                                           <td className="py-3 px-4 text-center text-slate-600">매월 {expense.payDay}일</td>
                                           <td className="py-3 px-4 text-center">
-                                            {diff<0?<span className="text-xs text-slate-300">완료</span>
-                                              :<span className={`text-xs font-bold px-2 py-0.5 rounded-full ${isUrgent?'bg-red-100 text-red-600':isWarning?'bg-amber-100 text-amber-600':'bg-slate-100 text-slate-500'}`}>{diff===0?'오늘!':`D-${diff}`}</span>}
+                                            {isCompleted ? <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full font-bold">✅ 결제완료</span>
+                                              : isOverdue ? <span className="text-xs bg-red-600 text-white px-2 py-0.5 rounded-full font-black animate-pulse shadow-lg">🚨 연체 {overdueDays}일</span>
+                                              : <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${isUrgent?'bg-red-100 text-red-600':isWarning?'bg-amber-100 text-amber-600':'bg-slate-100 text-slate-500'}`}>{diff===0?'오늘!':`D-${diff}`}</span>}
                                           </td>
                                           <td className="py-3 px-4 text-xs text-slate-400">{expense.note||'-'}</td>
                                           <td className="py-3 px-4 text-center">
                                             <div className="flex gap-1 justify-center">
+                                              <button onClick={()=>{
+                                                const completedMonths = expense.completedMonths || [];
+                                                const updated = isCompleted
+                                                  ? completedMonths.filter(m => m !== monthKey)
+                                                  : [...completedMonths, monthKey];
+                                                saveBizExpenses(bizExpenses.map(e=>e.id===expense.id?{...e, completedMonths: updated}:e));
+                                              }}
+                                                className={`p-1.5 rounded-lg text-xs font-bold ${isCompleted?'text-green-600 bg-green-50 hover:bg-green-100':isOverdue?'text-white bg-red-600 hover:bg-red-700 animate-pulse':'text-slate-500 bg-slate-100 hover:bg-green-100 hover:text-green-600'}`}
+                                                title={isCompleted?'완료 해제':'결제 완료 처리'}>
+                                                {isCompleted?'↩️':'✅'}
+                                              </button>
                                               <button onClick={()=>setEditExpensePopup({...expense,_type:'biz'})} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg"><Edit /></button>
                                               <button onClick={()=>{if(confirm('삭제?'))saveBizExpenses(bizExpenses.filter(e=>e.id!==expense.id));}} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg"><Trash /></button>
                                             </div>
@@ -9592,7 +9697,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260421.101</p>
+                <p>© 2026 LACEROOM통합관리 v20260421.103</p>
               </footer>
             </div>
           </div>
