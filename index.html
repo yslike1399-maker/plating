@@ -1618,7 +1618,7 @@ ${list}` }]
                 <div className="px-4 py-4 border-b border-slate-100">
                   <div>
                     <div className="text-sm font-bold text-slate-900 leading-tight">LACEROOM통합관리</div>
-                    <div className="text-xs text-slate-400">v20260421.111</div>
+                    <div className="text-xs text-slate-400">v20260421.113</div>
                   </div>
                 </div>
 
@@ -1760,11 +1760,13 @@ ${list}` }]
                         const monthKey = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
 
                         const checkOverdue = (expense) => {
-                          const isCompleted = (expense.completedMonths||[]).includes(monthKey);
+                          if (!expense || !expense.payDay) return null;
+                          const isCompleted = Array.isArray(expense.completedMonths) && expense.completedMonths.includes(monthKey);
                           if (isCompleted) return null;
                           const thisMonth = new Date(today.getFullYear(), today.getMonth(), expense.payDay);
-                          const diff = Math.ceil((thisMonth - today) / (1000*60*60*24));
-                          if (diff >= 0) return null;
+                          thisMonth.setHours(0,0,0,0);
+                          const diff = Math.floor((thisMonth.getTime() - today.getTime()) / (1000*60*60*24));
+                          if (diff >= 0) return null; // 오늘이거나 미래면 연체 아님
                           return { ...expense, overdueDays: Math.abs(diff) };
                         };
 
@@ -1802,12 +1804,14 @@ ${list}` }]
                                   <div className="flex items-center gap-2 shrink-0">
                                     <span className="text-sm font-black text-red-700">{e.amount.toLocaleString()}원</span>
                                     <button onClick={()=>{
-                                      const completedMonths = e.completedMonths || [];
-                                      if (e._type === '생활비') {
-                                        saveFixedExpenses(fixedExpenses.map(x=>x.id===e.id?{...x, completedMonths: [...completedMonths, monthKey]}:x));
-                                      } else {
-                                        saveBizExpenses(bizExpenses.map(x=>x.id===e.id?{...x, completedMonths: [...completedMonths, monthKey]}:x));
-                                      }
+                                      const list = e._type === '생활비' ? fixedExpenses : bizExpenses;
+                                      const target = list.find(x=>x.id===e.id);
+                                      if (!target) return;
+                                      const completedMonths = target.completedMonths || [];
+                                      if (completedMonths.includes(monthKey)) return; // 이미 완료면 무시
+                                      const updated = list.map(x=>x.id===e.id?{...x, completedMonths: [...completedMonths, monthKey]}:x);
+                                      if (e._type === '생활비') saveFixedExpenses(updated);
+                                      else saveBizExpenses(updated);
                                     }} className="bg-green-500 hover:bg-green-600 text-white text-xs font-bold px-2 py-1 rounded-lg shadow">
                                       ✅ 완료
                                     </button>
@@ -2024,11 +2028,19 @@ ${list}` }]
                         {/* 고정지출 결제 알림 */}
                         {(() => {
                           const today = new Date(); today.setHours(0,0,0,0);
-                          const upcoming = fixedExpenses.filter(e => {
-                            const thisMonth = new Date(today.getFullYear(), today.getMonth(), e.payDay);
-                            const diff = Math.ceil((thisMonth - today)/(1000*60*60*24));
+                          const monthKey = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+                          const filterUpcoming = (expense) => {
+                            if (!expense || !expense.payDay) return false;
+                            const isCompleted = Array.isArray(expense.completedMonths) && expense.completedMonths.includes(monthKey);
+                            if (isCompleted) return false;
+                            const thisMonth = new Date(today.getFullYear(), today.getMonth(), expense.payDay);
+                            thisMonth.setHours(0,0,0,0);
+                            const diff = Math.floor((thisMonth.getTime() - today.getTime())/(1000*60*60*24));
                             return diff >= 0 && diff <= 5;
-                          });
+                          };
+                          const upcomingLife = fixedExpenses.filter(filterUpcoming).map(e=>({...e, _type:'생활비'}));
+                          const upcomingBiz = bizExpenses.filter(filterUpcoming).map(e=>({...e, _type:'사업비'}));
+                          const upcoming = [...upcomingLife, ...upcomingBiz];
                           if (upcoming.length === 0) return null;
                           const totalAmt = upcoming.reduce((s,e) => s+e.amount, 0);
                           return (
@@ -2039,7 +2051,8 @@ ${list}` }]
                               <div className="text-xs text-rose-400 mt-1">{totalAmt.toLocaleString()}원</div>
                               {upcoming.map((e,i) => {
                                 const thisMonth = new Date(today.getFullYear(), today.getMonth(), e.payDay);
-                                const diff = Math.ceil((thisMonth - today)/(1000*60*60*24));
+                                thisMonth.setHours(0,0,0,0);
+                                const diff = Math.floor((thisMonth.getTime() - today.getTime())/(1000*60*60*24));
                                 return <div key={i} className="text-xs text-slate-500 flex justify-between mt-1">
                                   <span>{e.category} {e.content}</span>
                                   <span className="text-rose-500 font-semibold">{diff===0?'오늘!':`D-${diff}`}</span>
@@ -9946,7 +9959,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260421.111</p>
+                <p>© 2026 LACEROOM통합관리 v20260421.113</p>
               </footer>
             </div>
           </div>
