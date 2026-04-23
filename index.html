@@ -1505,7 +1505,7 @@ ${list}` }]
                 <div className="px-4 py-4 border-b border-slate-100">
                   <div>
                     <div className="text-sm font-bold text-slate-900 leading-tight">LACEROOM통합관리</div>
-                    <div className="text-xs text-slate-400">v20260421.77</div>
+                    <div className="text-xs text-slate-400">v20260421.81</div>
                   </div>
                 </div>
 
@@ -2324,7 +2324,7 @@ ${list}` }]
                   <div className="bg-white border-b border-slate-200 px-4 py-2 sticky top-0 z-40">
                     <div className="flex space-x-1">
                       {[
-                        ['products', '제품관리(구)', '1-1'],
+                        ['products', '색상별 단가', '1-1'],
                         ['order', '작업 지시서', '1-2'],
                         ['rework', '재도금 요청', '1-3'],
                         ['history', '작업 내역', '1-4'],
@@ -2347,10 +2347,11 @@ ${list}` }]
                     <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 flex items-start gap-3">
                       <span className="text-2xl">💡</span>
                       <div className="flex-1">
-                        <div className="font-bold text-amber-800 text-sm mb-1">제품 등록은 이제 9-1 상품 마스터에서 관리합니다</div>
+                        <div className="font-bold text-amber-800 text-sm mb-1">이 탭은 색상별 도금 단가 관리용입니다</div>
                         <div className="text-xs text-amber-700 leading-relaxed">
-                          9-1 상품 마스터에서 <strong>헤어핀 타입</strong>으로 등록하면 도금 속성(연마필요, 이미지, 원가)도 함께 설정할 수 있고, 1-2 작업지시서에서 자동으로 표시됩니다.<br/>
-                          기존 데이터는 자동으로 9-1로 이관되었습니다. 이 화면은 조회·수정 용으로 유지됩니다.
+                          제품 등록은 <strong>9-1 상품 마스터</strong>에서 먼저 등록하세요 (헤어핀 타입).<br/>
+                          여기서는 등록된 상품을 선택해 <strong>유광/반광 도금 단가 + 연마 단가</strong>를 입력합니다.<br/>
+                          곱창밴드는 도금하지 않으므로 헤어핀 상품만 표시됩니다.
                         </div>
                         <button onClick={() => { setActiveMainTab('productMgmt'); setProductMgmtTab('master'); }}
                           className="mt-2 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-bold">
@@ -2361,51 +2362,77 @@ ${list}` }]
 
                     <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8">
                       <h2 className="text-xl font-bold text-slate-900 mb-6 flex items-center">
-                        <Plus /> <span className="ml-2">새 제품 등록</span>
+                        🎨 <span className="ml-2">색상별 도금 단가 입력</span>
                       </h2>
-                      
+
                       <div className="space-y-5">
                         <div>
-                          <label className="block text-sm font-semibold text-slate-700 mb-2">제품명</label>
-                          <input
-                            type="text"
-                            value={productForm.name}
-                            onChange={(e) => setProductForm({...productForm, name: e.target.value})}
-                            className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none"
-                            placeholder="예: 체인 목걸이"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-semibold text-slate-700 mb-2">연마 필요</label>
-                          <select
-                            value={productForm.grindRequired}
-                            onChange={(e) => setProductForm({...productForm, grindRequired: e.target.value === 'true'})}
-                            className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none bg-white"
-                          >
-                            <option value="true">예 (연마 필요)</option>
-                            <option value="false">아니오 (연마 불필요)</option>
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-semibold text-slate-700 mb-2">제품 이미지</label>
-                          <label className="cursor-pointer block">
-                            <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 hover:border-blue-500 hover:bg-blue-50/50 transition-all text-center">
-                              {productForm.imagePreview ? (
-                                <img src={productForm.imagePreview} alt="미리보기" className="max-h-32 mx-auto rounded-lg" />
-                              ) : (
-                                <div className="text-slate-400">
-                                  <div className="flex justify-center mb-2"><Image /></div>
-                                  <p className="text-sm font-medium">이미지 업로드</p>
+                          <label className="block text-sm font-semibold text-slate-700 mb-2">📌 헤어핀 상품 선택</label>
+                          {(() => {
+                            const hairpinMasters = masterProducts.filter(p => p.type === 'hairpin');
+                            if (hairpinMasters.length === 0) {
+                              return (
+                                <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 text-sm text-amber-700">
+                                  ⚠️ 9-1 상품 마스터에 등록된 헤어핀 상품이 없습니다. 먼저 등록해주세요.
                                 </div>
-                              )}
-                            </div>
-                            <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
-                          </label>
+                              );
+                            }
+                            return (
+                              <select value={productForm.selectedMasterId || ''}
+                                onChange={e => {
+                                  const mp = hairpinMasters.find(p => String(p.id) === e.target.value);
+                                  if (!mp) {
+                                    setProductForm({ name: '', grindRequired: true, image: null, imagePreview: null, grindCost: '', injectionCost: '', springCost: '', pinCost: '', platingCosts: {}, selectedMasterId: '' });
+                                    return;
+                                  }
+                                  // 기존 products에 연결된 단가 정보 가져오기
+                                  const linkedProduct = products.find(p => String(p.masterProductId) === String(mp.id) || String(p.id) === String(mp.legacyProductId));
+                                  setProductForm({
+                                    name: mp.name,
+                                    grindRequired: mp.grindRequired !== false,
+                                    image: mp.image || null,
+                                    imagePreview: mp.image || null,
+                                    grindCost: linkedProduct?.grindCost || mp.grindCost || '',
+                                    injectionCost: linkedProduct?.injectionCost || mp.injectionCost || '',
+                                    springCost: linkedProduct?.springCost || mp.springCost || '',
+                                    pinCost: linkedProduct?.pinCost || mp.pinCost || '',
+                                    platingCosts: linkedProduct?.platingCosts || mp.platingCosts || {},
+                                    selectedMasterId: mp.id,
+                                    existingProductId: linkedProduct?.id || null
+                                  });
+                                }}
+                                className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none bg-white">
+                                <option value="">-- 헤어핀 상품 선택 --</option>
+                                {hairpinMasters.sort((a,b)=>a.name.localeCompare(b.name)).map(mp => (
+                                  <option key={mp.id} value={mp.id}>
+                                    {mp.name} {mp.grindRequired ? '(연마필요)' : '(연마불필요)'}
+                                  </option>
+                                ))}
+                              </select>
+                            );
+                          })()}
                         </div>
 
-                        <div className="border-t pt-5">
+                        {productForm.selectedMasterId && (
+                          <div className="bg-slate-50 rounded-xl p-4 flex items-center gap-4">
+                            {productForm.imagePreview ? (
+                              <img src={productForm.imagePreview} alt={productForm.name} className="w-20 h-20 object-cover rounded-lg border-2 border-white shadow shrink-0"/>
+                            ) : (
+                              <div className="w-20 h-20 bg-white rounded-lg border-2 border-slate-200 flex items-center justify-center text-3xl shrink-0">📌</div>
+                            )}
+                            <div className="flex-1">
+                              <div className="font-bold text-slate-900 text-base">{productForm.name}</div>
+                              <div className="text-xs text-slate-500 mt-0.5">
+                                {productForm.grindRequired ? '✓ 연마 필요' : '○ 연마 불필요'}
+                                {productForm.existingProductId && <span className="ml-2 bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded">기존 단가 불러옴</span>}
+                              </div>
+                              <div className="text-[11px] text-slate-400 mt-1">이미지/제품명/연마여부 변경은 9-1 상품 마스터에서 하세요</div>
+                            </div>
+                          </div>
+                        )}
+
+                        {productForm.selectedMasterId && (
+                          <>
                           <h3 className="text-sm font-bold text-slate-700 mb-4">도금 단가 (색상별)</h3>
                           <div className="overflow-x-auto mb-6">
                             <table className="w-full text-xs border border-slate-200">
@@ -2528,82 +2555,136 @@ ${list}` }]
                             </div>
                           </div>
                         </div>
+                        </>
+                        )}
 
+                        {productForm.selectedMasterId && (
                         <div className="flex space-x-3">
                           <button
-                            onClick={editingProduct ? handleUpdateProduct : handleAddProduct}
+                            onClick={() => {
+                              const mp = masterProducts.find(p => String(p.id) === String(productForm.selectedMasterId));
+                              if (!mp) return alert('상품을 선택하세요');
+
+                              const existingIdx = products.findIndex(p =>
+                                String(p.masterProductId) === String(mp.id) ||
+                                String(p.id) === String(mp.legacyProductId)
+                              );
+                              const productData = {
+                                id: existingIdx >= 0 ? products[existingIdx].id : (mp.legacyProductId || Date.now()),
+                                name: mp.name,
+                                grindRequired: mp.grindRequired !== false,
+                                image: mp.image || null,
+                                masterProductId: mp.id,
+                                platingCosts: productForm.platingCosts || {},
+                                grindCost: productForm.grindCost || '',
+                                injectionCost: productForm.injectionCost || '',
+                                springCost: productForm.springCost || '',
+                                pinCost: productForm.pinCost || '',
+                                createdAt: existingIdx >= 0 ? products[existingIdx].createdAt : new Date().toISOString()
+                              };
+                              let newProducts;
+                              if (existingIdx >= 0) {
+                                newProducts = [...products];
+                                newProducts[existingIdx] = productData;
+                              } else {
+                                newProducts = [...products, productData];
+                              }
+                              saveProducts(newProducts);
+
+                              // 9-1 마스터에도 단가 동기화
+                              const updatedMaster = masterProducts.map(p => String(p.id) === String(mp.id)
+                                ? {...p, platingCosts: productData.platingCosts, grindCost: productData.grindCost, injectionCost: productData.injectionCost, springCost: productData.springCost, pinCost: productData.pinCost}
+                                : p
+                              );
+                              saveMasterProducts(updatedMaster);
+
+                              alert('단가 정보가 저장되었습니다!');
+                              setProductForm({ name: '', grindRequired: true, image: null, imagePreview: null, grindCost: '', injectionCost: '', springCost: '', pinCost: '', platingCosts: {}, selectedMasterId: '' });
+                            }}
                             className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 rounded-xl font-bold shadow-lg hover:shadow-xl transition-all"
                           >
-                            {editingProduct ? '제품 수정하기' : '제품 등록하기'}
+                            💾 단가 저장
                           </button>
-                          {editingProduct && (
-                            <button
-                              onClick={() => {
-                                setEditingProduct(null);
-                                setProductForm({
-                                  name: '', grindRequired: true, image: null, imagePreview: null,
-                                  platingCost: '', grindCost: '', injectionCost: '', springCost: '', pinCost: ''
-                                });
-                              }}
-                              className="px-6 py-4 bg-slate-500 text-white rounded-xl font-bold shadow-lg hover:shadow-xl transition-all"
-                            >
-                              취소
-                            </button>
-                          )}
+                          <button
+                            onClick={() => {
+                              setProductForm({ name: '', grindRequired: true, image: null, imagePreview: null, grindCost: '', injectionCost: '', springCost: '', pinCost: '', platingCosts: {}, selectedMasterId: '' });
+                            }}
+                            className="px-6 py-4 bg-slate-500 text-white rounded-xl font-bold shadow-lg hover:shadow-xl transition-all"
+                          >
+                            초기화
+                          </button>
                         </div>
+                        )}
                       </div>
                     </div>
 
                     <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8">
-                      <h2 className="text-xl font-bold text-slate-900 mb-6">등록된 제품 ({products.length})</h2>
+                      <h2 className="text-xl font-bold text-slate-900 mb-6">단가 등록된 제품 ({products.length})</h2>
                       
                       {products.length === 0 ? (
                         <div className="text-center py-12 text-slate-400">
                           <div className="flex justify-center mb-4"><Package /></div>
-                          <p className="font-medium">등록된 제품이 없습니다</p>
+                          <p className="font-medium">단가가 입력된 제품이 없습니다</p>
+                          <p className="text-xs mt-1">위에서 9-1 상품을 선택하여 단가를 입력해주세요</p>
                         </div>
                       ) : (
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                          {[...products].sort((a, b) => a.name.localeCompare(b.name, 'ko-KR')).map(product => (
-                            <div key={product.id} className="relative p-4 rounded-2xl border-2 border-slate-100 hover:border-blue-300 hover:shadow-lg transition-all group">
-                              <div className="absolute top-2 right-2 flex space-x-1 opacity-0 group-hover:opacity-100 z-10">
-                                <button
-                                  onClick={() => handleEditProduct(product)}
-                                  className="p-1.5 bg-white text-blue-600 hover:bg-blue-50 rounded-lg shadow-lg transition-all"
-                                  title="수정"
-                                >
-                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                                  </svg>
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteProduct(product.id)}
-                                  className="p-1.5 bg-white text-red-500 hover:bg-red-50 rounded-lg shadow-lg transition-all"
-                                  title="삭제"
-                                >
-                                  <Trash />
-                                </button>
-                              </div>
-
-                              <div className="mb-3">
-                                {product.image ? (
-                                  <img src={product.image} alt={product.name} className="w-full h-32 rounded-xl object-cover border-2 border-slate-200" />
-                                ) : (
-                                  <div className="w-full h-32 rounded-xl bg-slate-100 flex items-center justify-center border-2 border-slate-200">
-                                    <Image />
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {[...products].sort((a, b) => a.name.localeCompare(b.name, 'ko-KR')).map(product => {
+                            const platingCount = Object.values(product.platingCosts||{}).filter(v=>v&&v!=='').length;
+                            return (
+                              <div key={product.id} className="relative p-4 rounded-2xl border-2 border-slate-100 hover:border-blue-300 hover:shadow-lg transition-all group cursor-pointer"
+                                onClick={() => {
+                                  // 클릭 시 해당 제품 단가 편집 모드로
+                                  const mp = masterProducts.find(p => String(p.id) === String(product.masterProductId) || String(p.legacyProductId) === String(product.id));
+                                  if (mp) {
+                                    setProductForm({
+                                      name: mp.name,
+                                      grindRequired: mp.grindRequired !== false,
+                                      image: mp.image || null,
+                                      imagePreview: mp.image || null,
+                                      grindCost: product.grindCost || '',
+                                      injectionCost: product.injectionCost || '',
+                                      springCost: product.springCost || '',
+                                      pinCost: product.pinCost || '',
+                                      platingCosts: product.platingCosts || {},
+                                      selectedMasterId: mp.id,
+                                      existingProductId: product.id
+                                    });
+                                    window.scrollTo({top: 0, behavior: 'smooth'});
+                                  } else {
+                                    alert('9-1 상품 마스터에서 원본 상품을 찾을 수 없습니다.');
+                                  }
+                                }}>
+                                <div className="flex gap-3 mb-3">
+                                  {product.image ? (
+                                    <img src={product.image} alt={product.name} className="w-20 h-20 rounded-xl object-cover border-2 border-slate-200 shrink-0" />
+                                  ) : (
+                                    <div className="w-20 h-20 rounded-xl bg-slate-100 flex items-center justify-center border-2 border-slate-200 shrink-0">
+                                      <span className="text-2xl">📌</span>
+                                    </div>
+                                  )}
+                                  <div className="flex-1 min-w-0">
+                                    <h3 className="font-bold text-slate-900 text-sm line-clamp-2">{product.name}</h3>
+                                    <div className="flex flex-wrap gap-1 mt-1">
+                                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${product.grindRequired?'bg-orange-100 text-orange-600':'bg-slate-100 text-slate-500'}`}>
+                                        {product.grindRequired ? '연마필요' : '연마불필요'}
+                                      </span>
+                                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-600 font-bold">
+                                        색상 {platingCount}개 단가 입력됨
+                                      </span>
+                                    </div>
                                   </div>
-                                )}
+                                </div>
+                                <div className="text-xs space-y-0.5 bg-slate-50 rounded-lg p-2">
+                                  {product.grindCost && <div className="flex justify-between"><span className="text-slate-500">연마</span><span className="font-semibold">{Number(product.grindCost).toLocaleString()}원</span></div>}
+                                  {product.injectionCost && <div className="flex justify-between"><span className="text-slate-500">사출</span><span className="font-semibold">{Number(product.injectionCost).toLocaleString()}원</span></div>}
+                                  {product.springCost && <div className="flex justify-between"><span className="text-slate-500">스프링</span><span className="font-semibold">{Number(product.springCost).toLocaleString()}원</span></div>}
+                                  {product.pinCost && <div className="flex justify-between"><span className="text-slate-500">핀대</span><span className="font-semibold">{Number(product.pinCost).toLocaleString()}원</span></div>}
+                                </div>
+                                <div className="text-[10px] text-blue-500 text-center mt-2 font-semibold">클릭하여 단가 수정 ↑</div>
                               </div>
-
-                              <div>
-                                <h3 className="font-bold text-slate-900 text-sm mb-1 line-clamp-2">{product.name}</h3>
-                                <p className="text-xs text-slate-500 bg-slate-50 px-2 py-1 rounded-md inline-block">
-                                  {product.grindRequired ? '연마 필요' : '연마 불필요'}
-                                </p>
-                              </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       )}
                     </div>
@@ -6910,14 +6991,19 @@ ${list}` }]
                                               ))}
                                             </div>
                                           ) : (
-                                            <div className="bg-slate-50 rounded-xl p-3">
-                                              <textarea
-                                                value={(form.colors||[]).join('\n')}
-                                                onChange={e=>setForm(p=>({...p,colors:e.target.value.split('\n').map(x=>x.trim()).filter(Boolean)}))}
-                                                placeholder={"색상명을 한 줄에 하나씩 입력\n예:\n네이비 체크\n베이지 리본\n브라운 도트"}
-                                                rows={6}
-                                                className="w-full px-3 py-2 rounded-lg border-2 border-slate-200 focus:border-purple-400 outline-none text-sm bg-white resize-y"/>
-                                              <p className="text-xs text-slate-400 mt-1">엔터로 구분 · 현재 {(form.colors||[]).length}개 등록</p>
+                                            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-700">
+                                              💡 곱창밴드는 <strong>"원단 연결"</strong> 섹션 하단의 색상 매칭에서 관리됩니다.<br/>
+                                              원단을 먼저 선택하면 거래처 색상에서 체크 + 우리 색상명을 입력할 수 있어요.
+                                              {(form.colors||[]).length > 0 && (
+                                                <div className="mt-2 pt-2 border-t border-blue-200">
+                                                  <div className="font-semibold">현재 등록된 색상 ({form.colors.length}개):</div>
+                                                  <div className="flex flex-wrap gap-1 mt-1">
+                                                    {form.colors.map(c=>(
+                                                      <span key={c} className="bg-white border border-blue-300 text-blue-700 px-2 py-0.5 rounded-full">{c}</span>
+                                                    ))}
+                                                  </div>
+                                                </div>
+                                              )}
                                             </div>
                                           )}
                                         </div>
@@ -7064,12 +7150,11 @@ ${list}` }]
                                               </div>
                                             )}
 
-                                            {/* 🎨 색상 매칭 기능 */}
+                                            {/* 🎨 색상 매칭 - 체크 + 우리색 입력 */}
                                             {form.fabricId && (() => {
                                               const sup2 = fabricSuppliersState.find(s=>String(s.id)===String(form.fabricSupplierId));
                                               const fab = sup2?.fabrics?.find(f=>String(f.id)===String(form.fabricId));
                                               const supplierColors = fab?.supplierColors || [];
-                                              const colorMapping = form._colorMapping || fab?.colorMapping || {};
                                               if (supplierColors.length === 0) {
                                                 return (
                                                   <div className="bg-amber-50 border border-amber-300 rounded-lg px-3 py-2 text-xs text-amber-700 mt-2">
@@ -7077,57 +7162,77 @@ ${list}` }]
                                                   </div>
                                                 );
                                               }
-                                              const ourColors = form.colors || [];
+                                              const mapping = form._colorMapping || {};
+
+                                              // 매칭 정보 업데이트 → form.colors도 자동 갱신
+                                              const updateMapping = (newMapping) => {
+                                                // 체크되고 우리 색상명이 입력된 것만 colors에 반영
+                                                const ourColors = Object.values(newMapping)
+                                                  .map(v => (v||'').trim())
+                                                  .filter(v => v.length > 0);
+                                                // 중복 제거
+                                                const uniqueColors = [...new Set(ourColors)];
+                                                setForm(p => ({...p, _colorMapping: newMapping, colors: uniqueColors}));
+                                              };
+
                                               return (
                                                 <div className="bg-white border-2 border-pink-200 rounded-xl p-3 mt-2">
                                                   <div className="text-xs font-bold text-pink-700 mb-2 flex items-center gap-1">
-                                                    🎨 색상 매칭 (거래처 색상 → 우리 색상)
-                                                    <span className="bg-pink-100 text-pink-600 px-1.5 py-0.5 rounded text-[10px]">{supplierColors.length}개</span>
+                                                    🎨 이 상품에 사용할 색상
+                                                    <span className="bg-pink-100 text-pink-600 px-1.5 py-0.5 rounded text-[10px]">거래처 {supplierColors.length}개 중 선택</span>
                                                   </div>
+                                                  <p className="text-[11px] text-slate-500 mb-2">✅ 체크 후 우리 색상명 입력 → 자동으로 <strong>사용 가능 색상</strong>에 반영</p>
                                                   <div className="space-y-1.5">
-                                                    {supplierColors.map(sc => (
-                                                      <div key={sc} className="flex items-center gap-2">
-                                                        <div className="flex-1 bg-slate-50 rounded-lg px-2 py-1.5 text-xs">
-                                                          <span className="text-slate-400">거래처:</span> <strong className="text-slate-800">{sc}</strong>
+                                                    {supplierColors.map(sc => {
+                                                      const isChecked = mapping[sc] !== undefined;
+                                                      const ourValue = mapping[sc] || '';
+                                                      return (
+                                                        <div key={sc} className="flex items-center gap-2">
+                                                          <label className="flex items-center gap-1.5 cursor-pointer shrink-0 w-28">
+                                                            <input type="checkbox" checked={isChecked}
+                                                              onChange={e=>{
+                                                                const newMapping = {...mapping};
+                                                                if (e.target.checked) {
+                                                                  // 체크 시: 거래처명과 동일하게 자동 입력
+                                                                  newMapping[sc] = sc;
+                                                                } else {
+                                                                  delete newMapping[sc];
+                                                                }
+                                                                updateMapping(newMapping);
+                                                              }}
+                                                              className="w-4 h-4 accent-pink-500"/>
+                                                            <span className={`text-xs ${isChecked?'font-bold text-slate-800':'text-slate-400'}`}>{sc}</span>
+                                                          </label>
+                                                          <span className="text-slate-400 shrink-0">→</span>
+                                                          {isChecked ? (
+                                                            <input type="text" value={ourValue}
+                                                              onChange={e=>updateMapping({...mapping, [sc]: e.target.value})}
+                                                              placeholder="우리 색상명"
+                                                              className="flex-1 px-2 py-1.5 rounded-lg border border-pink-200 focus:border-pink-400 outline-none text-xs bg-white"/>
+                                                          ) : (
+                                                            <div className="flex-1 px-2 py-1.5 text-xs text-slate-300 italic">(안씀)</div>
+                                                          )}
                                                         </div>
-                                                        <span className="text-slate-400">→</span>
-                                                        <select value={colorMapping[sc] || ''}
-                                                          onChange={e=>{
-                                                            const newMapping = {...colorMapping, [sc]: e.target.value};
-                                                            setForm(p=>({...p, _colorMapping: newMapping}));
-                                                          }}
-                                                          className="flex-1 px-2 py-1.5 rounded-lg border border-slate-200 text-xs bg-white">
-                                                          <option value="">-- 우리 색상 선택 --</option>
-                                                          {ourColors.map(oc => (
-                                                            <option key={oc} value={oc}>{oc}</option>
-                                                          ))}
-                                                          <option value="__direct__">(직접 입력)</option>
-                                                        </select>
-                                                        {colorMapping[sc] === '__direct__' && (
-                                                          <input type="text" placeholder="색상명"
-                                                            onChange={e=>{
-                                                              const newMapping = {...colorMapping, [sc]: e.target.value};
-                                                              setForm(p=>({...p, _colorMapping: newMapping}));
-                                                            }}
-                                                            className="w-20 px-2 py-1.5 rounded-lg border border-pink-200 text-xs"/>
-                                                        )}
-                                                      </div>
-                                                    ))}
+                                                      );
+                                                    })}
                                                   </div>
                                                   <div className="mt-2 pt-2 border-t border-pink-100 flex items-center justify-between">
-                                                    <span className="text-[10px] text-slate-400">
-                                                      매칭 완료: {Object.values(colorMapping).filter(v=>v && v!=='__direct__').length}/{supplierColors.length}
+                                                    <span className="text-[11px] text-pink-700 font-bold">
+                                                      ✓ 사용 색상: {Object.keys(mapping).length}개
                                                     </span>
-                                                    <button onClick={()=>{
-                                                      const auto = {};
-                                                      supplierColors.forEach(sc => {
-                                                        const match = ourColors.find(oc => oc.replace(/[()]/g,'').toLowerCase() === sc.replace(/[()]/g,'').toLowerCase());
-                                                        if (match) auto[sc] = match;
-                                                      });
-                                                      setForm(p=>({...p, _colorMapping: {...colorMapping, ...auto}}));
-                                                    }} className="text-[10px] bg-pink-100 text-pink-600 hover:bg-pink-200 px-2 py-0.5 rounded font-bold">
-                                                      ⚡ 자동매칭 (동일명)
-                                                    </button>
+                                                    <div className="flex gap-1">
+                                                      <button onClick={()=>{
+                                                        const newMapping = {};
+                                                        supplierColors.forEach(sc => { newMapping[sc] = sc; });
+                                                        updateMapping(newMapping);
+                                                      }} className="text-[10px] bg-pink-100 text-pink-600 hover:bg-pink-200 px-2 py-0.5 rounded font-bold">
+                                                        전체 선택
+                                                      </button>
+                                                      <button onClick={()=>updateMapping({})}
+                                                        className="text-[10px] bg-slate-100 text-slate-500 hover:bg-slate-200 px-2 py-0.5 rounded font-bold">
+                                                        전체 해제
+                                                      </button>
+                                                    </div>
                                                   </div>
                                                 </div>
                                               );
@@ -8482,7 +8587,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260421.77</p>
+                <p>© 2026 LACEROOM통합관리 v20260421.81</p>
               </footer>
             </div>
           </div>
