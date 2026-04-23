@@ -5542,51 +5542,77 @@ ${list}` }]
                                       <div className="text-lg font-bold text-blue-700">{smallCalc.totalCount > 0 ? (f.fabricYards / smallCalc.totalCount).toFixed(4) : '0'}Y</div>
                                     </div>
                                   </div>
-                                  {/* 📐 원단 배치 시각화 */}
+                                  {/* 📐 원단 배치 시각화 (2단 전용, 실제 비율) */}
                                   {(() => {
                                     const cols = smallCalc.horizontalCount;
-                                    const rows = Math.min(smallCalc.verticalStacks * f.stackCount, 12); // 최대 12줄만 표시 (시각적 한계)
-                                    const showMore = smallCalc.verticalStacks * f.stackCount > rows;
-                                    const svgW = 280;
-                                    const svgH = 180;
-                                    const padding = 30;
-                                    const drawW = svgW - padding * 2;
-                                    const drawH = svgH - padding * 2;
-                                    const cellW = drawW / Math.max(cols, 1);
-                                    const cellH = drawH / Math.max(rows, 1);
+                                    const stackCount = f.stackCount || 2;
+                                    const itemW = f.smallW; // mm
+                                    const itemH = f.smallH; // mm
+                                    // 전체 영역 (원단 폭 × 재단물 2단 높이 + 손실)
+                                    const lossR = (f.lossRight||0) * 10; // cm → mm
+                                    const lossT = (f.lossTop||0) * 10;
+                                    const totalDrawW = widthMM; // 원단 폭 실치수
+                                    const totalDrawH = lossT + itemH * stackCount; // 상단 손실 + 2단만큼
+                                    // SVG 크기 (실제 비율 유지)
+                                    const maxSvgW = 320;
+                                    const scale = maxSvgW / totalDrawW;
+                                    const svgW = maxSvgW + 60; // 좌측 라벨 공간
+                                    const svgH = totalDrawH * scale + 60; // 상단 라벨 공간
+                                    const ox = 40; // 원점 x
+                                    const oy = 30; // 원점 y
                                     return (
                                       <div className="bg-slate-50 rounded-lg p-2 border border-slate-200">
-                                        <div className="text-[10px] font-bold text-slate-600 mb-1 text-center">📐 원단 배치도 (소)</div>
+                                        <div className="text-[10px] font-bold text-slate-600 mb-1 text-center">📐 원단 배치도 (소) · {stackCount}단 실측 비율</div>
                                         <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full h-auto">
-                                          {/* 원단 바깥쪽 (회색) */}
-                                          <rect x={padding} y={padding} width={drawW} height={drawH} fill="#fef3c7" stroke="#d97706" strokeWidth="2"/>
-                                          {/* 재단물들 (초록 분홍 교차) */}
-                                          {Array.from({length: rows}).map((_, rowIdx) =>
+                                          {/* 원단 전체 영역 (노랑) */}
+                                          <rect x={ox} y={oy} width={totalDrawW * scale} height={totalDrawH * scale} fill="#fef3c7" stroke="#d97706" strokeWidth="1.5"/>
+
+                                          {/* 상단 손실 A (빨강 빗금) */}
+                                          {lossT > 0 && (
+                                            <>
+                                              <rect x={ox} y={oy} width={totalDrawW * scale} height={lossT * scale} fill="#fecaca" stroke="#dc2626" strokeWidth="1" strokeDasharray="2,2" opacity="0.7"/>
+                                              <text x={ox + (totalDrawW * scale)/2} y={oy + (lossT * scale)/2 + 3} fontSize="9" fill="#b91c1c" textAnchor="middle" fontWeight="bold">A 손실 {f.lossTop}cm</text>
+                                            </>
+                                          )}
+
+                                          {/* 우측 손실 B (빨강 빗금) - 원단 폭이 너무 넓어서 우측 손실 있으면 */}
+                                          {lossR > 0 && (
+                                            <>
+                                              <rect x={ox + (totalDrawW - lossR) * scale} y={oy + lossT * scale} width={lossR * scale} height={(totalDrawH - lossT) * scale} fill="#fecaca" stroke="#dc2626" strokeWidth="1" strokeDasharray="2,2" opacity="0.7"/>
+                                              <text x={ox + (totalDrawW - lossR/2) * scale} y={oy + (lossT + (totalDrawH - lossT)/2) * scale + 3} fontSize="8" fill="#b91c1c" textAnchor="middle" fontWeight="bold" transform={`rotate(-90, ${ox + (totalDrawW - lossR/2) * scale}, ${oy + (lossT + (totalDrawH - lossT)/2) * scale + 3})`}>B {f.lossRight}cm</text>
+                                            </>
+                                          )}
+
+                                          {/* 재단물 (딱 붙여서 배치) */}
+                                          {Array.from({length: stackCount}).map((_, rowIdx) =>
                                             Array.from({length: cols}).map((_, colIdx) => (
                                               <rect key={`${rowIdx}-${colIdx}`}
-                                                x={padding + colIdx * cellW + 1}
-                                                y={padding + rowIdx * cellH + 1}
-                                                width={cellW - 2}
-                                                height={cellH - 2}
-                                                fill={(rowIdx + colIdx) % 2 === 0 ? '#86efac' : '#a7f3d0'}
+                                                x={ox + colIdx * itemW * scale}
+                                                y={oy + (lossT + rowIdx * itemH) * scale}
+                                                width={itemW * scale}
+                                                height={itemH * scale}
+                                                fill={(rowIdx + colIdx) % 2 === 0 ? '#86efac' : '#bbf7d0'}
                                                 stroke="#16a34a"
                                                 strokeWidth="0.5"/>
                                             ))
                                           )}
+
                                           {/* 폭 화살표 (위) */}
-                                          <line x1={padding} y1={padding - 8} x2={padding + drawW} y2={padding - 8} stroke="#475569" strokeWidth="1"/>
-                                          <polygon points={`${padding},${padding-8} ${padding+5},${padding-11} ${padding+5},${padding-5}`} fill="#475569"/>
-                                          <polygon points={`${padding+drawW},${padding-8} ${padding+drawW-5},${padding-11} ${padding+drawW-5},${padding-5}`} fill="#475569"/>
-                                          <text x={svgW/2} y={padding-14} fontSize="10" fill="#1e293b" textAnchor="middle" fontWeight="bold">폭 {f.fabricWidth}인치 ({widthMM.toFixed(0)}mm)</text>
-                                          {/* 길이 화살표 (왼쪽) */}
-                                          <line x1={padding - 8} y1={padding} x2={padding - 8} y2={padding + drawH} stroke="#475569" strokeWidth="1"/>
-                                          <text x={padding - 12} y={padding + drawH/2} fontSize="9" fill="#1e293b" textAnchor="middle" fontWeight="bold" transform={`rotate(-90, ${padding - 12}, ${padding + drawH/2})`}>{showMore?`${rows}/${smallCalc.verticalStacks * f.stackCount}줄`:`${rows}줄`}</text>
-                                          {/* 가로 N개 라벨 */}
-                                          <text x={svgW/2} y={svgH - 8} fontSize="10" fill="#16a34a" textAnchor="middle" fontWeight="bold">↑ 1줄당 {cols}개</text>
+                                          <line x1={ox} y1={oy - 10} x2={ox + totalDrawW * scale} y2={oy - 10} stroke="#475569" strokeWidth="1"/>
+                                          <polygon points={`${ox},${oy-10} ${ox+4},${oy-13} ${ox+4},${oy-7}`} fill="#475569"/>
+                                          <polygon points={`${ox+totalDrawW*scale},${oy-10} ${ox+totalDrawW*scale-4},${oy-13} ${ox+totalDrawW*scale-4},${oy-7}`} fill="#475569"/>
+                                          <text x={ox + (totalDrawW * scale)/2} y={oy - 16} fontSize="9" fill="#1e293b" textAnchor="middle" fontWeight="bold">폭 {f.fabricWidth}인치 ({widthMM.toFixed(0)}mm)</text>
+
+                                          {/* 세로(높이) 라벨 (왼쪽) */}
+                                          <text x={ox - 8} y={oy + (lossT * scale)/2 + 3} fontSize="8" fill="#b91c1c" textAnchor="end" fontWeight="bold">{f.lossTop}cm</text>
+                                          <text x={ox - 8} y={oy + (lossT + itemH/2) * scale + 3} fontSize="8" fill="#1e293b" textAnchor="end" fontWeight="bold">{itemH}mm</text>
+                                          {stackCount >= 2 && <text x={ox - 8} y={oy + (lossT + itemH + itemH/2) * scale + 3} fontSize="8" fill="#1e293b" textAnchor="end" fontWeight="bold">{itemH}mm</text>}
                                         </svg>
                                         <div className="text-[10px] text-slate-500 text-center mt-1">
-                                          {f.smallW}×{f.smallH}mm × <strong className="text-green-700">{cols}</strong>개/줄 × <strong className="text-green-700">{smallCalc.verticalStacks * f.stackCount}</strong>줄
-                                          {f.stackCount > 1 && ` (${f.stackCount}층)`}
+                                          {f.smallW}×{f.smallH}mm · <strong className="text-green-700">{cols}</strong>개/단 × <strong className="text-green-700">{smallCalc.verticalStacks}</strong>단 × <strong className="text-green-700">{stackCount}</strong>층 = <strong className="text-green-700">{smallCalc.totalCount}</strong>개
+                                        </div>
+                                        <div className="text-[9px] text-slate-400 text-center mt-0.5">
+                                          ※ 시각화는 {stackCount}단 기준 (실제 {smallCalc.verticalStacks}단 반복 × {stackCount}층)
                                         </div>
                                       </div>
                                     );
@@ -5610,46 +5636,75 @@ ${list}` }]
                                       <div className="text-lg font-bold text-blue-700">{largeCalc.totalCount > 0 ? (f.fabricYards / largeCalc.totalCount).toFixed(4) : '0'}Y</div>
                                     </div>
                                   </div>
-                                  {/* 📐 원단 배치 시각화 */}
+                                  {/* 📐 원단 배치 시각화 (2단 전용, 실제 비율) */}
                                   {(() => {
                                     const cols = largeCalc.horizontalCount;
-                                    const rows = Math.min(largeCalc.verticalStacks * f.stackCount, 12);
-                                    const showMore = largeCalc.verticalStacks * f.stackCount > rows;
-                                    const svgW = 280;
-                                    const svgH = 180;
-                                    const padding = 30;
-                                    const drawW = svgW - padding * 2;
-                                    const drawH = svgH - padding * 2;
-                                    const cellW = drawW / Math.max(cols, 1);
-                                    const cellH = drawH / Math.max(rows, 1);
+                                    const stackCount = f.stackCount || 2;
+                                    const itemW = f.largeW; // mm
+                                    const itemH = f.largeH; // mm
+                                    const lossR = (f.lossRight||0) * 10;
+                                    const lossT = (f.lossTop||0) * 10;
+                                    const totalDrawW = widthMM;
+                                    const totalDrawH = lossT + itemH * stackCount;
+                                    const maxSvgW = 320;
+                                    const scale = maxSvgW / totalDrawW;
+                                    const svgW = maxSvgW + 60;
+                                    const svgH = totalDrawH * scale + 60;
+                                    const ox = 40;
+                                    const oy = 30;
                                     return (
                                       <div className="bg-slate-50 rounded-lg p-2 border border-slate-200">
-                                        <div className="text-[10px] font-bold text-slate-600 mb-1 text-center">📐 원단 배치도 (대)</div>
+                                        <div className="text-[10px] font-bold text-slate-600 mb-1 text-center">📐 원단 배치도 (대) · {stackCount}단 실측 비율</div>
                                         <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full h-auto">
-                                          <rect x={padding} y={padding} width={drawW} height={drawH} fill="#fef3c7" stroke="#d97706" strokeWidth="2"/>
-                                          {Array.from({length: rows}).map((_, rowIdx) =>
+                                          {/* 원단 전체 영역 */}
+                                          <rect x={ox} y={oy} width={totalDrawW * scale} height={totalDrawH * scale} fill="#fef3c7" stroke="#d97706" strokeWidth="1.5"/>
+
+                                          {/* 상단 손실 A */}
+                                          {lossT > 0 && (
+                                            <>
+                                              <rect x={ox} y={oy} width={totalDrawW * scale} height={lossT * scale} fill="#fecaca" stroke="#dc2626" strokeWidth="1" strokeDasharray="2,2" opacity="0.7"/>
+                                              <text x={ox + (totalDrawW * scale)/2} y={oy + (lossT * scale)/2 + 3} fontSize="9" fill="#b91c1c" textAnchor="middle" fontWeight="bold">A 손실 {f.lossTop}cm</text>
+                                            </>
+                                          )}
+
+                                          {/* 우측 손실 B */}
+                                          {lossR > 0 && (
+                                            <>
+                                              <rect x={ox + (totalDrawW - lossR) * scale} y={oy + lossT * scale} width={lossR * scale} height={(totalDrawH - lossT) * scale} fill="#fecaca" stroke="#dc2626" strokeWidth="1" strokeDasharray="2,2" opacity="0.7"/>
+                                              <text x={ox + (totalDrawW - lossR/2) * scale} y={oy + (lossT + (totalDrawH - lossT)/2) * scale + 3} fontSize="8" fill="#b91c1c" textAnchor="middle" fontWeight="bold" transform={`rotate(-90, ${ox + (totalDrawW - lossR/2) * scale}, ${oy + (lossT + (totalDrawH - lossT)/2) * scale + 3})`}>B {f.lossRight}cm</text>
+                                            </>
+                                          )}
+
+                                          {/* 재단물 (딱 붙여서) */}
+                                          {Array.from({length: stackCount}).map((_, rowIdx) =>
                                             Array.from({length: cols}).map((_, colIdx) => (
                                               <rect key={`${rowIdx}-${colIdx}`}
-                                                x={padding + colIdx * cellW + 1}
-                                                y={padding + rowIdx * cellH + 1}
-                                                width={cellW - 2}
-                                                height={cellH - 2}
+                                                x={ox + colIdx * itemW * scale}
+                                                y={oy + (lossT + rowIdx * itemH) * scale}
+                                                width={itemW * scale}
+                                                height={itemH * scale}
                                                 fill={(rowIdx + colIdx) % 2 === 0 ? '#fda4af' : '#fecdd3'}
                                                 stroke="#e11d48"
                                                 strokeWidth="0.5"/>
                                             ))
                                           )}
-                                          <line x1={padding} y1={padding - 8} x2={padding + drawW} y2={padding - 8} stroke="#475569" strokeWidth="1"/>
-                                          <polygon points={`${padding},${padding-8} ${padding+5},${padding-11} ${padding+5},${padding-5}`} fill="#475569"/>
-                                          <polygon points={`${padding+drawW},${padding-8} ${padding+drawW-5},${padding-11} ${padding+drawW-5},${padding-5}`} fill="#475569"/>
-                                          <text x={svgW/2} y={padding-14} fontSize="10" fill="#1e293b" textAnchor="middle" fontWeight="bold">폭 {f.fabricWidth}인치 ({widthMM.toFixed(0)}mm)</text>
-                                          <line x1={padding - 8} y1={padding} x2={padding - 8} y2={padding + drawH} stroke="#475569" strokeWidth="1"/>
-                                          <text x={padding - 12} y={padding + drawH/2} fontSize="9" fill="#1e293b" textAnchor="middle" fontWeight="bold" transform={`rotate(-90, ${padding - 12}, ${padding + drawH/2})`}>{showMore?`${rows}/${largeCalc.verticalStacks * f.stackCount}줄`:`${rows}줄`}</text>
-                                          <text x={svgW/2} y={svgH - 8} fontSize="10" fill="#e11d48" textAnchor="middle" fontWeight="bold">↑ 1줄당 {cols}개</text>
+
+                                          {/* 폭 화살표 */}
+                                          <line x1={ox} y1={oy - 10} x2={ox + totalDrawW * scale} y2={oy - 10} stroke="#475569" strokeWidth="1"/>
+                                          <polygon points={`${ox},${oy-10} ${ox+4},${oy-13} ${ox+4},${oy-7}`} fill="#475569"/>
+                                          <polygon points={`${ox+totalDrawW*scale},${oy-10} ${ox+totalDrawW*scale-4},${oy-13} ${ox+totalDrawW*scale-4},${oy-7}`} fill="#475569"/>
+                                          <text x={ox + (totalDrawW * scale)/2} y={oy - 16} fontSize="9" fill="#1e293b" textAnchor="middle" fontWeight="bold">폭 {f.fabricWidth}인치 ({widthMM.toFixed(0)}mm)</text>
+
+                                          {/* 세로 라벨 */}
+                                          <text x={ox - 8} y={oy + (lossT * scale)/2 + 3} fontSize="8" fill="#b91c1c" textAnchor="end" fontWeight="bold">{f.lossTop}cm</text>
+                                          <text x={ox - 8} y={oy + (lossT + itemH/2) * scale + 3} fontSize="8" fill="#1e293b" textAnchor="end" fontWeight="bold">{itemH}mm</text>
+                                          {stackCount >= 2 && <text x={ox - 8} y={oy + (lossT + itemH + itemH/2) * scale + 3} fontSize="8" fill="#1e293b" textAnchor="end" fontWeight="bold">{itemH}mm</text>}
                                         </svg>
                                         <div className="text-[10px] text-slate-500 text-center mt-1">
-                                          {f.largeW}×{f.largeH}mm × <strong className="text-rose-700">{cols}</strong>개/줄 × <strong className="text-rose-700">{largeCalc.verticalStacks * f.stackCount}</strong>줄
-                                          {f.stackCount > 1 && ` (${f.stackCount}층)`}
+                                          {f.largeW}×{f.largeH}mm · <strong className="text-rose-700">{cols}</strong>개/단 × <strong className="text-rose-700">{largeCalc.verticalStacks}</strong>단 × <strong className="text-rose-700">{stackCount}</strong>층 = <strong className="text-rose-700">{largeCalc.totalCount}</strong>개
+                                        </div>
+                                        <div className="text-[9px] text-slate-400 text-center mt-0.5">
+                                          ※ 시각화는 {stackCount}단 기준 (실제 {largeCalc.verticalStacks}단 반복 × {stackCount}층)
                                         </div>
                                       </div>
                                     );
