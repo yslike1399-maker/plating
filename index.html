@@ -1618,7 +1618,7 @@ ${list}` }]
                 <div className="px-4 py-4 border-b border-slate-100">
                   <div>
                     <div className="text-sm font-bold text-slate-900 leading-tight">LACEROOM통합관리</div>
-                    <div className="text-xs text-slate-400">v20260421.104</div>
+                    <div className="text-xs text-slate-400">v20260421.105</div>
                   </div>
                 </div>
 
@@ -7682,46 +7682,99 @@ ${list}` }]
 
                                         <div>
                                           <label className="block text-xs font-semibold text-slate-600 mb-1">📸 상품 이미지</label>
-                                          {form.image ? (
-                                            <div className="flex items-center gap-3">
-                                              <img src={form.image} alt="" className="w-20 h-20 object-cover rounded-lg border-2 border-slate-200"/>
-                                              <div className="flex flex-col gap-1">
-                                                <label className="text-xs text-blue-500 hover:bg-blue-50 px-2 py-1 rounded cursor-pointer border border-blue-200">
-                                                  이미지 변경
-                                                  <input type="file" accept="image/*" style={{display:'none'}}
-                                                    onChange={async e=>{
-                                                      const file = e.target.files?.[0];
-                                                      if(!file) return;
-                                                      try {
-                                                        const compressed = await compressImage(file);
-                                                        setForm(p=>({...p, image: compressed}));
-                                                      } catch (err) {
-                                                        console.error(err);
-                                                        alert('이미지 처리 실패');
-                                                      }
-                                                    }}/>
-                                                </label>
-                                                <button onClick={()=>setForm(p=>({...p, image: null}))}
-                                                  className="text-xs text-red-500 hover:bg-red-50 px-2 py-1 rounded border border-red-200">삭제</button>
+
+                                          {/* 미리보기 */}
+                                          {form.image && (
+                                            <div className="flex items-center gap-3 mb-3 p-2 bg-slate-50 rounded-xl">
+                                              <img src={form.image} alt="" className="w-20 h-20 object-cover rounded-lg border-2 border-slate-200"
+                                                onError={(e)=>{e.target.style.display='none';e.target.nextElementSibling.style.display='flex';}}/>
+                                              <div className="hidden w-20 h-20 bg-red-50 border-2 border-red-200 rounded-lg items-center justify-center text-xs text-red-500">❌ 로드<br/>실패</div>
+                                              <div className="flex-1 min-w-0">
+                                                <div className="text-xs text-slate-500 truncate" title={form.image}>{form.image.startsWith('data:')?'📦 직접 업로드 (base64)':'🌐 GitHub URL'}</div>
+                                                <button onClick={()=>setForm(p=>({...p, image: null, _imgMode: undefined}))}
+                                                  className="text-xs text-red-500 hover:bg-red-50 px-2 py-1 rounded border border-red-200 mt-1">🗑️ 이미지 삭제</button>
                                               </div>
                                             </div>
-                                          ) : (
-                                            <label className="block w-full px-3 py-4 rounded-xl border-2 border-dashed border-slate-300 hover:border-blue-400 cursor-pointer text-center text-sm text-slate-500">
-                                              📁 이미지 파일 선택 (자동 압축 · 작업지시서·쇼핑몰에 활용)
-                                              <input type="file" accept="image/*" style={{display:'none'}}
-                                                onChange={async e=>{
-                                                  const file = e.target.files?.[0];
-                                                  if(!file) return;
-                                                  try {
-                                                    const compressed = await compressImage(file);
-                                                    setForm(p=>({...p, image: compressed}));
-                                                  } catch (err) {
-                                                    console.error(err);
-                                                    alert('이미지 처리 실패');
-                                                  }
-                                                }}/>
-                                            </label>
                                           )}
+
+                                          {/* 업로드 방식 선택 */}
+                                          <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-3">
+                                            <div className="flex gap-2 mb-2">
+                                              <label className={`flex-1 flex items-center gap-2 p-2 rounded-lg cursor-pointer transition ${
+                                                (form._imgMode||'github') === 'github' ? 'bg-blue-100 border-2 border-blue-400' : 'bg-white border-2 border-transparent hover:bg-slate-50'
+                                              }`}>
+                                                <input type="radio" name="imgMode" checked={(form._imgMode||'github')==='github'}
+                                                  onChange={()=>setForm(p=>({...p, _imgMode: 'github'}))}
+                                                  className="w-4 h-4 accent-blue-500"/>
+                                                <div className="flex-1">
+                                                  <div className="text-xs font-bold text-slate-800">🌐 GitHub URL</div>
+                                                  <div className="text-[10px] text-slate-500">권장 · 용량 0</div>
+                                                </div>
+                                              </label>
+                                              <label className={`flex-1 flex items-center gap-2 p-2 rounded-lg cursor-pointer transition ${
+                                                form._imgMode === 'upload' ? 'bg-amber-100 border-2 border-amber-400' : 'bg-white border-2 border-transparent hover:bg-slate-50'
+                                              }`}>
+                                                <input type="radio" name="imgMode" checked={form._imgMode==='upload'}
+                                                  onChange={()=>setForm(p=>({...p, _imgMode: 'upload'}))}
+                                                  className="w-4 h-4 accent-amber-500"/>
+                                                <div className="flex-1">
+                                                  <div className="text-xs font-bold text-slate-800">📦 직접 업로드</div>
+                                                  <div className="text-[10px] text-slate-500">자동 압축</div>
+                                                </div>
+                                              </label>
+                                            </div>
+
+                                            {/* GitHub URL 모드 */}
+                                            {(form._imgMode||'github') === 'github' && (
+                                              <div className="space-y-2">
+                                                <div className="flex items-center gap-1">
+                                                  <span className="text-[11px] font-semibold text-slate-600 bg-white px-2 py-1.5 rounded-l-lg border border-r-0 border-slate-300">https://yslike1399-maker.github.io/plating/images/</span>
+                                                  <input type="text"
+                                                    value={form.image && !form.image.startsWith('data:') ? form.image.replace('https://yslike1399-maker.github.io/plating/images/','') : ''}
+                                                    onChange={e=>{
+                                                      const filename = e.target.value.trim();
+                                                      if (!filename) {
+                                                        setForm(p=>({...p, image: null}));
+                                                      } else {
+                                                        setForm(p=>({...p, image: `https://yslike1399-maker.github.io/plating/images/${filename}`}));
+                                                      }
+                                                    }}
+                                                    placeholder="11_5_gimt.jpg"
+                                                    className="flex-1 px-2 py-1.5 rounded-r-lg border border-slate-300 text-sm bg-white focus:border-blue-400 outline-none"/>
+                                                </div>
+                                                <details className="bg-white rounded-lg p-2 border border-blue-200">
+                                                  <summary className="text-[11px] text-blue-700 font-bold cursor-pointer">💡 이미지 추가 방법</summary>
+                                                  <ol className="text-[10px] text-slate-600 mt-2 space-y-0.5 pl-3 list-decimal">
+                                                    <li><a href="https://github.com/yslike1399-maker/plating/tree/main/images" target="_blank" className="text-blue-600 underline">GitHub images 폴더</a> 접속</li>
+                                                    <li>"Add file" → "Upload files" 클릭</li>
+                                                    <li>이미지 드래그 (영문 파일명 권장)</li>
+                                                    <li>"Commit changes" 클릭</li>
+                                                    <li>위에 파일명만 입력 (예: 11_5_gimt.jpg)</li>
+                                                  </ol>
+                                                </details>
+                                              </div>
+                                            )}
+
+                                            {/* 직접 업로드 모드 */}
+                                            {form._imgMode === 'upload' && (
+                                              <label className="block w-full px-3 py-4 rounded-xl border-2 border-dashed border-amber-300 hover:border-amber-500 cursor-pointer text-center text-sm text-amber-700 bg-amber-50">
+                                                📁 이미지 파일 선택 (자동 압축 600x600 JPEG)
+                                                <input type="file" accept="image/*" style={{display:'none'}}
+                                                  onChange={async e=>{
+                                                    const file = e.target.files?.[0];
+                                                    if(!file) return;
+                                                    try {
+                                                      const compressed = await compressImage(file);
+                                                      setForm(p=>({...p, image: compressed}));
+                                                    } catch (err) {
+                                                      console.error(err);
+                                                      alert('이미지 처리 실패');
+                                                    }
+                                                  }}/>
+                                                <div className="text-[10px] text-amber-600 mt-1">⚠️ localStorage 용량 차지함 (가급적 GitHub URL 권장)</div>
+                                              </label>
+                                            )}
+                                          </div>
                                         </div>
 
                                         {form.type === 'hairpin' && (
@@ -9650,7 +9703,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260421.104</p>
+                <p>© 2026 LACEROOM통합관리 v20260421.105</p>
               </footer>
             </div>
           </div>
