@@ -457,7 +457,7 @@ ${list}` }]
 
           // 🖼️ 이미지 자동 압축 함수 (최대 600x600, JPEG 75%)
           // 🖨️ 라벨 인쇄 (헬퍼와 통신 · JSON 다운로드 방식 · 한글 100% 지원)
-          // v20260424.06.6 - ZPL 직접생성 폐지, Python 헬퍼가 PNG 렌더링 후 ZT230 인쇄
+          // v20260424.06.8 - ZPL 직접생성 폐지, Python 헬퍼가 PNG 렌더링 후 ZT230 인쇄
           const downloadLabelJson = (labels) => {
             if (!labels || labels.length === 0) {
               alert('인쇄할 라벨이 없습니다.');
@@ -481,7 +481,7 @@ ${list}` }]
             }));
             
             const data = {
-              version: 'v20260424.06.6',
+              version: 'v20260424.06.8',
               created_at: new Date().toISOString(),
               label_count: enriched.length,
               total_print_count: enriched.reduce((s, l) => s + l.copies, 0),
@@ -1726,7 +1726,7 @@ ${list}` }]
                 <div className="px-4 py-4 border-b border-slate-100">
                   <div>
                     <div className="text-sm font-bold text-slate-900 leading-tight">LACEROOM통합관리</div>
-                    <div className="text-xs text-slate-400">v20260424.06.6</div>
+                    <div className="text-xs text-slate-400">v20260424.06.8</div>
                   </div>
                 </div>
 
@@ -7553,7 +7553,7 @@ ${list}` }]
 
                 {/* 🚫 빠른 품절 토글 팝업 */}
                 {/* 🎨 색상별 상태 설정 팝업 (9-1 카드 색상 클릭 시) */}
-                {/* 🖨️ 라벨 인쇄 편집기 v20260424.06.6 - 헬퍼 연동, 한글 100% */}
+                {/* 🖨️ 라벨 인쇄 편집기 v20260424.06.8 - 헬퍼 연동, 한글 100% */}
                 {barcodePrintPopup && (() => {
                   const p = barcodePrintPopup.product;
                   const barcodes = p.barcodes || {};
@@ -7698,7 +7698,7 @@ ${list}` }]
                         <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-slate-100 sticky top-0 bg-white z-10">
                           <div>
                             <h3 className="text-base font-bold text-slate-900">🖨️ 라벨 인쇄 + 디자인 편집기</h3>
-                            <div className="text-[10px] text-slate-500 mt-0.5">v20260424.06.6 · 헬퍼 자동 인쇄 · 한글 100%</div>
+                            <div className="text-[10px] text-slate-500 mt-0.5">v20260424.06.8 · 헬퍼 자동 인쇄 · 한글 100%</div>
                           </div>
                           <button onClick={()=>setBarcodePrintPopup(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
                         </div>
@@ -8619,17 +8619,32 @@ ${list}` }]
                                               </div>
                                             ) : (
                                               <div className="space-y-1">
-                                                {form.colors.map(color => {
+                                                {(() => {
+                                                  // 색상 표시 순서 규칙
+                                                  const colorOrder = [
+                                                    '골드(유광)', '실버(유광)', '블랙(유광)', '로즈골드(유광)', '다크골드(유광)',
+                                                    '골드(반광)', '실버(반광)', '블랙(반광)', '로즈골드(반광)', '다크골드(반광)',
+                                                    '14k도금', '14K도금', '은', '흑무광'
+                                                  ];
+                                                  const getOrder = (c) => {
+                                                    const idx = colorOrder.indexOf(c);
+                                                    return idx === -1 ? 9999 : idx;
+                                                  };
+                                                  return [...(form.colors || [])].sort((a, b) => getOrder(a) - getOrder(b));
+                                                })().map(color => {
                                                   const barcodes = form.barcodes || {};
                                                   const positions = form.positions || {};
                                                   const customColorNames = form.customColorNames || {};
                                                   const val = barcodes[color] || '';
                                                   const pos = positions[color] || '';
                                                   const customColorName = customColorNames[color] || '';
-                                                  // 위치값에서 [ ] 벗겨낸 raw 값 추출 (표시용)
                                                   const posRaw = pos.replace(/^\[/, '').replace(/\]$/, '');
+                                                  // 반광 구분 (배경색 살짝 어둡게)
+                                                  const isMatte = color.includes('(반광)');
+                                                  const cardBg = isMatte ? 'bg-slate-100' : 'bg-white';
+                                                  const cardBorder = isMatte ? 'border-slate-400' : 'border-indigo-200';
                                                   return (
-                                                    <div key={color} className="bg-white rounded-lg p-2 border border-indigo-200">
+                                                    <div key={color} className={`${cardBg} rounded-lg p-2 border ${cardBorder}`}>
                                                       {/* 1줄: 색상명 + 바코드 */}
                                                       <div className="flex items-center gap-2 mb-1">
                                                         <span className="text-xs font-semibold text-slate-700 min-w-[110px] truncate" title={color}>{color}</span>
@@ -9118,6 +9133,7 @@ ${list}` }]
                                         labelName: form.labelName || '',
                                         barcodes: form.barcodes || {},
                                         positions: form.positions || {},
+                                        customColorNames: form.customColorNames || {},
                                         legacyProductId: form.legacyProductId||null,
                                         createdAt: form.createdAt||new Date().toISOString()
                                       };
@@ -10744,7 +10760,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260424.06.6</p>
+                <p>© 2026 LACEROOM통합관리 v20260424.06.8</p>
               </footer>
             </div>
           </div>
