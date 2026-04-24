@@ -456,30 +456,27 @@ ${list}` }]
           };
 
           // 🖼️ 이미지 자동 압축 함수 (최대 600x600, JPEG 75%)
-          // 🖨️ 바코드 ZPL 생성 + 다운로드 (Zebra ZT230 · 50x30mm Code128)
-          const printBarcode = (barcode, productName, copies = 1) => {
-            if (!barcode) { alert('바코드 번호가 없습니다. 9-1에서 등록해주세요.'); return; }
+          // 🖨️ 바코드 ZPL 생성 + 다운로드 (Zebra ZT230 · 50x30mm Code128 · 11자리)
+          const printBarcode = (barcode, labelName, copies = 1) => {
+            if (!barcode) { alert('바코드 번호가 없습니다.'); return; }
             // 50x30mm @ 203dpi = 400x240 dots
-            // 상품명 한글은 Zebra 기본 폰트에서 깨짐 → 영문/바코드만
-            const safeName = (productName||'').replace(/[^A-Za-z0-9\-\s]/g,'').trim().slice(0,20) || 'LACEROOM';
+            const safeName = (labelName||'').replace(/[^A-Za-z0-9\-\s]/g,'').trim().slice(0,24) || 'LACEROOM';
             const zpl = [
               '^XA',
               '^PW400',
               '^LL240',
               '^LH0,0',
-              '^CF0,28',
+              '^CF0,30',
               `^FO20,20^FD${safeName}^FS`,
-              `^FO30,60^BY2,2,100^BCN,100,Y,N,N^FD${barcode}^FS`,
+              `^FO40,70^BY2,2,110^BCN,110,Y,N,N^FD${barcode}^FS`,
               copies > 1 ? `^PQ${copies}` : '',
               '^XZ'
             ].filter(Boolean).join('\n');
 
-            // 파일명: timestamp + 바코드 → 자동 인쇄 폴더에서 식별
             const now = new Date();
-            const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`;
+            const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}${String(now.getMilliseconds()).padStart(3,'0')}`;
             const filename = `${ts}_${barcode}.zpl`;
 
-            // ZPL 파일 다운로드 (송장 PC에서 C:\laceroom-print\ 로 저장 → Python 헬퍼가 자동 인쇄)
             const blob = new Blob([zpl], {type: 'text/plain'});
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -489,6 +486,15 @@ ${list}` }]
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
+          };
+
+          // 일괄 출력 (색상별 선택 + 수량)
+          const [barcodePrintPopup, setBarcodePrintPopup] = useState(null); // {product}
+          const printBarcodeBatch = (items) => {
+            // items: [{barcode, labelName, copies}]
+            items.forEach((item, idx) => {
+              setTimeout(() => printBarcode(item.barcode, item.labelName, item.copies), idx * 300);
+            });
           };
 
           const compressImage = (file, maxSize = 600, quality = 0.75) => {
@@ -1653,7 +1659,7 @@ ${list}` }]
                 <div className="px-4 py-4 border-b border-slate-100">
                   <div>
                     <div className="text-sm font-bold text-slate-900 leading-tight">LACEROOM통합관리</div>
-                    <div className="text-xs text-slate-400">v20260421.114</div>
+                    <div className="text-xs text-slate-400">v20260421.115</div>
                   </div>
                 </div>
 
@@ -7480,6 +7486,99 @@ ${list}` }]
 
                 {/* 🚫 빠른 품절 토글 팝업 */}
                 {/* 🎨 색상별 상태 설정 팝업 (9-1 카드 색상 클릭 시) */}
+                {/* 🖨️ 바코드 일괄 출력 팝업 */}
+                {barcodePrintPopup && (() => {
+                  const p = barcodePrintPopup.product;
+                  const barcodes = p.barcodes || {};
+                  const colors = p.colors || [];
+                  const selections = barcodePrintPopup.selections || {};
+                  const setSelections = (updater) => setBarcodePrintPopup({...barcodePrintPopup, selections: typeof updater === 'function' ? updater(selections) : updater});
+                  const totalLabels = Object.values(selections).reduce((s,v) => s + (parseInt(v)||0), 0);
+                  const toPrint = colors
+                    .filter(c => barcodes[c] && (parseInt(selections[c])||0) > 0)
+                    .map(c => ({ color: c, barcode: barcodes[c], labelName: p.labelName || p.name, copies: parseInt(selections[c])||0 }));
+                  return (
+                    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.5)'}}
+                      onClick={()=>setBarcodePrintPopup(null)}>
+                      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-5 max-h-[90vh] overflow-y-auto"
+                        onClick={e=>e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-base font-bold text-slate-900">🖨️ 바코드 출력</h3>
+                          <button onClick={()=>setBarcodePrintPopup(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
+                        </div>
+
+                        <div className="flex items-center gap-3 bg-slate-50 rounded-xl p-3 mb-3">
+                          {p.image ? (
+                            <img src={p.image} className="w-12 h-12 rounded-lg object-cover border" alt=""/>
+                          ) : (
+                            <div className="w-12 h-12 rounded-lg bg-white border flex items-center justify-center text-xl">{p.type==='hairpin'?'📌':'🎀'}</div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="font-bold text-slate-900 text-sm truncate">{p.name}</div>
+                            <div className="text-xs text-indigo-600 font-mono mt-0.5">🏷️ {p.labelName || '(라벨명 미등록)'}</div>
+                          </div>
+                        </div>
+
+                        <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-2 mb-3">
+                          <div className="text-[11px] font-bold text-indigo-700 mb-2 flex items-center justify-between">
+                            <span>색상별 출력 수량</span>
+                            <div className="flex gap-1">
+                              <button onClick={()=>{
+                                const next = {};
+                                colors.forEach(c => { if (barcodes[c]) next[c] = 1; });
+                                setSelections(next);
+                              }} className="text-[10px] bg-indigo-500 hover:bg-indigo-600 text-white px-2 py-0.5 rounded font-bold">전체 1장</button>
+                              <button onClick={()=>setSelections({})} className="text-[10px] bg-slate-300 hover:bg-slate-400 text-white px-2 py-0.5 rounded font-bold">해제</button>
+                            </div>
+                          </div>
+                          <div className="space-y-1 max-h-80 overflow-y-auto">
+                            {colors.length === 0 && <div className="text-xs text-slate-400 text-center py-4">등록된 색상이 없습니다</div>}
+                            {colors.map(color => {
+                              const bc = barcodes[color];
+                              const qty = selections[color] || '';
+                              return (
+                                <div key={color} className={`flex items-center gap-2 rounded-lg p-2 border ${bc?'bg-white border-indigo-200':'bg-slate-50 border-slate-200 opacity-60'}`}>
+                                  <span className="text-xs font-semibold text-slate-700 flex-1 truncate" title={color}>{color}</span>
+                                  {bc ? (
+                                    <>
+                                      <span className="text-[10px] font-mono text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">{bc}</span>
+                                      <input type="number" min="0" max="99" value={qty}
+                                        onChange={e=>setSelections(s=>({...s, [color]: e.target.value.replace(/\D/g,'').slice(0,2)}))}
+                                        placeholder="0"
+                                        className="w-14 px-1 py-1 rounded border border-indigo-200 text-xs text-center outline-none font-bold"/>
+                                      <span className="text-[10px] text-slate-400">장</span>
+                                    </>
+                                  ) : (
+                                    <span className="text-[10px] text-amber-600 font-bold">⚠️ 바코드 미등록</span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 mb-3 text-[10px] text-amber-700">
+                          💡 출력 시 .zpl 파일이 다운로드 됩니다. 송장 PC의 <strong>C:\laceroom-print\</strong> 폴더에 저장되면 자동 인쇄됩니다.
+                        </div>
+
+                        <div className="flex gap-2">
+                          <button onClick={()=>setBarcodePrintPopup(null)}
+                            className="flex-1 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl font-bold text-sm">취소</button>
+                          <button onClick={()=>{
+                            if (toPrint.length === 0) { alert('출력할 색상/수량을 지정해주세요'); return; }
+                            printBarcodeBatch(toPrint);
+                            setBarcodePrintPopup(null);
+                          }}
+                            disabled={toPrint.length === 0}
+                            className={`flex-[2] py-2.5 rounded-xl font-bold text-sm ${toPrint.length===0?'bg-slate-200 text-slate-400 cursor-not-allowed':'bg-indigo-500 hover:bg-indigo-600 text-white shadow'}`}>
+                            🖨️ 출력 ({toPrint.length}종 · 총 {totalLabels}장)
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {colorStatusPopup && (() => {
                   const p = colorStatusPopup.product;
                   const c = colorStatusPopup.color;
@@ -7971,30 +8070,58 @@ ${list}` }]
                                             placeholder="예: S, M, L" className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 outline-none text-sm"/>
                                         </div>
 
-                                        {/* 🔖 바코드 번호 */}
-                                        <div className="bg-indigo-50 border-2 border-indigo-200 rounded-xl p-3">
-                                          <label className="block text-xs font-bold text-indigo-700 mb-2">🔖 바코드 번호 <span className="text-slate-400 font-normal">(Zebra ZT230 · Code128)</span></label>
-                                          <div className="flex gap-2">
-                                            <input type="text" value={form.barcode||''}
-                                              onChange={e=>setForm(p=>({...p, barcode: e.target.value.toUpperCase().replace(/[^A-Z0-9\-]/g,'')}))}
-                                              placeholder="예: LCR-HP-001 또는 자동생성"
-                                              className="flex-1 px-3 py-2 rounded-xl border-2 border-indigo-200 outline-none text-sm font-mono bg-white"/>
-                                            <button type="button" onClick={()=>{
-                                              // 자동 생성: 타입별 prefix + 일련번호
-                                              const prefix = form.type === 'hairpin' ? 'LCR-HP' : 'LCR-GC';
-                                              const existing = masterProducts
-                                                .filter(p => p.barcode && p.barcode.startsWith(prefix))
-                                                .map(p => parseInt((p.barcode.split('-')[2]||'0'), 10))
-                                                .filter(n => !isNaN(n));
-                                              const nextNum = existing.length ? Math.max(...existing) + 1 : 1;
-                                              const newBarcode = `${prefix}-${String(nextNum).padStart(3,'0')}`;
-                                              setForm(p=>({...p, barcode: newBarcode}));
-                                            }} className="px-3 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl text-xs font-bold whitespace-nowrap">
-                                              🎲 자동생성
-                                            </button>
+                                        {/* 🔖 셀메이트 바코드 + 라벨 출력명 */}
+                                        <div className="bg-indigo-50 border-2 border-indigo-200 rounded-xl p-3 space-y-3">
+                                          <div>
+                                            <label className="block text-xs font-bold text-indigo-700 mb-1">🏷️ 라벨 출력명 <span className="text-slate-400 font-normal">(바코드 라벨에 표시 · 영문/숫자만)</span></label>
+                                            <input type="text" value={form.labelName||''}
+                                              onChange={e=>setForm(p=>({...p, labelName: e.target.value}))}
+                                              placeholder="예: METAL 2SEDAE"
+                                              list="labelNameList"
+                                              className="w-full px-3 py-2 rounded-xl border-2 border-indigo-200 outline-none text-sm bg-white"/>
+                                            <datalist id="labelNameList">
+                                              {[...new Set(masterProducts.map(p=>p.labelName).filter(Boolean))].map(name => (
+                                                <option key={name} value={name}/>
+                                              ))}
+                                            </datalist>
+                                            <div className="text-[10px] text-slate-500 mt-1">💡 과거 입력한 이름은 자동완성으로 선택 가능</div>
                                           </div>
-                                          <div className="text-[10px] text-slate-500 mt-1.5">
-                                            💡 형식: <strong>LCR-HP-001</strong> (헤어핀) / <strong>LCR-GC-001</strong> (곱창밴드) · 영문대문자, 숫자, 하이픈만
+
+                                          <div>
+                                            <label className="block text-xs font-bold text-indigo-700 mb-2">🔖 셀메이트 바코드 <span className="text-slate-400 font-normal">(11자리, 색상별 개별 입력)</span></label>
+                                            {(form.colors||[]).length === 0 ? (
+                                              <div className="bg-white border border-indigo-200 rounded-lg p-3 text-xs text-slate-500 text-center">
+                                                ⚠️ 색상을 먼저 등록해주세요
+                                              </div>
+                                            ) : (
+                                              <div className="space-y-1">
+                                                {form.colors.map(color => {
+                                                  const barcodes = form.barcodes || {};
+                                                  const val = barcodes[color] || '';
+                                                  return (
+                                                    <div key={color} className="flex items-center gap-2 bg-white rounded-lg p-2 border border-indigo-200">
+                                                      <span className="text-xs font-semibold text-slate-700 min-w-[110px] truncate" title={color}>{color}</span>
+                                                      <input type="text" value={val}
+                                                        onChange={e=>{
+                                                          const digits = e.target.value.replace(/\D/g,'').slice(0,11);
+                                                          setForm(p=>({...p, barcodes: {...(p.barcodes||{}), [color]: digits}}));
+                                                        }}
+                                                        placeholder="11자리 숫자"
+                                                        maxLength={11}
+                                                        className={`flex-1 px-2 py-1 rounded border text-sm font-mono outline-none ${
+                                                          val.length===11 ? 'border-green-400 bg-green-50 text-green-700' :
+                                                          val.length>0 ? 'border-amber-300 bg-amber-50' :
+                                                          'border-slate-200'
+                                                        }`}/>
+                                                      <span className="text-[10px] text-slate-400 min-w-[30px]">{val.length}/11</span>
+                                                    </div>
+                                                  );
+                                                })}
+                                              </div>
+                                            )}
+                                            <div className="text-[10px] text-slate-500 mt-2">
+                                              💡 셀메이트에서 먼저 상품 등록 → 발급받은 <strong>11자리 바코드</strong>를 색상별로 입력
+                                            </div>
                                           </div>
                                         </div>
 
@@ -8419,7 +8546,8 @@ ${list}` }]
                                         yardsPerUnit: form.yardsPerUnit||0,
                                         colorMapping: form._colorMapping || {},
                                         isFeatured: form.isFeatured || false,
-                                        barcode: form.barcode || '',
+                                        labelName: form.labelName || '',
+                                        barcodes: form.barcodes || {},
                                         legacyProductId: form.legacyProductId||null,
                                         createdAt: form.createdAt||new Date().toISOString()
                                       };
@@ -8620,15 +8748,18 @@ ${list}` }]
                                               <div className="flex gap-1">
                                                 <button onClick={()=>setMasterPopup({...p, _colorMapping: p.colorMapping||{}})}
                                                   className="flex-1 bg-blue-500 hover:bg-blue-600 text-white rounded py-1 text-[11px] font-bold">✏️ 수정</button>
-                                                {p.barcode ? (
-                                                  <button onClick={()=>printBarcode(p.barcode, p.name)}
-                                                    title={`바코드 출력: ${p.barcode}`}
-                                                    className="bg-indigo-500 hover:bg-indigo-600 text-white rounded px-2 py-1 text-[11px] font-bold">🖨️</button>
-                                                ) : (
-                                                  <button onClick={()=>setMasterPopup({...p, _colorMapping: p.colorMapping||{}})}
-                                                    title="바코드 미등록"
-                                                    className="bg-slate-100 hover:bg-indigo-100 text-slate-400 hover:text-indigo-500 border border-slate-200 rounded px-2 py-1 text-[11px] font-bold">🔖</button>
-                                                )}
+                                                {(() => {
+                                                  const hasAnyBarcode = p.barcodes && Object.values(p.barcodes).some(v => v && v.length === 11);
+                                                  return hasAnyBarcode ? (
+                                                    <button onClick={()=>setBarcodePrintPopup({product: p, selections: {}})}
+                                                      title="바코드 출력"
+                                                      className="bg-indigo-500 hover:bg-indigo-600 text-white rounded px-2 py-1 text-[11px] font-bold">🖨️</button>
+                                                  ) : (
+                                                    <button onClick={()=>setMasterPopup({...p, _colorMapping: p.colorMapping||{}})}
+                                                      title="바코드 미등록 - 수정에서 등록"
+                                                      className="bg-slate-100 hover:bg-indigo-100 text-slate-400 hover:text-indigo-500 border border-slate-200 rounded px-2 py-1 text-[11px] font-bold">🔖</button>
+                                                  );
+                                                })()}
                                                 <button onClick={()=>{if(soldoutCount>0||offCount>0) return alert('품절/OFF 기록이 있어 삭제할 수 없습니다'); if(confirm(`[${p.name}] 삭제?`)) saveMasterProducts(masterProducts.filter(x=>x.id!==p.id));}}
                                                   className="bg-red-50 hover:bg-red-100 text-red-500 border border-red-200 rounded px-2 py-1 text-[11px] font-bold">🗑️</button>
                                               </div>
@@ -8808,19 +8939,18 @@ ${list}` }]
                                                   className="flex-1 bg-blue-500 hover:bg-blue-600 text-white rounded py-1 text-[11px] font-bold flex items-center justify-center gap-0.5">
                                                   ✏️ 수정
                                                 </button>
-                                                {p.barcode ? (
-                                                  <button onClick={()=>printBarcode(p.barcode, p.name)}
-                                                    title={`바코드 출력: ${p.barcode}`}
-                                                    className="bg-indigo-500 hover:bg-indigo-600 text-white rounded px-2 py-1 text-[11px] font-bold">
-                                                    🖨️
-                                                  </button>
-                                                ) : (
-                                                  <button onClick={()=>setMasterPopup({...p, _colorMapping: p.colorMapping||{}})}
-                                                    title="바코드 미등록 - 수정에서 등록"
-                                                    className="bg-slate-100 hover:bg-indigo-100 text-slate-400 hover:text-indigo-500 border border-slate-200 rounded px-2 py-1 text-[11px] font-bold">
-                                                    🔖
-                                                  </button>
-                                                )}
+                                                {(() => {
+                                                  const hasAnyBarcode = p.barcodes && Object.values(p.barcodes).some(v => v && v.length === 11);
+                                                  return hasAnyBarcode ? (
+                                                    <button onClick={()=>setBarcodePrintPopup({product: p, selections: {}})}
+                                                      title="바코드 출력"
+                                                      className="bg-indigo-500 hover:bg-indigo-600 text-white rounded px-2 py-1 text-[11px] font-bold">🖨️</button>
+                                                  ) : (
+                                                    <button onClick={()=>setMasterPopup({...p, _colorMapping: p.colorMapping||{}})}
+                                                      title="바코드 미등록 - 수정에서 등록"
+                                                      className="bg-slate-100 hover:bg-indigo-100 text-slate-400 hover:text-indigo-500 border border-slate-200 rounded px-2 py-1 text-[11px] font-bold">🔖</button>
+                                                  );
+                                                })()}
                                                 <button onClick={()=>{
                                                   if(soldoutCount>0||offCount>0) return alert('이 상품으로 등록된 품절/OFF 기록이 있어 삭제할 수 없습니다.\\n먼저 해당 기록을 정리해주세요.');
                                                   if(confirm(`[${p.name}] 삭제?`)) saveMasterProducts(masterProducts.filter(x=>x.id!==p.id));
@@ -10044,7 +10174,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260421.114</p>
+                <p>© 2026 LACEROOM통합관리 v20260421.115</p>
               </footer>
             </div>
           </div>
