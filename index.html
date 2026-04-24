@@ -457,7 +457,7 @@ ${list}` }]
 
           // 🖼️ 이미지 자동 압축 함수 (최대 600x600, JPEG 75%)
           // 🖨️ 라벨 인쇄 (헬퍼와 통신 · JSON 다운로드 방식 · 한글 100% 지원)
-          // v20260424.04 - ZPL 직접생성 폐지, Python 헬퍼가 PNG 렌더링 후 ZT230 인쇄
+          // v20260424.06 - ZPL 직접생성 폐지, Python 헬퍼가 PNG 렌더링 후 ZT230 인쇄
           const downloadLabelJson = (labels) => {
             if (!labels || labels.length === 0) {
               alert('인쇄할 라벨이 없습니다.');
@@ -481,7 +481,7 @@ ${list}` }]
             }));
             
             const data = {
-              version: 'v20260424.04',
+              version: 'v20260424.06',
               created_at: new Date().toISOString(),
               label_count: enriched.length,
               total_print_count: enriched.reduce((s, l) => s + l.copies, 0),
@@ -7553,7 +7553,7 @@ ${list}` }]
 
                 {/* 🚫 빠른 품절 토글 팝업 */}
                 {/* 🎨 색상별 상태 설정 팝업 (9-1 카드 색상 클릭 시) */}
-                {/* 🖨️ 라벨 인쇄 편집기 v20260424.04 - 헬퍼 연동, 한글 100% */}
+                {/* 🖨️ 라벨 인쇄 편집기 v20260424.06 - 헬퍼 연동, 한글 100% */}
                 {barcodePrintPopup && (() => {
                   const p = barcodePrintPopup.product;
                   const barcodes = p.barcodes || {};
@@ -7681,8 +7681,8 @@ ${list}` }]
                   const previewBg = getColorRGB(previewColor);
                   const previewTextColor = getTextColor(previewBg);
                   
-                  // 미리보기 비율 (5배 확대)
-                  const pvScale = 5;
+                  // 미리보기 비율 (8배 확대 - 실물과 비례 맞춤)
+                  const pvScale = 8;
                   const pvW = opts.widthMm * pvScale;
                   const pvH = opts.heightMm * pvScale;
                   const pvMargin = opts.margin / 2;
@@ -7697,7 +7697,7 @@ ${list}` }]
                         <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-slate-100 sticky top-0 bg-white z-10">
                           <div>
                             <h3 className="text-base font-bold text-slate-900">🖨️ 라벨 인쇄 + 디자인 편집기</h3>
-                            <div className="text-[10px] text-slate-500 mt-0.5">v20260424.04 · 헬퍼 자동 인쇄 · 한글 100%</div>
+                            <div className="text-[10px] text-slate-500 mt-0.5">v20260424.06 · 헬퍼 자동 인쇄 · 한글 100%</div>
                           </div>
                           <button onClick={()=>setBarcodePrintPopup(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
                         </div>
@@ -7872,7 +7872,7 @@ ${list}` }]
                             <div className="bg-slate-50 rounded-xl p-3">
                               <div className="flex justify-between items-center mb-2">
                                 <span className="text-[11px] font-bold text-slate-600">📐 실시간 미리보기</span>
-                                <span className="text-[9px] text-slate-400">{opts.widthMm}×{opts.heightMm}mm @ 200dpi · 5배 확대</span>
+                                <span className="text-[9px] text-slate-400">{opts.widthMm}×{opts.heightMm}mm @ 200dpi · 8배 확대</span>
                               </div>
                               <div className="flex justify-center bg-slate-200 rounded-lg p-3">
                                 <div className="bg-white border border-slate-300 relative" 
@@ -7894,7 +7894,7 @@ ${list}` }]
                                   {opts.showLabelName && (
                                     <div style={{
                                       marginTop: '4px',
-                                      fontSize: `${Math.min(opts.labelNameSize * 0.7, pvW/(p.labelName?.length||p.name?.length||5)*1.4)}px`,
+                                      fontSize: `${Math.min(opts.labelNameSize, pvW/(p.labelName?.length||p.name?.length||5)*1.6)}px`,
                                       fontWeight: 700, lineHeight: 1.1
                                     }}>{p.labelName || p.name || '상품명'}</div>
                                   )}
@@ -7905,15 +7905,15 @@ ${list}` }]
                                       {opts.showColorBadge && (
                                         <div style={{
                                           background: previewBg, color: previewTextColor,
-                                          padding: '2px 8px', borderRadius: '3px',
-                                          fontSize: '13px', fontWeight: 700
+                                          padding: '3px 10px', borderRadius: '4px',
+                                          fontSize: `${opts.badgeSize}px`, fontWeight: 700
                                         }}>{previewColor}</div>
                                       )}
                                       {opts.showPositionBadge && previewPos && (
                                         <div style={{
                                           background: '#f0f0f0', color: '#000',
-                                          padding: '2px 8px', borderRadius: '3px',
-                                          fontSize: '13px', fontWeight: 700
+                                          padding: '3px 10px', borderRadius: '4px',
+                                          fontSize: `${opts.badgeSize}px`, fontWeight: 700
                                         }}>{previewPos}</div>
                                       )}
                                     </div>
@@ -7925,11 +7925,11 @@ ${list}` }]
                                     position: 'absolute', bottom: `${opts.margin}px`, left: `${opts.margin}px`, right: `${opts.margin}px`
                                   }}>
                                     {opts.showBarcode && (
-                                      <div>
+                                      <div style={{flex: opts.includeQR ? '0 1 auto' : '1 1 auto', marginRight: opts.includeQR ? '6px' : '0'}}>
                                         <div style={{
                                           background: 'repeating-linear-gradient(90deg, #000 0, #000 1px, transparent 1px, transparent 3px)',
-                                          height: `${opts.barcodeHeight*0.6}px`,
-                                          width: opts.includeQR ? `${pvW * 0.55}px` : `${pvW * 0.7}px`,
+                                          height: `${opts.barcodeHeight*0.9}px`,
+                                          width: opts.includeQR ? `${pvW * 0.65}px` : `${pvW * 0.95}px`,
                                           minWidth: '80px'
                                         }}></div>
                                         {opts.showBarcodeText && (
