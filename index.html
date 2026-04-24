@@ -456,104 +456,52 @@ ${list}` }]
           };
 
           // 🖼️ 이미지 자동 압축 함수 (최대 600x600, JPEG 75%)
-          // 🖨️ 바코드 ZPL 생성 + 다운로드 (Zebra ZT230 · Code128 + 외부 QR)
-          // opts: { widthMm, heightMm, topText, bottomText, showBarcodeText, barcodeHeight, includeQR, qrUrl, qrLabel, qrSize, colorText, positionText }
-          const printBarcode = (barcode, labelName, copies = 1, opts = {}) => {
-            if (!barcode) { alert('바코드 번호가 없습니다.'); return; }
-            const widthMm = opts.widthMm || 50;
-            const heightMm = opts.heightMm || 30;
-            const sanitize = (s) => (s||'').replace(/[^A-Za-z0-9\-\s\.\/@_\[\]]/g,'').trim();
-            const topText = sanitize(opts.topText !== undefined ? opts.topText : (labelName || 'LACEROOM')).slice(0,30);
-            const bottomText = sanitize(opts.bottomText || '').slice(0,30);
-            const colorText = sanitize(opts.colorText || '').slice(0,20);
-            const positionText = sanitize(opts.positionText || '').slice(0,10);
-            const showBcText = opts.showBarcodeText !== false;
-            const barcodeHeight = opts.barcodeHeight || 50;
-            const fontSize = opts.fontSize || 22;
-            const includeQR = opts.includeQR === true; // 기본값 false로 변경
-            const qrUrl = opts.qrUrl || '';
-            const qrLabel = sanitize(opts.qrLabel || '').slice(0,12);
-            const qrSize = opts.qrSize || 3;
-
-            // 203dpi: 1mm = 8 dots
-            const widthDots = Math.round(widthMm * 8);
-            const heightDots = Math.round(heightMm * 8);
-
-            const elements = ['^XA', `^PW${widthDots}`, `^LL${heightDots}`, '^LH0,0'];
-
-            // 세로 높이 계산 (요소마다 필요한 공간)
-            const topTextH = topText ? 28 : 0;
-            const bcTextH = showBcText ? 28 : 0;
-            const bottomTextH = bottomText ? 22 : 0;
-            const colorTextH = colorText ? 22 : 0;
-            const positionTextH = positionText ? 22 : 0;
-            const barcodeAreaH = barcodeHeight + bcTextH;
-            const gap = 6;
-
-            // 전체 콘텐츠 높이
-            const contentH = topTextH + (topTextH?gap:0)
-                           + barcodeAreaH
-                           + (colorTextH?(gap+colorTextH):0)
-                           + (positionTextH?(gap+positionTextH):0)
-                           + (bottomTextH?(gap+bottomTextH):0);
-
-            // 세로 중앙 정렬 시작점
-            let y = Math.max(15, Math.round((heightDots - contentH) / 2));
-
-            // 좌측 시작점 (QR 있으면 좌측만 사용)
-            const leftMargin = 15;
-            const qrPxEstimate = qrSize * 25;
-            const qrLabelWidth = qrLabel ? 55 : 0;
-            const barcodeMaxW = includeQR && qrUrl
-              ? widthDots - qrPxEstimate - qrLabelWidth - 25 - leftMargin
-              : widthDots - leftMargin * 2;
-
-            // 상단 텍스트 (라벨명)
-            if (topText) {
-              elements.push(`^CF0,${fontSize}`);
-              elements.push(`^FO${leftMargin},${y}^FD${topText}^FS`);
-              y += topTextH + gap;
+          // 🖨️ 라벨 인쇄 (헬퍼와 통신 · JSON 다운로드 방식 · 한글 100% 지원)
+          // v20260424.04 - ZPL 직접생성 폐지, Python 헬퍼가 PNG 렌더링 후 ZT230 인쇄
+          const downloadLabelJson = (labels) => {
+            if (!labels || labels.length === 0) {
+              alert('인쇄할 라벨이 없습니다.');
+              return null;
             }
-
-            // 바코드
-            elements.push(`^FO${leftMargin},${y}^BY2,2,${barcodeHeight}^BCN,${barcodeHeight},${showBcText?'Y':'N'},N,N^FD${barcode}^FS`);
-            y += barcodeAreaH;
-
-            // 색상 (있으면)
-            if (colorText) {
-              y += gap;
-              elements.push(`^FO${leftMargin},${y}^A0N,18,18^FD${colorText}^FS`);
-              y += colorTextH;
-            }
-
-            // 진열 위치 (있으면) + 기존 하단 텍스트
-            if (positionText || bottomText) {
-              y += gap;
-              const line = [positionText, bottomText].filter(Boolean).join('  ');
-              elements.push(`^FO${leftMargin},${y}^A0N,18,18^FD${line}^FS`);
-            }
-
-            // QR 코드 (우측 수직 중앙)
-            if (includeQR && qrUrl) {
-              const qrY = Math.max(15, Math.round((heightDots - qrPxEstimate) / 2));
-              const qrLabelX = widthDots - qrLabelWidth - 10;
-              const qrX = qrLabelX - qrPxEstimate - 5;
-              elements.push(`^FO${qrX},${qrY}^BQN,2,${qrSize}^FDLA,${qrUrl}^FS`);
-              if (qrLabel) {
-                const qrLabelY = qrY + Math.round(qrPxEstimate / 2) - 8;
-                elements.push(`^FO${qrLabelX},${qrLabelY}^A0N,16,16^FD${qrLabel}^FS`);
-              }
-            }
-
-            if (copies > 1) elements.push(`^PQ${copies}`);
-            elements.push('^XZ');
-
-            const zpl = elements.join('\n');
+            
+            // 기본값 + 헬퍼가 이해할 수 있는 형식으로 정규화
+            const enriched = labels.map(label => ({
+              label_name: label.label_name || label.labelName || label.name || '상품명',
+              color_name: label.color_name || label.colorText || label.color || '',
+              position: label.position || label.positionText || '',
+              barcode: label.barcode || '',
+              qr_url: label.qr_url || label.qrUrl || '',
+              qr_label: label.qr_label || label.qrLabel || '',
+              logo_text: label.logo_text || label.logoText || 'LACEROOM',
+              korean_name: label.korean_name || label.koreanName || '레이스룸',
+              bottom_text: label.bottom_text || label.bottomText || '',
+              copies: parseInt(label.copies) || 1,
+              // 레이아웃 옵션 (편집기에서 설정)
+              layout: label.layout || {}
+            }));
+            
+            const data = {
+              version: 'v20260424.04',
+              created_at: new Date().toISOString(),
+              label_count: enriched.length,
+              total_print_count: enriched.reduce((s, l) => s + l.copies, 0),
+              labels: enriched
+            };
+            
             const now = new Date();
-            const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}${String(now.getMilliseconds()).padStart(3,'0')}`;
-            const filename = `${ts}_${barcode}.zpl`;
-
-            const blob = new Blob([zpl], {type: 'text/plain'});
+            const ts = now.getFullYear() +
+              String(now.getMonth() + 1).padStart(2, '0') +
+              String(now.getDate()).padStart(2, '0') + '_' +
+              String(now.getHours()).padStart(2, '0') +
+              String(now.getMinutes()).padStart(2, '0') +
+              String(now.getSeconds()).padStart(2, '0');
+            
+            const filename = `laceroom_label_${ts}.json`;
+            
+            const blob = new Blob([JSON.stringify(data, null, 2)], {
+              type: 'application/json;charset=utf-8'
+            });
+            
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -562,16 +510,58 @@ ${list}` }]
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
+            
+            return filename;
           };
 
-          // 일괄 출력 (색상별 선택 + 수량)
+          // 일괄 출력 팝업 상태
           const [barcodePrintPopup, setBarcodePrintPopup] = useState(null); // {product}
+          
+          // 인쇄 알림 토스트 (헬퍼가 자동 인쇄한다는 안내)
+          const [printToast, setPrintToast] = useState(null);
+          const showPrintToast = (filename, count, totalPrints) => {
+            setPrintToast({ filename, count, totalPrints });
+            setTimeout(() => setPrintToast(null), 4500);
+          };
+
+          // 색상별 선택 → JSON 한 번에 다운로드 + 토스트 표시
           const printBarcodeBatch = (items, opts) => {
-            // items: [{barcode, labelName, copies, colorText, positionText}]
-            items.forEach((item, idx) => {
-              const itemOpts = {...opts, colorText: item.colorText || '', positionText: item.positionText || ''};
-              setTimeout(() => printBarcode(item.barcode, item.labelName, item.copies, itemOpts), idx * 300);
-            });
+            // items: [{barcode, labelName, copies, colorText, positionText, color}]
+            const labels = items.map(item => ({
+              label_name: item.labelName,
+              color_name: item.colorText || '',
+              position: item.positionText || '',
+              barcode: item.barcode,
+              copies: item.copies || 1,
+              qr_url: opts.includeQR ? (opts.qrUrl || '') : '',
+              qr_label: opts.includeQR ? (opts.qrLabel || '') : '',
+              logo_text: opts.topText || 'LACEROOM',
+              korean_name: opts.koreanName || '레이스룸',
+              bottom_text: opts.bottomText || '',
+              layout: {
+                width_mm: opts.widthMm || 50,
+                height_mm: opts.heightMm || 30,
+                show_logo: opts.showLogo !== false,
+                show_korean_name: opts.showKoreanName !== false,
+                show_label_name: opts.showLabelName !== false,
+                show_color_badge: opts.showColorBadge !== false,
+                show_position_badge: opts.showPositionBadge !== false,
+                show_barcode: opts.showBarcode !== false,
+                show_barcode_text: opts.showBarcodeText !== false,
+                show_qr: opts.includeQR === true,
+                label_name_size: opts.labelNameSize || 38,
+                badge_size: opts.badgeSize || 20,
+                barcode_height: opts.barcodeHeight || 70,
+                margin: opts.margin || 8,
+                qr_size: opts.qrSize || 75
+              }
+            }));
+            
+            const totalPrints = labels.reduce((s, l) => s + (l.copies || 1), 0);
+            const filename = downloadLabelJson(labels);
+            if (filename) {
+              showPrintToast(filename, labels.length, totalPrints);
+            }
           };
 
           const compressImage = (file, maxSize = 600, quality = 0.75) => {
@@ -7563,29 +7553,40 @@ ${list}` }]
 
                 {/* 🚫 빠른 품절 토글 팝업 */}
                 {/* 🎨 색상별 상태 설정 팝업 (9-1 카드 색상 클릭 시) */}
-                {/* 🖨️ 바코드 일괄 출력 팝업 */}
+                {/* 🖨️ 라벨 인쇄 편집기 v20260424.04 - 헬퍼 연동, 한글 100% */}
                 {barcodePrintPopup && (() => {
                   const p = barcodePrintPopup.product;
                   const barcodes = p.barcodes || {};
                   const colors = p.colors || [];
+                  const positions = p.positions || {};
                   const selections = barcodePrintPopup.selections || {};
-                  // 라벨 옵션 (기본값) - QR 미포함이 디폴드
+                  
+                  // 라벨 옵션 (기본값)
                   const opts = barcodePrintPopup.opts || {
                     widthMm: 50, heightMm: 30,
-                    topText: p.labelName || 'LACEROOM',
+                    topText: 'LACEROOM',
+                    koreanName: '레이스룸',
                     bottomText: '',
+                    showLogo: true,
+                    showKoreanName: true,
+                    showLabelName: true,
+                    showColorBadge: true,
+                    showPositionBadge: true,
+                    showBarcode: true,
                     showBarcodeText: true,
-                    barcodeHeight: 50,
-                    fontSize: 22,
                     includeQR: false,
                     qrUrl: 'https://www.youtube.com/@laceroom',
-                    qrLabel: 'YOUTUBE',
-                    qrSize: 3
+                    qrLabel: '',
+                    qrSize: 75,
+                    labelNameSize: 38,
+                    badgeSize: 20,
+                    barcodeHeight: 70,
+                    margin: 8
                   };
                   const setOpts = (updater) => setBarcodePrintPopup({...barcodePrintPopup, opts: typeof updater === 'function' ? updater(opts) : {...opts, ...updater}});
                   const setSelections = (updater) => setBarcodePrintPopup({...barcodePrintPopup, selections: typeof updater === 'function' ? updater(selections) : updater});
+                  
                   const totalLabels = Object.values(selections).reduce((s,v) => s + (parseInt(v)||0), 0);
-                  const positions = p.positions || {};
                   const toPrint = colors
                     .filter(c => barcodes[c] && (parseInt(selections[c])||0) > 0)
                     .map(c => ({
@@ -7596,229 +7597,510 @@ ${list}` }]
                       colorText: c,
                       positionText: positions[c] || ''
                     }));
+                  
                   // 라벨 크기 프리셋
                   const sizePresets = [
-                    { name: '50×30mm', w: 50, h: 30, bcH: 110, font: 30 },
-                    { name: '40×25mm', w: 40, h: 25, bcH: 90, font: 26 },
-                    { name: '30×20mm', w: 30, h: 20, bcH: 70, font: 22 },
-                    { name: '60×40mm', w: 60, h: 40, bcH: 140, font: 34 }
+                    { name: '50×30mm', w: 50, h: 30, lns: 38, bcH: 70 },
+                    { name: '40×25mm', w: 40, h: 25, lns: 30, bcH: 55 },
+                    { name: '30×20mm', w: 30, h: 20, lns: 22, bcH: 40 },
+                    { name: '60×40mm', w: 60, h: 40, lns: 48, bcH: 95 }
                   ];
+                  
+                  // 디자인 프리셋
+                  const designPresets = [
+                    { 
+                      key: 'default',
+                      icon: '⭐', name: '기본',
+                      desc: '로고+상품명+색상+위치+바코드',
+                      apply: { showLogo: true, showKoreanName: true, showLabelName: true, showColorBadge: true, showPositionBadge: true, showBarcode: true, showBarcodeText: true, includeQR: false }
+                    },
+                    {
+                      key: 'minimal',
+                      icon: '🎀', name: '미니멀',
+                      desc: '상품명+바코드만',
+                      apply: { showLogo: false, showKoreanName: false, showLabelName: true, showColorBadge: false, showPositionBadge: false, showBarcode: true, showBarcodeText: true, includeQR: false }
+                    },
+                    {
+                      key: 'with_qr',
+                      icon: '🔗', name: 'QR포함',
+                      desc: '기본 + 외부연결 QR',
+                      apply: { showLogo: true, showKoreanName: true, showLabelName: true, showColorBadge: true, showPositionBadge: true, showBarcode: true, showBarcodeText: true, includeQR: true }
+                    },
+                    {
+                      key: 'compact',
+                      icon: '📦', name: '컴팩트',
+                      desc: '상품명+색상+바코드',
+                      apply: { showLogo: false, showKoreanName: false, showLabelName: true, showColorBadge: true, showPositionBadge: false, showBarcode: true, showBarcodeText: true, includeQR: false }
+                    }
+                  ];
+                  
+                  // 사용자 프리셋 (localStorage)
+                  const userPresets = JSON.parse(localStorage.getItem('laceroom_label_presets') || '[]');
+                  const saveUserPreset = () => {
+                    const name = prompt('프리셋 이름을 입력하세요:', '내 디자인 1');
+                    if (!name) return;
+                    const newPreset = { key: 'user_' + Date.now(), icon: '💾', name, desc: '사용자 정의', apply: opts };
+                    const updated = [...userPresets, newPreset];
+                    localStorage.setItem('laceroom_label_presets', JSON.stringify(updated));
+                    setBarcodePrintPopup({...barcodePrintPopup}); // 리렌더
+                    alert(`✅ '${name}' 프리셋 저장 완료`);
+                  };
+                  const deleteUserPreset = (key) => {
+                    if (!confirm('이 프리셋을 삭제하시겠습니까?')) return;
+                    const updated = userPresets.filter(pr => pr.key !== key);
+                    localStorage.setItem('laceroom_label_presets', JSON.stringify(updated));
+                    setBarcodePrintPopup({...barcodePrintPopup}); // 리렌더
+                  };
+                  
+                  // 색상 → RGB 매핑 (미리보기용)
+                  const colorRGB = {
+                    '골드유광': '#FFD700', '골드반광': '#DAA520',
+                    '실버유광': '#DCDCDC', '실버반광': '#C0C0C0',
+                    '블랙유광': '#282828', '블랙반광': '#3C3C3C',
+                    '흑무광': '#141414',
+                    '로즈골드유광': '#E79A84', '로즈골드반광': '#D2826E',
+                    '다크골드유광': '#A07832', '다크골드반광': '#8C6428',
+                    '14K도금': '#D4AF37', '은': '#C8C8C8'
+                  };
+                  const getColorRGB = (name) => {
+                    const key = (name || '').replace(/\s/g, '');
+                    return colorRGB[key] || '#F0F0F0';
+                  };
+                  const getTextColor = (bgHex) => {
+                    const r = parseInt(bgHex.slice(1,3), 16);
+                    const g = parseInt(bgHex.slice(3,5), 16);
+                    const b = parseInt(bgHex.slice(5,7), 16);
+                    return (0.299*r + 0.587*g + 0.114*b) / 255 < 0.5 ? '#FFFFFF' : '#1E1E1E';
+                  };
+                  
+                  // 미리보기에 사용할 색상
+                  const previewColor = colors.find(c => barcodes[c] && (parseInt(selections[c])||0) > 0)
+                                       || colors.find(c => barcodes[c]) || colors[0] || '';
+                  const previewPos = positions[previewColor] || '';
+                  const previewBarcode = barcodes[previewColor] || '11500001001';
+                  const previewBg = getColorRGB(previewColor);
+                  const previewTextColor = getTextColor(previewBg);
+                  
+                  // 미리보기 비율 (5배 확대)
+                  const pvScale = 5;
+                  const pvW = opts.widthMm * pvScale;
+                  const pvH = opts.heightMm * pvScale;
+                  const pvMargin = opts.margin / 2;
+                  
                   return (
-                    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.5)'}}
+                    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.55)'}}
                       onClick={()=>setBarcodePrintPopup(null)}>
-                      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-5 max-h-[92vh] overflow-y-auto"
+                      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[94vh] overflow-y-auto"
                         onClick={e=>e.stopPropagation()}>
-                        <div className="flex items-center justify-between mb-4">
-                          <h3 className="text-base font-bold text-slate-900">🖨️ 바코드 출력</h3>
+                        
+                        {/* 헤더 */}
+                        <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-slate-100 sticky top-0 bg-white z-10">
+                          <div>
+                            <h3 className="text-base font-bold text-slate-900">🖨️ 라벨 인쇄 + 디자인 편집기</h3>
+                            <div className="text-[10px] text-slate-500 mt-0.5">v20260424.04 · 헬퍼 자동 인쇄 · 한글 100%</div>
+                          </div>
                           <button onClick={()=>setBarcodePrintPopup(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
                         </div>
-
-                        <div className="flex items-center gap-3 bg-slate-50 rounded-xl p-3 mb-3">
-                          {p.image ? (
-                            <img src={p.image} className="w-12 h-12 rounded-lg object-cover border" alt=""/>
-                          ) : (
-                            <div className="w-12 h-12 rounded-lg bg-white border flex items-center justify-center text-xl">{p.type==='hairpin'?'📌':'🎀'}</div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <div className="font-bold text-slate-900 text-sm truncate">{p.name}</div>
-                            <div className="text-xs text-indigo-600 font-mono mt-0.5">🏷️ {p.labelName || '(라벨명 미등록)'}</div>
+                        
+                        {/* 상품 정보 */}
+                        <div className="px-5 pt-3">
+                          <div className="flex items-center gap-3 bg-slate-50 rounded-xl p-3">
+                            {p.image ? (
+                              <img src={p.image} className="w-12 h-12 rounded-lg object-cover border" alt=""/>
+                            ) : (
+                              <div className="w-12 h-12 rounded-lg bg-white border flex items-center justify-center text-xl">{p.type==='hairpin'?'📌':'🎀'}</div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="font-bold text-slate-900 text-sm truncate">{p.name}</div>
+                              <div className="text-xs text-indigo-600 mt-0.5">🏷️ {p.labelName || '(라벨명 미등록)'}</div>
+                            </div>
                           </div>
                         </div>
-
-                        {/* ⚙️ 라벨 설정 */}
-                        <details className="bg-purple-50 border border-purple-200 rounded-xl p-3 mb-3" open>
-                          <summary className="text-xs font-bold text-purple-700 cursor-pointer">⚙️ 라벨 설정 <span className="text-slate-500 font-normal">(크기 · 노출 문구)</span></summary>
-                          <div className="mt-3 space-y-2">
-                            {/* 크기 프리셋 */}
-                            <div>
-                              <label className="block text-[10px] font-bold text-slate-600 mb-1">📏 라벨 크기</label>
-                              <div className="grid grid-cols-4 gap-1">
-                                {sizePresets.map(s => (
-                                  <button key={s.name} onClick={()=>setOpts({widthMm:s.w, heightMm:s.h, barcodeHeight:s.bcH, fontSize:s.font})}
-                                    className={`px-1 py-1.5 rounded text-[10px] font-bold transition ${
-                                      opts.widthMm===s.w && opts.heightMm===s.h ? 'bg-purple-500 text-white' : 'bg-white border border-purple-200 text-slate-600 hover:bg-purple-100'
-                                    }`}>{s.name}</button>
+                        
+                        {/* 본문: 좌(설정) + 우(미리보기/색상수량) */}
+                        <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-3 px-5 py-3">
+                          
+                          {/* === 좌측: 디자인 프리셋 + 표시 항목 === */}
+                          <div className="space-y-3">
+                            
+                            {/* 디자인 프리셋 */}
+                            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-2.5">
+                              <div className="text-[11px] font-bold text-indigo-700 mb-1.5">⚡ 디자인 프리셋</div>
+                              <div className="space-y-1">
+                                {designPresets.map(pr => {
+                                  const isActive = Object.keys(pr.apply).every(k => opts[k] === pr.apply[k]);
+                                  return (
+                                    <button key={pr.key}
+                                      onClick={() => setOpts({...opts, ...pr.apply})}
+                                      className={`w-full text-left px-2 py-1.5 rounded-md transition ${
+                                        isActive ? 'bg-indigo-500 text-white' : 'bg-white border border-indigo-200 text-slate-700 hover:bg-indigo-100'
+                                      }`}>
+                                      <div className="text-[11px] font-bold">{pr.icon} {pr.name}</div>
+                                      <div className={`text-[9px] mt-0.5 ${isActive?'text-indigo-100':'text-slate-400'}`}>{pr.desc}</div>
+                                    </button>
+                                  );
+                                })}
+                                
+                                {userPresets.map(pr => (
+                                  <div key={pr.key} className="flex items-stretch gap-1">
+                                    <button onClick={() => setOpts({...opts, ...pr.apply})}
+                                      className="flex-1 text-left px-2 py-1.5 rounded-md bg-white border border-purple-200 text-slate-700 hover:bg-purple-50 transition">
+                                      <div className="text-[11px] font-bold">{pr.icon} {pr.name}</div>
+                                      <div className="text-[9px] text-slate-400 mt-0.5">{pr.desc}</div>
+                                    </button>
+                                    <button onClick={() => deleteUserPreset(pr.key)}
+                                      className="px-1.5 rounded-md bg-red-100 text-red-600 hover:bg-red-200 text-[10px] font-bold">✕</button>
+                                  </div>
                                 ))}
+                                
+                                <button onClick={saveUserPreset}
+                                  className="w-full text-center px-2 py-1.5 rounded-md border border-dashed border-slate-300 text-slate-500 hover:bg-white text-[10px] font-bold">
+                                  💾 현재 설정 저장
+                                </button>
                               </div>
-                              <div className="flex gap-1 mt-1 items-center">
-                                <span className="text-[10px] text-slate-500">사용자 정의:</span>
+                            </div>
+                            
+                            {/* 라벨 크기 */}
+                            <div className="bg-amber-50 border border-amber-200 rounded-xl p-2.5">
+                              <div className="text-[11px] font-bold text-amber-700 mb-1.5">📏 라벨 크기</div>
+                              <div className="grid grid-cols-2 gap-1">
+                                {sizePresets.map(s => {
+                                  const isActive = opts.widthMm===s.w && opts.heightMm===s.h;
+                                  return (
+                                    <button key={s.name} onClick={()=>setOpts({widthMm:s.w, heightMm:s.h, labelNameSize:s.lns, barcodeHeight:s.bcH})}
+                                      className={`px-1 py-1.5 rounded text-[10px] font-bold transition ${
+                                        isActive ? 'bg-amber-500 text-white' : 'bg-white border border-amber-200 text-slate-600 hover:bg-amber-100'
+                                      }`}>{s.name}</button>
+                                  );
+                                })}
+                              </div>
+                              <div className="flex gap-1 mt-1.5 items-center">
                                 <input type="number" value={opts.widthMm} min="20" max="100"
                                   onChange={e=>setOpts({widthMm: parseInt(e.target.value)||50})}
-                                  className="w-12 px-1 py-0.5 border border-slate-200 rounded text-[10px] text-center"/>
-                                <span className="text-[10px] text-slate-400">×</span>
+                                  className="flex-1 px-1 py-1 border border-amber-200 rounded text-[10px] text-center"/>
+                                <span className="text-[10px] text-amber-400">×</span>
                                 <input type="number" value={opts.heightMm} min="10" max="100"
                                   onChange={e=>setOpts({heightMm: parseInt(e.target.value)||30})}
-                                  className="w-12 px-1 py-0.5 border border-slate-200 rounded text-[10px] text-center"/>
-                                <span className="text-[10px] text-slate-500">mm</span>
+                                  className="flex-1 px-1 py-1 border border-amber-200 rounded text-[10px] text-center"/>
+                                <span className="text-[10px] text-amber-600 font-bold">mm</span>
                               </div>
                             </div>
-
-                            {/* 상단 문구 */}
-                            <div>
-                              <label className="block text-[10px] font-bold text-slate-600 mb-1">🔤 상단 문구 <span className="text-slate-400 font-normal">(영문/숫자만)</span></label>
-                              <input type="text" value={opts.topText||''}
-                                onChange={e=>setOpts({topText: e.target.value})}
-                                placeholder="예: LACEROOM 또는 비워두기"
-                                maxLength={30}
-                                className="w-full px-2 py-1 border border-purple-200 rounded text-xs"/>
-                            </div>
-
-                            {/* 하단 문구 */}
-                            <div>
-                              <label className="block text-[10px] font-bold text-slate-600 mb-1">🔤 하단 문구 <span className="text-slate-400 font-normal">(선택)</span></label>
-                              <input type="text" value={opts.bottomText||''}
-                                onChange={e=>setOpts({bottomText: e.target.value})}
-                                placeholder="예: MADE IN KOREA"
-                                maxLength={30}
-                                className="w-full px-2 py-1 border border-purple-200 rounded text-xs"/>
-                            </div>
-
-                            {/* 추가 옵션 */}
-                            <div className="grid grid-cols-2 gap-2">
-                              <label className="flex items-center gap-1.5 bg-white rounded p-1.5 border border-purple-200 cursor-pointer">
-                                <input type="checkbox" checked={opts.showBarcodeText !== false}
-                                  onChange={e=>setOpts({showBarcodeText: e.target.checked})}
-                                  className="w-3 h-3 accent-purple-500"/>
-                                <span className="text-[10px] text-slate-700">바코드 숫자 표시</span>
-                              </label>
-                              <div className="flex items-center gap-1 bg-white rounded p-1.5 border border-purple-200">
-                                <span className="text-[10px] text-slate-600">바코드 높이:</span>
-                                <input type="number" value={opts.barcodeHeight} min="40" max="200" step="10"
-                                  onChange={e=>setOpts({barcodeHeight: parseInt(e.target.value)||50})}
-                                  className="w-12 px-1 border border-slate-200 rounded text-[10px] text-center"/>
+                            
+                            {/* 표시 항목 */}
+                            <div className="bg-purple-50 border border-purple-200 rounded-xl p-2.5">
+                              <div className="text-[11px] font-bold text-purple-700 mb-1.5">🎨 표시 항목</div>
+                              <div className="space-y-1">
+                                {[
+                                  {key: 'showLogo', label: 'LACEROOM 로고'},
+                                  {key: 'showKoreanName', label: '한글 보조명 (레이스룸)'},
+                                  {key: 'showLabelName', label: '상품명 (큰글씨)'},
+                                  {key: 'showColorBadge', label: '색상 뱃지'},
+                                  {key: 'showPositionBadge', label: '진열위치 뱃지'},
+                                  {key: 'showBarcode', label: 'Code128 바코드'},
+                                  {key: 'showBarcodeText', label: '바코드 숫자'},
+                                  {key: 'includeQR', label: 'QR코드 (외부링크)'}
+                                ].map(item => (
+                                  <label key={item.key} className="flex items-center gap-1.5 cursor-pointer">
+                                    <input type="checkbox" checked={opts[item.key] !== false}
+                                      onChange={e=>setOpts({[item.key]: e.target.checked})}
+                                      className="w-3.5 h-3.5 accent-purple-500"/>
+                                    <span className="text-[11px] text-slate-700">{item.label}</span>
+                                  </label>
+                                ))}
                               </div>
                             </div>
-
-                            {/* 🔗 외부연결 QR 코드 옵션 */}
-                            <div className="bg-red-50 border border-red-200 rounded-lg p-2 space-y-1.5">
-                              <label className="flex items-center gap-2 cursor-pointer">
-                                <input type="checkbox" checked={opts.includeQR === true}
-                                  onChange={e=>setOpts({includeQR: e.target.checked})}
-                                  className="w-3.5 h-3.5 accent-red-500"/>
-                                <span className="text-xs font-bold text-red-700">🔗 외부연결 QR코드 포함</span>
-                                <span className="text-[9px] text-slate-400 ml-auto">기본 미포함</span>
-                              </label>
-                              {opts.includeQR === true && (
-                                <div className="space-y-1.5 pl-5">
-                                  <div>
-                                    <label className="block text-[10px] font-bold text-slate-600 mb-0.5">URL</label>
-                                    <input type="text" value={opts.qrUrl||''}
-                                      onChange={e=>setOpts({qrUrl: e.target.value})}
-                                      placeholder="https://www.youtube.com/@laceroom"
-                                      className="w-full px-2 py-1 border border-red-200 rounded text-[10px] font-mono"/>
-                                  </div>
+                            
+                            {/* 텍스트 */}
+                            <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5">
+                              <div className="text-[11px] font-bold text-slate-700 mb-1.5">✏️ 텍스트</div>
+                              <div className="space-y-1.5">
+                                <div>
+                                  <label className="text-[9px] text-slate-500 block mb-0.5">로고</label>
+                                  <input type="text" value={opts.topText||''}
+                                    onChange={e=>setOpts({topText: e.target.value})}
+                                    placeholder="LACEROOM" maxLength={20}
+                                    className="w-full px-2 py-1 border border-slate-200 rounded text-[10px]"/>
+                                </div>
+                                <div>
+                                  <label className="text-[9px] text-slate-500 block mb-0.5">한글 보조명</label>
+                                  <input type="text" value={opts.koreanName||''}
+                                    onChange={e=>setOpts({koreanName: e.target.value})}
+                                    placeholder="레이스룸" maxLength={10}
+                                    className="w-full px-2 py-1 border border-slate-200 rounded text-[10px]"/>
+                                </div>
+                                <div>
+                                  <label className="text-[9px] text-slate-500 block mb-0.5">하단 문구 (선택)</label>
+                                  <input type="text" value={opts.bottomText||''}
+                                    onChange={e=>setOpts({bottomText: e.target.value})}
+                                    placeholder="MADE IN KOREA" maxLength={30}
+                                    className="w-full px-2 py-1 border border-slate-200 rounded text-[10px]"/>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* QR 옵션 */}
+                            {opts.includeQR && (
+                              <div className="bg-red-50 border border-red-200 rounded-xl p-2.5">
+                                <div className="text-[11px] font-bold text-red-700 mb-1.5">🔗 QR 설정</div>
+                                <div className="space-y-1.5">
+                                  <input type="text" value={opts.qrUrl||''}
+                                    onChange={e=>setOpts({qrUrl: e.target.value})}
+                                    placeholder="https://..."
+                                    className="w-full px-2 py-1 border border-red-200 rounded text-[10px] font-mono"/>
                                   <div className="grid grid-cols-2 gap-1.5">
-                                    <div>
-                                      <label className="block text-[10px] font-bold text-slate-600 mb-0.5">QR 옆 라벨</label>
-                                      <input type="text" value={opts.qrLabel||''}
-                                        onChange={e=>setOpts({qrLabel: e.target.value.replace(/[^A-Za-z0-9\s]/g,'').slice(0,12)})}
-                                        placeholder="YOUTUBE"
-                                        maxLength={12}
-                                        className="w-full px-2 py-1 border border-red-200 rounded text-[10px]"/>
-                                    </div>
-                                    <div>
-                                      <label className="block text-[10px] font-bold text-slate-600 mb-0.5">QR 크기 (1~10)</label>
-                                      <input type="number" value={opts.qrSize||3} min="2" max="8"
-                                        onChange={e=>setOpts({qrSize: parseInt(e.target.value)||3})}
-                                        className="w-full px-2 py-1 border border-red-200 rounded text-[10px] text-center"/>
+                                    <input type="text" value={opts.qrLabel||''}
+                                      onChange={e=>setOpts({qrLabel: e.target.value.slice(0,12)})}
+                                      placeholder="QR 라벨" maxLength={12}
+                                      className="w-full px-2 py-1 border border-red-200 rounded text-[10px]"/>
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-[9px] text-slate-500">크기</span>
+                                      <input type="range" value={opts.qrSize||75} min="40" max="120"
+                                        onChange={e=>setOpts({qrSize: parseInt(e.target.value)||75})}
+                                        className="flex-1 accent-red-500"/>
+                                      <span className="text-[9px] text-slate-500 w-6 text-right">{opts.qrSize}</span>
                                     </div>
                                   </div>
                                 </div>
-                              )}
-                            </div>
-
-                            {/* 미리보기 (수직 중앙 정렬) */}
-                            {(() => {
-                              const previewColor = colors.find(c => barcodes[c]) || colors[0] || '';
-                              const previewPos = positions[previewColor] || '';
-                              return (
-                                <div className="bg-white border-2 border-dashed border-purple-300 rounded-lg p-2">
-                                  <div className="text-[9px] text-purple-600 font-bold mb-1">📋 미리보기 ({opts.widthMm}×{opts.heightMm}mm) · {previewColor || '색상 미등록'}</div>
-                                  <div className="bg-white border border-slate-300 mx-auto flex items-center" style={{width: `${opts.widthMm*3}px`, height: `${opts.heightMm*3}px`, padding: '4px'}}>
-                                    <div className="flex-1 flex flex-col justify-center" style={{minHeight: '100%'}}>
-                                      {opts.topText && <div className="text-[9px] font-bold text-slate-700 leading-tight">{opts.topText}</div>}
-                                      <div className="my-0.5">
-                                        <div className="bg-slate-800" style={{height: `${opts.barcodeHeight/3}px`, width: '100%'}}></div>
-                                        {opts.showBarcodeText && <div className="text-[8px] text-center font-mono text-slate-600 leading-none mt-0.5">{(barcodes[previewColor] || '11966320004')}</div>}
-                                      </div>
-                                      {previewColor && <div className="text-[9px] text-slate-700 leading-tight mt-0.5">{previewColor}</div>}
-                                      {(previewPos || opts.bottomText) && <div className="text-[9px] text-slate-700 leading-tight">{[previewPos, opts.bottomText].filter(Boolean).join('  ')}</div>}
+                              </div>
+                            )}
+                          </div>
+                          
+                          {/* === 우측: 미리보기 + 미세조정 + 색상수량 === */}
+                          <div className="space-y-3">
+                            
+                            {/* 미리보기 */}
+                            <div className="bg-slate-50 rounded-xl p-3">
+                              <div className="flex justify-between items-center mb-2">
+                                <span className="text-[11px] font-bold text-slate-600">📐 실시간 미리보기</span>
+                                <span className="text-[9px] text-slate-400">{opts.widthMm}×{opts.heightMm}mm @ 200dpi · 5배 확대</span>
+                              </div>
+                              <div className="flex justify-center bg-slate-200 rounded-lg p-3">
+                                <div className="bg-white border border-slate-300 relative" 
+                                  style={{
+                                    width: `${pvW}px`, height: `${pvH}px`,
+                                    padding: `${opts.margin}px`, boxSizing: 'border-box',
+                                    fontFamily: 'Malgun Gothic, sans-serif', color: '#000'
+                                  }}>
+                                  
+                                  {/* 상단 로고 */}
+                                  {(opts.showLogo || opts.showKoreanName) && (
+                                    <div className="flex justify-between items-baseline">
+                                      {opts.showLogo && <div style={{fontSize: '14px', fontWeight: 700, letterSpacing: '1px'}}>{opts.topText}</div>}
+                                      {opts.showKoreanName && <div style={{fontSize: '11px', color: '#666'}}>{opts.koreanName}</div>}
                                     </div>
-                                    {opts.includeQR === true && (
-                                      <div className="flex items-center gap-1 ml-1">
-                                        <div className="bg-slate-800" style={{width: `${opts.qrSize*7}px`, height: `${opts.qrSize*7}px`}}></div>
-                                        {opts.qrLabel && <div className="text-[8px] font-bold text-slate-700">{opts.qrLabel}</div>}
+                                  )}
+                                  
+                                  {/* 상품명 */}
+                                  {opts.showLabelName && (
+                                    <div style={{
+                                      marginTop: '4px',
+                                      fontSize: `${Math.min(opts.labelNameSize * 0.7, pvW/(p.labelName?.length||p.name?.length||5)*1.4)}px`,
+                                      fontWeight: 700, lineHeight: 1.1
+                                    }}>{p.labelName || p.name || '상품명'}</div>
+                                  )}
+                                  
+                                  {/* 뱃지 */}
+                                  {(opts.showColorBadge || opts.showPositionBadge) && previewColor && (
+                                    <div className="flex gap-1 mt-1">
+                                      {opts.showColorBadge && (
+                                        <div style={{
+                                          background: previewBg, color: previewTextColor,
+                                          padding: '2px 8px', borderRadius: '3px',
+                                          fontSize: '13px', fontWeight: 700
+                                        }}>{previewColor}</div>
+                                      )}
+                                      {opts.showPositionBadge && previewPos && (
+                                        <div style={{
+                                          background: '#f0f0f0', color: '#000',
+                                          padding: '2px 8px', borderRadius: '3px',
+                                          fontSize: '13px', fontWeight: 700
+                                        }}>{previewPos}</div>
+                                      )}
+                                    </div>
+                                  )}
+                                  
+                                  {/* 하단: 바코드 + QR */}
+                                  <div style={{
+                                    display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end',
+                                    position: 'absolute', bottom: `${opts.margin}px`, left: `${opts.margin}px`, right: `${opts.margin}px`
+                                  }}>
+                                    {opts.showBarcode && (
+                                      <div>
+                                        <div style={{
+                                          background: 'repeating-linear-gradient(90deg, #000 0, #000 1px, transparent 1px, transparent 3px)',
+                                          height: `${opts.barcodeHeight*0.6}px`,
+                                          width: opts.includeQR ? `${pvW * 0.55}px` : `${pvW * 0.7}px`,
+                                          minWidth: '80px'
+                                        }}></div>
+                                        {opts.showBarcodeText && (
+                                          <div style={{fontFamily: 'monospace', fontSize: '10px', marginTop: '1px'}}>{previewBarcode}</div>
+                                        )}
+                                      </div>
+                                    )}
+                                    {opts.includeQR && (
+                                      <div className="flex items-center gap-1">
+                                        <div style={{
+                                          background: '#000', width: `${opts.qrSize*0.5}px`, height: `${opts.qrSize*0.5}px`,
+                                          backgroundImage: 'repeating-conic-gradient(#000 0 25%, #fff 0 50%)',
+                                          backgroundSize: '6px 6px'
+                                        }}></div>
+                                        {opts.qrLabel && <div style={{fontSize: '9px', fontWeight: 700}}>{opts.qrLabel}</div>}
                                       </div>
                                     )}
                                   </div>
-                                  <div className="text-[8px] text-slate-400 mt-1 text-center">색상별로 라벨 내용이 자동 변경됩니다</div>
-                                </div>
-                              );
-                            })()}
-                          </div>
-                        </details>
-
-                        <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-2 mb-3">
-                          <div className="text-[11px] font-bold text-indigo-700 mb-2 flex items-center justify-between">
-                            <span>색상별 출력 수량</span>
-                            <div className="flex gap-1">
-                              <button onClick={()=>{
-                                const next = {};
-                                colors.forEach(c => { if (barcodes[c]) next[c] = 1; });
-                                setSelections(next);
-                              }} className="text-[10px] bg-indigo-500 hover:bg-indigo-600 text-white px-2 py-0.5 rounded font-bold">전체 1장</button>
-                              <button onClick={()=>setSelections({})} className="text-[10px] bg-slate-300 hover:bg-slate-400 text-white px-2 py-0.5 rounded font-bold">해제</button>
-                            </div>
-                          </div>
-                          <div className="space-y-1 max-h-80 overflow-y-auto">
-                            {colors.length === 0 && <div className="text-xs text-slate-400 text-center py-4">등록된 색상이 없습니다</div>}
-                            {colors.map(color => {
-                              const bc = barcodes[color];
-                              const pos = positions[color] || '';
-                              const qty = selections[color] || '';
-                              return (
-                                <div key={color} className={`flex items-center gap-2 rounded-lg p-2 border ${bc?'bg-white border-indigo-200':'bg-slate-50 border-slate-200 opacity-60'}`}>
-                                  <span className="text-xs font-semibold text-slate-700 flex-1 truncate" title={color}>{color}</span>
-                                  {pos && <span className="text-[10px] font-mono text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded font-bold">{pos}</span>}
-                                  {bc ? (
-                                    <>
-                                      <span className="text-[10px] font-mono text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">{bc}</span>
-                                      <input type="number" min="0" max="99" value={qty}
-                                        onChange={e=>setSelections(s=>({...s, [color]: e.target.value.replace(/\D/g,'').slice(0,2)}))}
-                                        placeholder="0"
-                                        className="w-14 px-1 py-1 rounded border border-indigo-200 text-xs text-center outline-none font-bold"/>
-                                      <span className="text-[10px] text-slate-400">장</span>
-                                    </>
-                                  ) : (
-                                    <span className="text-[10px] text-amber-600 font-bold">⚠️ 바코드 미등록</span>
+                                  
+                                  {/* 하단 문구 */}
+                                  {opts.bottomText && (
+                                    <div style={{
+                                      position: 'absolute', bottom: '2px', left: 0, right: 0,
+                                      textAlign: 'center', fontSize: '8px', color: '#999'
+                                    }}>{opts.bottomText}</div>
                                   )}
                                 </div>
-                              );
-                            })}
+                              </div>
+                              <div className="text-[9px] text-slate-400 mt-1.5 text-center">색상별로 자동 변경 · 실제 출력은 한글이 더 선명합니다</div>
+                            </div>
+                            
+                            {/* 미세조정 */}
+                            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3">
+                              <div className="text-[11px] font-bold text-yellow-700 mb-2">🎯 미세조정</div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <div className="flex justify-between text-[10px] mb-0.5">
+                                    <span className="text-slate-600">상품명 크기</span>
+                                    <span className="text-yellow-700 font-bold">{opts.labelNameSize}</span>
+                                  </div>
+                                  <input type="range" value={opts.labelNameSize} min="20" max="60"
+                                    onChange={e=>setOpts({labelNameSize: parseInt(e.target.value)||38})}
+                                    className="w-full accent-yellow-500"/>
+                                </div>
+                                <div>
+                                  <div className="flex justify-between text-[10px] mb-0.5">
+                                    <span className="text-slate-600">바코드 높이</span>
+                                    <span className="text-yellow-700 font-bold">{opts.barcodeHeight}</span>
+                                  </div>
+                                  <input type="range" value={opts.barcodeHeight} min="30" max="120"
+                                    onChange={e=>setOpts({barcodeHeight: parseInt(e.target.value)||70})}
+                                    className="w-full accent-yellow-500"/>
+                                </div>
+                                <div>
+                                  <div className="flex justify-between text-[10px] mb-0.5">
+                                    <span className="text-slate-600">전체 여백</span>
+                                    <span className="text-yellow-700 font-bold">{opts.margin}</span>
+                                  </div>
+                                  <input type="range" value={opts.margin} min="2" max="20"
+                                    onChange={e=>setOpts({margin: parseInt(e.target.value)||8})}
+                                    className="w-full accent-yellow-500"/>
+                                </div>
+                                <div>
+                                  <div className="flex justify-between text-[10px] mb-0.5">
+                                    <span className="text-slate-600">뱃지 크기</span>
+                                    <span className="text-yellow-700 font-bold">{opts.badgeSize}</span>
+                                  </div>
+                                  <input type="range" value={opts.badgeSize} min="14" max="32"
+                                    onChange={e=>setOpts({badgeSize: parseInt(e.target.value)||20})}
+                                    className="w-full accent-yellow-500"/>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* 색상별 수량 */}
+                            <div className="bg-cyan-50 border border-cyan-200 rounded-xl p-3">
+                              <div className="text-[11px] font-bold text-cyan-700 mb-2 flex items-center justify-between">
+                                <span>📋 색상별 출력 수량</span>
+                                <div className="flex gap-1">
+                                  <button onClick={()=>{
+                                    const next = {};
+                                    colors.forEach(c => { if (barcodes[c]) next[c] = 1; });
+                                    setSelections(next);
+                                  }} className="text-[10px] bg-cyan-500 hover:bg-cyan-600 text-white px-2 py-0.5 rounded font-bold">전체 1장</button>
+                                  <button onClick={()=>setSelections({})} className="text-[10px] bg-slate-300 hover:bg-slate-400 text-white px-2 py-0.5 rounded font-bold">해제</button>
+                                </div>
+                              </div>
+                              <div className="space-y-1 max-h-56 overflow-y-auto">
+                                {colors.length === 0 && <div className="text-xs text-slate-400 text-center py-3">등록된 색상이 없습니다</div>}
+                                {colors.map(color => {
+                                  const bc = barcodes[color];
+                                  const pos = positions[color] || '';
+                                  const qty = selections[color] || '';
+                                  const cBg = getColorRGB(color);
+                                  const cTxt = getTextColor(cBg);
+                                  return (
+                                    <div key={color} className={`flex items-center gap-2 rounded-lg p-2 border ${bc?'bg-white border-cyan-200':'bg-slate-50 border-slate-200 opacity-60'}`}>
+                                      <span style={{background:cBg, color:cTxt, padding:'2px 8px', borderRadius:'3px', fontSize:'11px', fontWeight:700}} title={color}>{color}</span>
+                                      {pos && <span className="text-[10px] font-mono text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded font-bold">{pos}</span>}
+                                      {bc ? (
+                                        <>
+                                          <span className="text-[10px] font-mono text-cyan-700 bg-cyan-100 px-1.5 py-0.5 rounded ml-auto">{bc}</span>
+                                          <input type="number" min="0" max="99" value={qty}
+                                            onChange={e=>setSelections(s=>({...s, [color]: e.target.value.replace(/\D/g,'').slice(0,2)}))}
+                                            placeholder="0"
+                                            className="w-12 px-1 py-1 rounded border border-cyan-200 text-xs text-center outline-none font-bold"/>
+                                          <span className="text-[10px] text-slate-400">장</span>
+                                        </>
+                                      ) : (
+                                        <span className="text-[10px] text-amber-600 font-bold ml-auto">⚠️ 바코드 미등록</span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                            
                           </div>
                         </div>
-
-                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 mb-3 text-[10px] text-amber-700">
-                          💡 출력 시 .zpl 파일이 다운로드 됩니다. 송장 PC의 <strong>C:\laceroom-print\</strong> 폴더에 저장되면 자동 인쇄됩니다.
+                        
+                        {/* 푸터: 안내 + 버튼 */}
+                        <div className="px-5 pb-5">
+                          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-2.5 mb-3 text-[11px] text-emerald-700 flex items-center gap-2">
+                            <span className="text-base">⚡</span>
+                            <div>
+                              <div className="font-bold">Python 헬퍼가 자동 인쇄합니다</div>
+                              <div className="text-[10px] text-emerald-600">JSON 파일이 <strong>C:\laceroom-print\</strong> 에 다운로드되면 즉시 ZT230으로 인쇄</div>
+                            </div>
+                          </div>
+                          
+                          <div className="flex gap-2">
+                            <button onClick={()=>setBarcodePrintPopup(null)}
+                              className="flex-1 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl font-bold text-sm">취소</button>
+                            <button onClick={()=>{
+                              if (toPrint.length === 0) { alert('출력할 색상/수량을 지정해주세요'); return; }
+                              printBarcodeBatch(toPrint, opts);
+                              setBarcodePrintPopup(null);
+                            }}
+                              disabled={toPrint.length === 0}
+                              className={`flex-[2] py-2.5 rounded-xl font-bold text-sm ${toPrint.length===0?'bg-slate-200 text-slate-400 cursor-not-allowed':'bg-indigo-500 hover:bg-indigo-600 text-white shadow'}`}>
+                              🖨️ 인쇄 ({toPrint.length}종 · 총 {totalLabels}장)
+                            </button>
+                          </div>
                         </div>
-
-                        <div className="flex gap-2">
-                          <button onClick={()=>setBarcodePrintPopup(null)}
-                            className="flex-1 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl font-bold text-sm">취소</button>
-                          <button onClick={()=>{
-                            if (toPrint.length === 0) { alert('출력할 색상/수량을 지정해주세요'); return; }
-                            printBarcodeBatch(toPrint, opts);
-                            setBarcodePrintPopup(null);
-                          }}
-                            disabled={toPrint.length === 0}
-                            className={`flex-[2] py-2.5 rounded-xl font-bold text-sm ${toPrint.length===0?'bg-slate-200 text-slate-400 cursor-not-allowed':'bg-indigo-500 hover:bg-indigo-600 text-white shadow'}`}>
-                            🖨️ 출력 ({toPrint.length}종 · 총 {totalLabels}장)
-                          </button>
-                        </div>
+                        
                       </div>
                     </div>
                   );
                 })()}
+
+                {/* 인쇄 알림 토스트 */}
+                {printToast && (
+                  <div className="fixed bottom-6 right-6 z-[80] bg-emerald-500 text-white rounded-2xl shadow-2xl p-4 max-w-sm animate-pulse-slow">
+                    <div className="flex items-start gap-3">
+                      <span className="text-2xl">✅</span>
+                      <div className="flex-1">
+                        <div className="font-bold text-sm">라벨 다운로드 완료</div>
+                        <div className="text-xs mt-1 opacity-95">
+                          {printToast.count}종 · 총 <strong>{printToast.totalPrints}장</strong> 인쇄 예정
+                        </div>
+                        <div className="text-[10px] mt-1 opacity-85">
+                          📁 {printToast.filename}
+                        </div>
+                        <div className="text-[10px] mt-1.5 opacity-85">
+                          ⚡ 헬퍼가 자동으로 ZT230으로 인쇄합니다
+                        </div>
+                      </div>
+                      <button onClick={()=>setPrintToast(null)} className="text-white opacity-70 hover:opacity-100">✕</button>
+                    </div>
+                  </div>
+                )}
 
                 {colorStatusPopup && (() => {
                   const p = colorStatusPopup.product;
