@@ -457,7 +457,7 @@ ${list}` }]
 
           // 🖼️ 이미지 자동 압축 함수 (최대 600x600, JPEG 75%)
           // 🖨️ 라벨 인쇄 (헬퍼와 통신 · JSON 다운로드 방식 · 한글 100% 지원)
-          // v20260424.06.9 - ZPL 직접생성 폐지, Python 헬퍼가 PNG 렌더링 후 ZT230 인쇄
+          // v20260424.06.10 - ZPL 직접생성 폐지, Python 헬퍼가 PNG 렌더링 후 ZT230 인쇄
           const downloadLabelJson = (labels) => {
             if (!labels || labels.length === 0) {
               alert('인쇄할 라벨이 없습니다.');
@@ -481,7 +481,7 @@ ${list}` }]
             }));
             
             const data = {
-              version: 'v20260424.06.9',
+              version: 'v20260424.06.10',
               created_at: new Date().toISOString(),
               label_count: enriched.length,
               total_print_count: enriched.reduce((s, l) => s + l.copies, 0),
@@ -1726,7 +1726,7 @@ ${list}` }]
                 <div className="px-4 py-4 border-b border-slate-100">
                   <div>
                     <div className="text-sm font-bold text-slate-900 leading-tight">LACEROOM통합관리</div>
-                    <div className="text-xs text-slate-400">v20260424.06.9</div>
+                    <div className="text-xs text-slate-400">v20260424.06.10</div>
                   </div>
                 </div>
 
@@ -7553,7 +7553,7 @@ ${list}` }]
 
                 {/* 🚫 빠른 품절 토글 팝업 */}
                 {/* 🎨 색상별 상태 설정 팝업 (9-1 카드 색상 클릭 시) */}
-                {/* 🖨️ 라벨 인쇄 편집기 v20260424.06.9 - 헬퍼 연동, 한글 100% */}
+                {/* 🖨️ 라벨 인쇄 편집기 v20260424.06.10 - 헬퍼 연동, 한글 100% */}
                 {barcodePrintPopup && (() => {
                   const p = barcodePrintPopup.product;
                   const barcodes = p.barcodes || {};
@@ -7698,7 +7698,7 @@ ${list}` }]
                         <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-slate-100 sticky top-0 bg-white z-10">
                           <div>
                             <h3 className="text-base font-bold text-slate-900">🖨️ 라벨 인쇄 + 디자인 편집기</h3>
-                            <div className="text-[10px] text-slate-500 mt-0.5">v20260424.06.9 · 헬퍼 자동 인쇄 · 한글 100%</div>
+                            <div className="text-[10px] text-slate-500 mt-0.5">v20260424.06.10 · 헬퍼 자동 인쇄 · 한글 100%</div>
                           </div>
                           <button onClick={()=>setBarcodePrintPopup(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
                         </div>
@@ -8040,9 +8040,18 @@ ${list}` }]
                                   const qty = selections[color] || '';
                                   const cBg = getColorRGB(color);
                                   const cTxt = getTextColor(cBg);
+                                  // 커스텀 라벨 색상명 (입력됐으면 우선 표시)
+                                  const customColorNames = p.customColorNames || {};
+                                  const customName = customColorNames[color] || '';
+                                  const displayColorName = (customName && customName.trim()) ? customName.trim() : color;
+                                  // 반광 구분
+                                  const isMatte = color.includes('(반광)');
+                                  const rowBg = !bc ? 'bg-slate-50 border-slate-200 opacity-60' : 
+                                                isMatte ? 'bg-slate-100 border-slate-400' : 
+                                                'bg-white border-cyan-200';
                                   return (
-                                    <div key={color} className={`flex items-center gap-2 rounded-lg p-2 border ${bc?'bg-white border-cyan-200':'bg-slate-50 border-slate-200 opacity-60'}`}>
-                                      <span style={{background:cBg, color:cTxt, padding:'2px 8px', borderRadius:'3px', fontSize:'11px', fontWeight:700}} title={color}>{color}</span>
+                                    <div key={color} className={`flex items-center gap-2 rounded-lg p-2 border ${rowBg}`}>
+                                      <span style={{background:cBg, color:cTxt, padding:'2px 8px', borderRadius:'3px', fontSize:'11px', fontWeight:700}} title={color}>{displayColorName}</span>
                                       {posDisplay && <span className="text-[10px] font-mono text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded font-bold">{posDisplay}</span>}
                                       {bc ? (
                                         <>
@@ -8055,18 +8064,17 @@ ${list}` }]
                                           <button
                                             onClick={()=>{
                                               const n = parseInt(qty) || 1;
-                                              const customColorNames = p.customColorNames || {};
                                               const singleItem = [{
                                                 color,
                                                 barcode: bc,
                                                 labelName: p.labelName || p.name,
                                                 copies: n,
-                                                colorText: (customColorNames[color] && customColorNames[color].trim()) ? customColorNames[color].trim() : color,
+                                                colorText: displayColorName,
                                                 positionText: pos || ''
                                               }];
                                               printBarcodeBatch(singleItem, opts);
                                             }}
-                                            title={`${color} ${qty||1}장 즉시 출력`}
+                                            title={`${displayColorName} ${qty||1}장 즉시 출력`}
                                             className="bg-indigo-500 hover:bg-indigo-600 text-white rounded px-2 py-1 text-[10px] font-bold whitespace-nowrap">🖨️ 출력</button>
                                         </>
                                       ) : (
@@ -10790,7 +10798,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260424.06.9</p>
+                <p>© 2026 LACEROOM통합관리 v20260424.06.10</p>
               </footer>
             </div>
           </div>
