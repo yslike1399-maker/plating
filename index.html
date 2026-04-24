@@ -456,60 +456,93 @@ ${list}` }]
           };
 
           // 🖼️ 이미지 자동 압축 함수 (최대 600x600, JPEG 75%)
-          // 🖨️ 바코드 ZPL 생성 + 다운로드 (Zebra ZT230 · Code128 + 유튜브 QR)
+          // 🖨️ 바코드 ZPL 생성 + 다운로드 (Zebra ZT230 · Code128 + 외부 QR)
+          // opts: { widthMm, heightMm, topText, bottomText, showBarcodeText, barcodeHeight, includeQR, qrUrl, qrLabel, qrSize, colorText, positionText }
           const printBarcode = (barcode, labelName, copies = 1, opts = {}) => {
             if (!barcode) { alert('바코드 번호가 없습니다.'); return; }
             const widthMm = opts.widthMm || 50;
             const heightMm = opts.heightMm || 30;
-            const topText = (opts.topText !== undefined ? opts.topText : (labelName || 'LACEROOM'))
-              .replace(/[^A-Za-z0-9\-\s\.\/@_]/g,'').trim().slice(0,30);
-            const bottomText = (opts.bottomText || '')
-              .replace(/[^A-Za-z0-9\-\s\.\/@_]/g,'').trim().slice(0,30);
+            const sanitize = (s) => (s||'').replace(/[^A-Za-z0-9\-\s\.\/@_\[\]]/g,'').trim();
+            const topText = sanitize(opts.topText !== undefined ? opts.topText : (labelName || 'LACEROOM')).slice(0,30);
+            const bottomText = sanitize(opts.bottomText || '').slice(0,30);
+            const colorText = sanitize(opts.colorText || '').slice(0,20);
+            const positionText = sanitize(opts.positionText || '').slice(0,10);
             const showBcText = opts.showBarcodeText !== false;
             const barcodeHeight = opts.barcodeHeight || 50;
-            const fontSize = opts.fontSize || 24;
-            const includeQR = opts.includeQR !== false;
-            const qrUrl = opts.qrUrl || 'https://www.youtube.com/@laceroom';
-            const qrLabel = opts.qrLabel || 'YOUTUBE';
-            const qrSize = opts.qrSize || 3; // 다이소 사이즈
+            const fontSize = opts.fontSize || 22;
+            const includeQR = opts.includeQR === true; // 기본값 false로 변경
+            const qrUrl = opts.qrUrl || '';
+            const qrLabel = sanitize(opts.qrLabel || '').slice(0,12);
+            const qrSize = opts.qrSize || 3;
 
             // 203dpi: 1mm = 8 dots
             const widthDots = Math.round(widthMm * 8);
             const heightDots = Math.round(heightMm * 8);
 
-            const elements = ['^XA', `^PW${widthDots}`, `^LL${heightDots}`, '^LH0,0', `^CF0,${fontSize}`];
+            const elements = ['^XA', `^PW${widthDots}`, `^LL${heightDots}`, '^LH0,0'];
 
-            // 상단 텍스트
-            if (topText) elements.push(`^FO10,10^FD${topText}^FS`);
+            // 세로 높이 계산 (요소마다 필요한 공간)
+            const topTextH = topText ? 28 : 0;
+            const bcTextH = showBcText ? 28 : 0;
+            const bottomTextH = bottomText ? 22 : 0;
+            const colorTextH = colorText ? 22 : 0;
+            const positionTextH = positionText ? 22 : 0;
+            const barcodeAreaH = barcodeHeight + bcTextH;
+            const gap = 6;
 
-            const bcY = topText ? 40 : 15;
+            // 전체 콘텐츠 높이
+            const contentH = topTextH + (topTextH?gap:0)
+                           + barcodeAreaH
+                           + (colorTextH?(gap+colorTextH):0)
+                           + (positionTextH?(gap+positionTextH):0)
+                           + (bottomTextH?(gap+bottomTextH):0);
 
-            if (includeQR && qrUrl) {
-              // QR 영역 계산 (우측에 배치)
-              const qrPxEstimate = qrSize * 25; // 약 75px (size 3)
-              const qrLabelWidth = 60; // YOUTUBE 텍스트 영역
-              const qrX = widthDots - qrPxEstimate - qrLabelWidth - 15;
-              const qrLabelX = qrX + qrPxEstimate + 8;
+            // 세로 중앙 정렬 시작점
+            let y = Math.max(15, Math.round((heightDots - contentH) / 2));
 
-              // 바코드 (좌측, QR 공간 빼고)
-              elements.push(`^FO10,${bcY}^BY2,2,${barcodeHeight}^BCN,${barcodeHeight},${showBcText?'Y':'N'},N,N^FD${barcode}^FS`);
+            // 좌측 시작점 (QR 있으면 좌측만 사용)
+            const leftMargin = 15;
+            const qrPxEstimate = qrSize * 25;
+            const qrLabelWidth = qrLabel ? 55 : 0;
+            const barcodeMaxW = includeQR && qrUrl
+              ? widthDots - qrPxEstimate - qrLabelWidth - 25 - leftMargin
+              : widthDots - leftMargin * 2;
 
-              // QR 코드 (우측 중앙)
-              const qrY = Math.max(15, Math.round((heightDots - qrPxEstimate) / 2));
-              elements.push(`^FO${qrX},${qrY}^BQN,2,${qrSize}^FDLA,${qrUrl}^FS`);
-
-              // QR 옆 라벨 (YOUTUBE)
-              const qrLabelY = qrY + Math.round(qrPxEstimate / 2) - 8;
-              elements.push(`^FO${qrLabelX},${qrLabelY}^A0N,18,18^FD${qrLabel}^FS`);
-            } else {
-              // QR 없을 때: 중앙 바코드
-              elements.push(`^FO30,${bcY}^BY2,2,${barcodeHeight}^BCN,${barcodeHeight},${showBcText?'Y':'N'},N,N^FD${barcode}^FS`);
+            // 상단 텍스트 (라벨명)
+            if (topText) {
+              elements.push(`^CF0,${fontSize}`);
+              elements.push(`^FO${leftMargin},${y}^FD${topText}^FS`);
+              y += topTextH + gap;
             }
 
-            // 하단 텍스트
-            if (bottomText) {
-              const bottomY = bcY + barcodeHeight + (showBcText ? 35 : 10);
-              elements.push(`^FO10,${bottomY}^A0N,16,16^FD${bottomText}^FS`);
+            // 바코드
+            elements.push(`^FO${leftMargin},${y}^BY2,2,${barcodeHeight}^BCN,${barcodeHeight},${showBcText?'Y':'N'},N,N^FD${barcode}^FS`);
+            y += barcodeAreaH;
+
+            // 색상 (있으면)
+            if (colorText) {
+              y += gap;
+              elements.push(`^FO${leftMargin},${y}^A0N,18,18^FD${colorText}^FS`);
+              y += colorTextH;
+            }
+
+            // 진열 위치 (있으면) + 기존 하단 텍스트
+            if (positionText || bottomText) {
+              y += gap;
+              const line = [positionText, bottomText].filter(Boolean).join('  ');
+              elements.push(`^FO${leftMargin},${y}^A0N,18,18^FD${line}^FS`);
+            }
+
+            // QR 코드 (우측 수직 중앙)
+            if (includeQR && qrUrl) {
+              const qrY = Math.max(15, Math.round((heightDots - qrPxEstimate) / 2));
+              const qrLabelX = widthDots - qrLabelWidth - 10;
+              const qrX = qrLabelX - qrPxEstimate - 5;
+              elements.push(`^FO${qrX},${qrY}^BQN,2,${qrSize}^FDLA,${qrUrl}^FS`);
+              if (qrLabel) {
+                const qrLabelY = qrY + Math.round(qrPxEstimate / 2) - 8;
+                elements.push(`^FO${qrLabelX},${qrLabelY}^A0N,16,16^FD${qrLabel}^FS`);
+              }
             }
 
             if (copies > 1) elements.push(`^PQ${copies}`);
@@ -534,9 +567,10 @@ ${list}` }]
           // 일괄 출력 (색상별 선택 + 수량)
           const [barcodePrintPopup, setBarcodePrintPopup] = useState(null); // {product}
           const printBarcodeBatch = (items, opts) => {
-            // items: [{barcode, labelName, copies}]
+            // items: [{barcode, labelName, copies, colorText, positionText}]
             items.forEach((item, idx) => {
-              setTimeout(() => printBarcode(item.barcode, item.labelName, item.copies, opts), idx * 300);
+              const itemOpts = {...opts, colorText: item.colorText || '', positionText: item.positionText || ''};
+              setTimeout(() => printBarcode(item.barcode, item.labelName, item.copies, itemOpts), idx * 300);
             });
           };
 
@@ -1702,7 +1736,7 @@ ${list}` }]
                 <div className="px-4 py-4 border-b border-slate-100">
                   <div>
                     <div className="text-sm font-bold text-slate-900 leading-tight">LACEROOM통합관리</div>
-                    <div className="text-xs text-slate-400">v20260424.02</div>
+                    <div className="text-xs text-slate-400">v20260424.03</div>
                   </div>
                 </div>
 
@@ -7535,15 +7569,15 @@ ${list}` }]
                   const barcodes = p.barcodes || {};
                   const colors = p.colors || [];
                   const selections = barcodePrintPopup.selections || {};
-                  // 라벨 옵션 (기본값)
+                  // 라벨 옵션 (기본값) - QR 미포함이 디폴드
                   const opts = barcodePrintPopup.opts || {
                     widthMm: 50, heightMm: 30,
                     topText: p.labelName || 'LACEROOM',
                     bottomText: '',
                     showBarcodeText: true,
                     barcodeHeight: 50,
-                    fontSize: 24,
-                    includeQR: true,
+                    fontSize: 22,
+                    includeQR: false,
                     qrUrl: 'https://www.youtube.com/@laceroom',
                     qrLabel: 'YOUTUBE',
                     qrSize: 3
@@ -7551,9 +7585,17 @@ ${list}` }]
                   const setOpts = (updater) => setBarcodePrintPopup({...barcodePrintPopup, opts: typeof updater === 'function' ? updater(opts) : {...opts, ...updater}});
                   const setSelections = (updater) => setBarcodePrintPopup({...barcodePrintPopup, selections: typeof updater === 'function' ? updater(selections) : updater});
                   const totalLabels = Object.values(selections).reduce((s,v) => s + (parseInt(v)||0), 0);
+                  const positions = p.positions || {};
                   const toPrint = colors
                     .filter(c => barcodes[c] && (parseInt(selections[c])||0) > 0)
-                    .map(c => ({ color: c, barcode: barcodes[c], labelName: p.labelName || p.name, copies: parseInt(selections[c])||0 }));
+                    .map(c => ({
+                      color: c,
+                      barcode: barcodes[c],
+                      labelName: p.labelName || p.name,
+                      copies: parseInt(selections[c])||0,
+                      colorText: c,
+                      positionText: positions[c] || ''
+                    }));
                   // 라벨 크기 프리셋
                   const sizePresets = [
                     { name: '50×30mm', w: 50, h: 30, bcH: 110, font: 30 },
@@ -7647,15 +7689,16 @@ ${list}` }]
                               </div>
                             </div>
 
-                            {/* 🎬 QR 코드 옵션 */}
+                            {/* 🔗 외부연결 QR 코드 옵션 */}
                             <div className="bg-red-50 border border-red-200 rounded-lg p-2 space-y-1.5">
                               <label className="flex items-center gap-2 cursor-pointer">
-                                <input type="checkbox" checked={opts.includeQR !== false}
+                                <input type="checkbox" checked={opts.includeQR === true}
                                   onChange={e=>setOpts({includeQR: e.target.checked})}
                                   className="w-3.5 h-3.5 accent-red-500"/>
-                                <span className="text-xs font-bold text-red-700">🎬 유튜브 QR 포함</span>
+                                <span className="text-xs font-bold text-red-700">🔗 외부연결 QR코드 포함</span>
+                                <span className="text-[9px] text-slate-400 ml-auto">기본 미포함</span>
                               </label>
-                              {opts.includeQR !== false && (
+                              {opts.includeQR === true && (
                                 <div className="space-y-1.5 pl-5">
                                   <div>
                                     <label className="block text-[10px] font-bold text-slate-600 mb-0.5">URL</label>
@@ -7667,7 +7710,7 @@ ${list}` }]
                                   <div className="grid grid-cols-2 gap-1.5">
                                     <div>
                                       <label className="block text-[10px] font-bold text-slate-600 mb-0.5">QR 옆 라벨</label>
-                                      <input type="text" value={opts.qrLabel||'YOUTUBE'}
+                                      <input type="text" value={opts.qrLabel||''}
                                         onChange={e=>setOpts({qrLabel: e.target.value.replace(/[^A-Za-z0-9\s]/g,'').slice(0,12)})}
                                         placeholder="YOUTUBE"
                                         maxLength={12}
@@ -7684,26 +7727,34 @@ ${list}` }]
                               )}
                             </div>
 
-                            {/* 미리보기 (간단히) */}
-                            <div className="bg-white border-2 border-dashed border-purple-300 rounded-lg p-2">
-                              <div className="text-[9px] text-purple-600 font-bold mb-1">📋 미리보기 ({opts.widthMm}×{opts.heightMm}mm)</div>
-                              <div className="bg-white border border-slate-300 mx-auto flex flex-col" style={{width: `${opts.widthMm*3}px`, minHeight: `${opts.heightMm*3}px`, padding: '4px'}}>
-                                {opts.topText && <div className="text-[9px] font-bold text-slate-700">{opts.topText}</div>}
-                                <div className="flex items-center gap-1 my-1 flex-1">
-                                  <div className="flex-1">
-                                    <div className="bg-slate-800" style={{height: `${opts.barcodeHeight/3}px`, width: '100%'}}></div>
-                                    {opts.showBarcodeText && <div className="text-[9px] text-center font-mono text-slate-600 mt-0.5">11966320004</div>}
-                                  </div>
-                                  {opts.includeQR !== false && (
-                                    <div className="flex items-center gap-1">
-                                      <div className="bg-slate-800" style={{width: `${opts.qrSize*7}px`, height: `${opts.qrSize*7}px`}}></div>
-                                      <div className="text-[8px] font-bold text-slate-700">{opts.qrLabel||'YOUTUBE'}</div>
+                            {/* 미리보기 (수직 중앙 정렬) */}
+                            {(() => {
+                              const previewColor = colors.find(c => barcodes[c]) || colors[0] || '';
+                              const previewPos = positions[previewColor] || '';
+                              return (
+                                <div className="bg-white border-2 border-dashed border-purple-300 rounded-lg p-2">
+                                  <div className="text-[9px] text-purple-600 font-bold mb-1">📋 미리보기 ({opts.widthMm}×{opts.heightMm}mm) · {previewColor || '색상 미등록'}</div>
+                                  <div className="bg-white border border-slate-300 mx-auto flex items-center" style={{width: `${opts.widthMm*3}px`, height: `${opts.heightMm*3}px`, padding: '4px'}}>
+                                    <div className="flex-1 flex flex-col justify-center" style={{minHeight: '100%'}}>
+                                      {opts.topText && <div className="text-[9px] font-bold text-slate-700 leading-tight">{opts.topText}</div>}
+                                      <div className="my-0.5">
+                                        <div className="bg-slate-800" style={{height: `${opts.barcodeHeight/3}px`, width: '100%'}}></div>
+                                        {opts.showBarcodeText && <div className="text-[8px] text-center font-mono text-slate-600 leading-none mt-0.5">{(barcodes[previewColor] || '11966320004')}</div>}
+                                      </div>
+                                      {previewColor && <div className="text-[9px] text-slate-700 leading-tight mt-0.5">{previewColor}</div>}
+                                      {(previewPos || opts.bottomText) && <div className="text-[9px] text-slate-700 leading-tight">{[previewPos, opts.bottomText].filter(Boolean).join('  ')}</div>}
                                     </div>
-                                  )}
+                                    {opts.includeQR === true && (
+                                      <div className="flex items-center gap-1 ml-1">
+                                        <div className="bg-slate-800" style={{width: `${opts.qrSize*7}px`, height: `${opts.qrSize*7}px`}}></div>
+                                        {opts.qrLabel && <div className="text-[8px] font-bold text-slate-700">{opts.qrLabel}</div>}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="text-[8px] text-slate-400 mt-1 text-center">색상별로 라벨 내용이 자동 변경됩니다</div>
                                 </div>
-                                {opts.bottomText && <div className="text-[9px] text-slate-700">{opts.bottomText}</div>}
-                              </div>
-                            </div>
+                              );
+                            })()}
                           </div>
                         </details>
 
@@ -7723,10 +7774,12 @@ ${list}` }]
                             {colors.length === 0 && <div className="text-xs text-slate-400 text-center py-4">등록된 색상이 없습니다</div>}
                             {colors.map(color => {
                               const bc = barcodes[color];
+                              const pos = positions[color] || '';
                               const qty = selections[color] || '';
                               return (
                                 <div key={color} className={`flex items-center gap-2 rounded-lg p-2 border ${bc?'bg-white border-indigo-200':'bg-slate-50 border-slate-200 opacity-60'}`}>
                                   <span className="text-xs font-semibold text-slate-700 flex-1 truncate" title={color}>{color}</span>
+                                  {pos && <span className="text-[10px] font-mono text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded font-bold">{pos}</span>}
                                   {bc ? (
                                     <>
                                       <span className="text-[10px] font-mono text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">{bc}</span>
@@ -8285,30 +8338,43 @@ ${list}` }]
                                               <div className="space-y-1">
                                                 {form.colors.map(color => {
                                                   const barcodes = form.barcodes || {};
+                                                  const positions = form.positions || {};
                                                   const val = barcodes[color] || '';
+                                                  const pos = positions[color] || '';
                                                   return (
-                                                    <div key={color} className="flex items-center gap-2 bg-white rounded-lg p-2 border border-indigo-200">
-                                                      <span className="text-xs font-semibold text-slate-700 min-w-[110px] truncate" title={color}>{color}</span>
-                                                      <input type="text" value={val}
-                                                        onChange={e=>{
-                                                          const digits = e.target.value.replace(/\D/g,'').slice(0,11);
-                                                          setForm(p=>({...p, barcodes: {...(p.barcodes||{}), [color]: digits}}));
-                                                        }}
-                                                        placeholder="11자리 숫자"
-                                                        maxLength={11}
-                                                        className={`flex-1 px-2 py-1 rounded border text-sm font-mono outline-none ${
-                                                          val.length===11 ? 'border-green-400 bg-green-50 text-green-700' :
-                                                          val.length>0 ? 'border-amber-300 bg-amber-50' :
-                                                          'border-slate-200'
-                                                        }`}/>
-                                                      <span className="text-[10px] text-slate-400 min-w-[30px]">{val.length}/11</span>
+                                                    <div key={color} className="bg-white rounded-lg p-2 border border-indigo-200">
+                                                      <div className="flex items-center gap-2">
+                                                        <span className="text-xs font-semibold text-slate-700 min-w-[110px] truncate" title={color}>{color}</span>
+                                                        <input type="text" value={val}
+                                                          onChange={e=>{
+                                                            const digits = e.target.value.replace(/\D/g,'').slice(0,11);
+                                                            setForm(p=>({...p, barcodes: {...(p.barcodes||{}), [color]: digits}}));
+                                                          }}
+                                                          placeholder="11자리 바코드"
+                                                          maxLength={11}
+                                                          className={`flex-1 px-2 py-1 rounded border text-sm font-mono outline-none ${
+                                                            val.length===11 ? 'border-green-400 bg-green-50 text-green-700' :
+                                                            val.length>0 ? 'border-amber-300 bg-amber-50' :
+                                                            'border-slate-200'
+                                                          }`}/>
+                                                        <span className="text-[10px] text-slate-400 min-w-[30px]">{val.length}/11</span>
+                                                        <input type="text" value={pos}
+                                                          onChange={e=>{
+                                                            const v = e.target.value.replace(/[^A-Za-z0-9가-힣\[\]\s]/g,'').slice(0,8);
+                                                            setForm(p=>({...p, positions: {...(p.positions||{}), [color]: v}}));
+                                                          }}
+                                                          placeholder="[노1]"
+                                                          maxLength={8}
+                                                          title="진열 위치 (예: [노1] = 노란다이 1번칸)"
+                                                          className="w-20 px-2 py-1 rounded border border-purple-200 text-xs text-center bg-purple-50 outline-none"/>
+                                                      </div>
                                                     </div>
                                                   );
                                                 })}
                                               </div>
                                             )}
                                             <div className="text-[10px] text-slate-500 mt-2">
-                                              💡 셀메이트에서 먼저 상품 등록 → 발급받은 <strong>11자리 바코드</strong>를 색상별로 입력
+                                              💡 셀메이트 <strong>11자리 바코드</strong> + 진열 위치 기호 <strong>[노1]</strong> 색상별 입력
                                             </div>
                                           </div>
                                         </div>
@@ -8736,6 +8802,7 @@ ${list}` }]
                                         isFeatured: form.isFeatured || false,
                                         labelName: form.labelName || '',
                                         barcodes: form.barcodes || {},
+                                        positions: form.positions || {},
                                         legacyProductId: form.legacyProductId||null,
                                         createdAt: form.createdAt||new Date().toISOString()
                                       };
@@ -10362,7 +10429,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260424.02</p>
+                <p>© 2026 LACEROOM통합관리 v20260424.03</p>
               </footer>
             </div>
           </div>
