@@ -151,6 +151,9 @@
             } catch { return []; }
           });
           const [masterPopup, setMasterPopup] = useState(null);
+          const [quickSoldoutPopup, setQuickSoldoutPopup] = useState(null); // {product, reason}
+          const [quickOffPopup, setQuickOffPopup] = useState(null); // {product, reason, estimatedDate}
+          const [colorStatusPopup, setColorStatusPopup] = useState(null); // {product, color}
           const [form_masterSearch, setForm_masterSearch] = useState('');
           const [form_masterFilter, setForm_masterFilter] = useState('all');
           const saveMasterProducts = (d) => { setMasterProducts(d); localStorage.setItem('master_products', JSON.stringify(d)); };
@@ -446,6 +449,173 @@ ${list}` }]
               localStorage.setItem('plating_products', JSON.stringify(data));
             } catch (e) {
               console.error('저장 오류:', e);
+              if (e.name === 'QuotaExceededError' || /quota/i.test(e.message)) {
+                alert('💾 저장 공간 초과!\n\n이미지 용량이 너무 큽니다.\n9-1 상품관리에서 이미지를 다시 업로드해주세요.\n(자동 압축 적용)');
+              }
+            }
+          };
+
+          // 🖼️ 이미지 자동 압축 함수 (최대 600x600, JPEG 75%)
+          // 🖨️ 라벨 인쇄 (헬퍼와 통신 · JSON 다운로드 방식 · 한글 100% 지원)
+          // v20260424.06.11 - ZPL 직접생성 폐지, Python 헬퍼가 PNG 렌더링 후 ZT230 인쇄
+          const downloadLabelJson = (labels) => {
+            if (!labels || labels.length === 0) {
+              alert('인쇄할 라벨이 없습니다.');
+              return null;
+            }
+            
+            // 기본값 + 헬퍼가 이해할 수 있는 형식으로 정규화
+            const enriched = labels.map(label => ({
+              label_name: label.label_name || label.labelName || label.name || '상품명',
+              color_name: label.color_name || label.colorText || label.color || '',
+              position: label.position || label.positionText || '',
+              barcode: label.barcode || '',
+              qr_url: label.qr_url || label.qrUrl || '',
+              qr_label: label.qr_label || label.qrLabel || '',
+              logo_text: label.logo_text || label.logoText || 'LACEROOM',
+              korean_name: label.korean_name || label.koreanName || '레이스룸',
+              bottom_text: label.bottom_text || label.bottomText || '',
+              copies: parseInt(label.copies) || 1,
+              // 레이아웃 옵션 (편집기에서 설정)
+              layout: label.layout || {}
+            }));
+            
+            const data = {
+              version: 'v20260424.06.11',
+              created_at: new Date().toISOString(),
+              label_count: enriched.length,
+              total_print_count: enriched.reduce((s, l) => s + l.copies, 0),
+              labels: enriched
+            };
+            
+            const now = new Date();
+            const ts = now.getFullYear() +
+              String(now.getMonth() + 1).padStart(2, '0') +
+              String(now.getDate()).padStart(2, '0') + '_' +
+              String(now.getHours()).padStart(2, '0') +
+              String(now.getMinutes()).padStart(2, '0') +
+              String(now.getSeconds()).padStart(2, '0');
+            
+            const filename = `laceroom_label_${ts}.json`;
+            
+            const blob = new Blob([JSON.stringify(data, null, 2)], {
+              type: 'application/json;charset=utf-8'
+            });
+            
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            return filename;
+          };
+
+          // 일괄 출력 팝업 상태
+          const [barcodePrintPopup, setBarcodePrintPopup] = useState(null); // {product}
+          
+          // 인쇄 알림 토스트 (헬퍼가 자동 인쇄한다는 안내)
+          const [printToast, setPrintToast] = useState(null);
+          const showPrintToast = (filename, count, totalPrints) => {
+            setPrintToast({ filename, count, totalPrints });
+            setTimeout(() => setPrintToast(null), 4500);
+          };
+
+          // 색상별 선택 → JSON 한 번에 다운로드 + 토스트 표시
+          const printBarcodeBatch = (items, opts) => {
+            // items: [{barcode, labelName, copies, colorText, positionText, color}]
+            const labels = items.map(item => ({
+              label_name: item.labelName,
+              color_name: item.colorText || '',
+              position: item.positionText || '',
+              barcode: item.barcode,
+              copies: item.copies || 1,
+              qr_url: opts.includeQR ? (opts.qrUrl || '') : '',
+              qr_label: opts.includeQR ? (opts.qrLabel || '') : '',
+              logo_text: opts.topText || 'LACEROOM',
+              korean_name: opts.koreanName || '레이스룸',
+              bottom_text: opts.bottomText || '',
+              layout: {
+                width_mm: opts.widthMm || 50,
+                height_mm: opts.heightMm || 30,
+                show_logo: opts.showLogo !== false,
+                show_korean_name: opts.showKoreanName !== false,
+                show_label_name: opts.showLabelName !== false,
+                show_color_badge: opts.showColorBadge !== false,
+                show_position_badge: opts.showPositionBadge !== false,
+                show_barcode: opts.showBarcode !== false,
+                show_barcode_text: opts.showBarcodeText !== false,
+                show_qr: opts.includeQR === true,
+                label_name_size: opts.labelNameSize || 38,
+                badge_size: opts.badgeSize || 20,
+                barcode_height: opts.barcodeHeight || 70,
+                margin: opts.margin || 8,
+                qr_size: opts.qrSize || 75
+              }
+            }));
+            
+            const totalPrints = labels.reduce((s, l) => s + (l.copies || 1), 0);
+            const filename = downloadLabelJson(labels);
+            if (filename) {
+              showPrintToast(filename, labels.length, totalPrints);
+            }
+          };
+
+          const compressImage = (file, maxSize = 600, quality = 0.75) => {
+            return new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                  let { width, height } = img;
+                  // 비율 유지하며 최대 크기에 맞추기
+                  if (width > maxSize || height > maxSize) {
+                    if (width > height) {
+                      height = Math.round((height * maxSize) / width);
+                      width = maxSize;
+                    } else {
+                      width = Math.round((width * maxSize) / height);
+                      height = maxSize;
+                    }
+                  }
+                  const canvas = document.createElement('canvas');
+                  canvas.width = width;
+                  canvas.height = height;
+                  const ctx = canvas.getContext('2d');
+                  ctx.fillStyle = '#FFFFFF'; // PNG 투명배경 -> 흰색
+                  ctx.fillRect(0, 0, width, height);
+                  ctx.drawImage(img, 0, 0, width, height);
+                  // JPEG로 변환 (PNG보다 훨씬 작음)
+                  const compressed = canvas.toDataURL('image/jpeg', quality);
+                  const originalKB = Math.round(file.size / 1024);
+                  const compressedKB = Math.round((compressed.length * 0.75) / 1024);
+                  console.log(`이미지 압축: ${originalKB}KB → ${compressedKB}KB (${Math.round(100 - (compressedKB/originalKB)*100)}% 감소)`);
+                  resolve(compressed);
+                };
+                img.onerror = () => reject(new Error('이미지 로드 실패'));
+                img.src = e.target.result;
+              };
+              reader.onerror = () => reject(new Error('파일 읽기 실패'));
+              reader.readAsDataURL(file);
+            });
+          };
+
+          // 안전한 localStorage 저장 (용량 초과 시 알림)
+          const safeSetItem = (key, value) => {
+            try {
+              localStorage.setItem(key, value);
+              return true;
+            } catch (e) {
+              if (e.name === 'QuotaExceededError' || /quota/i.test(e.message)) {
+                const sizeMB = (value.length / 1024 / 1024).toFixed(2);
+                alert(`💾 저장 공간 초과! (${sizeMB}MB)\n\n원인: 이미지가 너무 많거나 큼\n해결: 9-1에서 이미지 다시 업로드 (자동 압축됨)\n또는 일부 데이터 삭제`);
+              } else {
+                console.error('저장 오류:', e);
+              }
+              return false;
             }
           };
 
@@ -1556,7 +1726,7 @@ ${list}` }]
                 <div className="px-4 py-4 border-b border-slate-100">
                   <div>
                     <div className="text-sm font-bold text-slate-900 leading-tight">LACEROOM통합관리</div>
-                    <div className="text-xs text-slate-400">v20260421.94</div>
+                    <div className="text-xs text-slate-400">v20260424.06.11</div>
                   </div>
                 </div>
 
@@ -1638,6 +1808,7 @@ ${list}` }]
                         reader.onload = (evt) => {
                           try {
                             const data = JSON.parse(evt.target.result);
+
                             if (data.products) saveProducts(data.products);
                             if (data.history) saveHistory(data.history);
                             if (data.receivables) saveReceivables(data.receivables);
@@ -1664,9 +1835,15 @@ ${list}` }]
                             if (data.polishStocks) savePolishStocks(data.polishStocks);
                             if (data.masterProducts) saveMasterProducts(data.masterProducts);
                             if (data.yocheokInput) saveYocheokInput(data.yocheokInput);
-                            alert('불러오기 완료!');
+                            alert('✅ 불러오기 완료!');
                             window.location.reload();
-                          } catch (err) { alert('파일 형식 오류: ' + err.message); }
+                          } catch (err) {
+                            if (err.name === 'QuotaExceededError' || /quota/i.test(err.message||'')) {
+                              alert('💾 저장 공간 초과!\n\n9-1에서 일부 상품 이미지를 삭제 후\n다시 시도하세요.');
+                            } else {
+                              alert('파일 형식 오류: ' + err.message);
+                            }
+                          }
                         };
                         reader.readAsText(file);
                       }}
@@ -1683,6 +1860,80 @@ ${list}` }]
                   <main className="flex-1 px-6 py-8">
                     <div className="space-y-6">
                       <h1 className="text-2xl font-bold text-slate-900">대시보드</h1>
+
+                      {/* 🚨 고정지출 연체 알림 */}
+                      {(() => {
+                        const today = new Date();
+                        today.setHours(0,0,0,0);
+                        const monthKey = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+
+                        const checkOverdue = (expense) => {
+                          if (!expense || !expense.payDay) return null;
+                          const isCompleted = Array.isArray(expense.completedMonths) && expense.completedMonths.includes(monthKey);
+                          if (isCompleted) return null;
+                          const thisMonth = new Date(today.getFullYear(), today.getMonth(), expense.payDay);
+                          thisMonth.setHours(0,0,0,0);
+                          const diff = Math.floor((thisMonth.getTime() - today.getTime()) / (1000*60*60*24));
+                          if (diff >= 0) return null; // 오늘이거나 미래면 연체 아님
+                          return { ...expense, overdueDays: Math.abs(diff) };
+                        };
+
+                        const overdueLife = fixedExpenses.map(checkOverdue).filter(Boolean);
+                        const overdueBiz = bizExpenses.map(checkOverdue).filter(Boolean);
+                        const allOverdue = [...overdueLife.map(e=>({...e, _type:'생활비'})), ...overdueBiz.map(e=>({...e, _type:'사업비'}))];
+
+                        if (allOverdue.length === 0) return null;
+
+                        const totalAmount = allOverdue.reduce((s,e)=>s+(e.amount||0), 0);
+
+                        return (
+                          <div className="bg-gradient-to-r from-red-500 to-red-600 rounded-2xl shadow-2xl border-4 border-red-300 p-5 animate-pulse">
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-3">
+                                <span className="text-3xl">🚨</span>
+                                <div>
+                                  <h2 className="text-white font-black text-lg">고정지출 연체 알림</h2>
+                                  <p className="text-red-100 text-xs">결제일이 지났는데 완료 처리되지 않은 항목이 있습니다</p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-white font-black text-2xl">{allOverdue.length}건</div>
+                                <div className="text-red-100 text-xs font-bold">{totalAmount.toLocaleString()}원</div>
+                              </div>
+                            </div>
+                            <div className="bg-white/95 rounded-xl p-3 space-y-1.5 max-h-60 overflow-y-auto">
+                              {allOverdue.sort((a,b)=>b.overdueDays-a.overdueDays).map(e => (
+                                <div key={e.id} className="flex items-center justify-between bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                                    <span className="bg-red-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full shrink-0">🚨 {e.overdueDays}일 연체</span>
+                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${e._type==='생활비'?'bg-rose-100 text-rose-600':'bg-blue-100 text-blue-600'}`}>{e._type}</span>
+                                    <span className="text-sm font-bold text-slate-800 truncate">{e.content}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <span className="text-sm font-black text-red-700">{e.amount.toLocaleString()}원</span>
+                                    <button onClick={()=>{
+                                      const list = e._type === '생활비' ? fixedExpenses : bizExpenses;
+                                      const target = list.find(x=>x.id===e.id);
+                                      if (!target) return;
+                                      const completedMonths = target.completedMonths || [];
+                                      if (completedMonths.includes(monthKey)) return; // 이미 완료면 무시
+                                      const updated = list.map(x=>x.id===e.id?{...x, completedMonths: [...completedMonths, monthKey]}:x);
+                                      if (e._type === '생활비') saveFixedExpenses(updated);
+                                      else saveBizExpenses(updated);
+                                    }} className="bg-green-500 hover:bg-green-600 text-white text-xs font-bold px-2 py-1 rounded-lg shadow">
+                                      ✅ 완료
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                            <button onClick={()=>setActiveMainTab('fixedExpense')}
+                              className="w-full mt-3 py-2 bg-white hover:bg-red-50 text-red-700 rounded-xl font-bold text-sm shadow">
+                              📋 10. 고정지출 탭으로 이동 →
+                            </button>
+                          </div>
+                        );
+                      })()}
 
                       {/* 중요 메모 */}
                       {(() => {
@@ -1885,11 +2136,19 @@ ${list}` }]
                         {/* 고정지출 결제 알림 */}
                         {(() => {
                           const today = new Date(); today.setHours(0,0,0,0);
-                          const upcoming = fixedExpenses.filter(e => {
-                            const thisMonth = new Date(today.getFullYear(), today.getMonth(), e.payDay);
-                            const diff = Math.ceil((thisMonth - today)/(1000*60*60*24));
+                          const monthKey = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+                          const filterUpcoming = (expense) => {
+                            if (!expense || !expense.payDay) return false;
+                            const isCompleted = Array.isArray(expense.completedMonths) && expense.completedMonths.includes(monthKey);
+                            if (isCompleted) return false;
+                            const thisMonth = new Date(today.getFullYear(), today.getMonth(), expense.payDay);
+                            thisMonth.setHours(0,0,0,0);
+                            const diff = Math.floor((thisMonth.getTime() - today.getTime())/(1000*60*60*24));
                             return diff >= 0 && diff <= 5;
-                          });
+                          };
+                          const upcomingLife = fixedExpenses.filter(filterUpcoming).map(e=>({...e, _type:'생활비'}));
+                          const upcomingBiz = bizExpenses.filter(filterUpcoming).map(e=>({...e, _type:'사업비'}));
+                          const upcoming = [...upcomingLife, ...upcomingBiz];
                           if (upcoming.length === 0) return null;
                           const totalAmt = upcoming.reduce((s,e) => s+e.amount, 0);
                           return (
@@ -1900,7 +2159,8 @@ ${list}` }]
                               <div className="text-xs text-rose-400 mt-1">{totalAmt.toLocaleString()}원</div>
                               {upcoming.map((e,i) => {
                                 const thisMonth = new Date(today.getFullYear(), today.getMonth(), e.payDay);
-                                const diff = Math.ceil((thisMonth - today)/(1000*60*60*24));
+                                thisMonth.setHours(0,0,0,0);
+                                const diff = Math.floor((thisMonth.getTime() - today.getTime())/(1000*60*60*24));
                                 return <div key={i} className="text-xs text-slate-500 flex justify-between mt-1">
                                   <span>{e.category} {e.content}</span>
                                   <span className="text-rose-500 font-semibold">{diff===0?'오늘!':`D-${diff}`}</span>
@@ -5158,15 +5418,40 @@ ${list}` }]
                                   const hasSmall = sizes.includes('소') || sizes.includes('s');
                                   const hasLarge = sizes.includes('대') || sizes.includes('l');
 
+                                  // 원단 정보 없는 상품 → 공란 처리
+                                  if (mp.hasFabricInfo === false) {
+                                    saveYocheokInput({
+                                      ...f,
+                                      _selectedMasterProduct: e.target.value,
+                                      _selectedSupplier: '',
+                                      _selectedFabric: '',
+                                      _fabricName: '',
+                                      _productName: mp.name,
+                                      _noFabricInfo: true,
+                                      fabricWidth: 0,
+                                      pricePerYard: 0,
+                                      useSmall: hasSmall || (!hasSmall && !hasLarge),
+                                      useLarge: hasLarge || (!hasSmall && !hasLarge)
+                                    });
+                                    return;
+                                  }
+
+                                  // 거래처 + 원단 정보로부터 폭 직접 조회 (정확)
+                                  const supplier = fabricSuppliersState.find(s => String(s.id) === String(mp.fabricSupplierId));
+                                  const fabric = supplier?.fabrics?.find(fb => String(fb.id) === String(mp.fabricId));
+                                  const widthFromFabric = fabric ? parseFloat(fabric.width) : 0;
+                                  const priceFromFabric = fabric ? parseFloat(fabric.price) : 0;
+
                                   saveYocheokInput({
                                     ...f,
                                     _selectedMasterProduct: e.target.value,
-                                    _selectedSupplier: mp.fabricSupplierId || f._selectedSupplier,
-                                    _selectedFabric: mp.fabricId || f._selectedFabric,
-                                    _fabricName: mp.fabricName || '',
+                                    _selectedSupplier: mp.fabricSupplierId || '',
+                                    _selectedFabric: mp.fabricId || '',
+                                    _fabricName: mp.fabricName || (fabric?.name) || '',
                                     _productName: mp.name,
-                                    fabricWidth: mp.fabricWidth || f.fabricWidth,
-                                    pricePerYard: mp.fabricPrice || f.pricePerYard,
+                                    _noFabricInfo: false,
+                                    fabricWidth: widthFromFabric || mp.fabricWidth || 0,
+                                    pricePerYard: priceFromFabric || mp.fabricPrice || 0,
                                     useSmall: hasSmall || (!hasSmall && !hasLarge),
                                     useLarge: hasLarge || (!hasSmall && !hasLarge)
                                   });
@@ -5175,15 +5460,19 @@ ${list}` }]
                                 <option value="">-- 곱창밴드 상품 선택 (선택사항) --</option>
                                 {masterProducts.filter(p=>p.type==='gocchang').map(p => (
                                   <option key={p.id} value={p.id}>
-                                    {p.name}{p.fabricName?` · 🧵 ${p.fabricName}`:''}{p.sizes?` · ${p.sizes}`:''}
+                                    {p.name}{p.hasFabricInfo === false ? ' · ⚠️ 원단정보 없음' : (p.fabricName?` · 🧵 ${p.fabricName}`:'')}{p.sizes?` · ${p.sizes}`:''}
                                   </option>
                                 ))}
                               </select>
                               {f._productName && (
-                                <div className="mt-2 bg-white border border-purple-200 rounded-lg px-3 py-2 text-xs">
-                                  <strong className="text-purple-700">✓ {f._productName}</strong>
+                                <div className={`mt-2 rounded-lg px-3 py-2 text-xs border ${
+                                  f._noFabricInfo ? 'bg-amber-50 border-amber-300' : 'bg-white border-purple-200'
+                                }`}>
+                                  <strong className={f._noFabricInfo ? 'text-amber-700' : 'text-purple-700'}>
+                                    {f._noFabricInfo ? '⚠️' : '✓'} {f._productName}
+                                  </strong>
                                   {f._fabricName && <span className="text-slate-500"> · 🧵 {f._fabricName}</span>}
-                                  <span className="text-slate-400"> 정보가 자동 입력되었습니다</span>
+                                  <span className="text-slate-400"> {f._noFabricInfo ? '— 원단 정보가 없는 상품입니다. 직접 입력해주세요.' : '정보가 자동 입력되었습니다'}</span>
                                 </div>
                               )}
                             </div>
@@ -5364,7 +5653,7 @@ ${list}` }]
                                     <div>가로 {smallCalc.horizontalCount}줄 × 세로 {smallCalc.verticalStacks}단 × {f.stackCount}층</div>
                                   </div>
                                   <div className="text-2xl font-black text-green-600 my-2">{smallCalc.totalCount.toLocaleString()}개</div>
-                                  <div className="grid grid-cols-2 gap-2">
+                                  <div className="grid grid-cols-2 gap-2 mb-3">
                                     <div className="bg-green-100 rounded-lg px-3 py-2">
                                       <div className="text-xs text-slate-600">1개당 원가</div>
                                       <div className="text-lg font-bold text-green-700">{smallUnitCost.toFixed(1)}원</div>
@@ -5374,6 +5663,94 @@ ${list}` }]
                                       <div className="text-lg font-bold text-blue-700">{smallCalc.totalCount > 0 ? (f.fabricYards / smallCalc.totalCount).toFixed(4) : '0'}Y</div>
                                     </div>
                                   </div>
+                                  {/* 📐 원단 배치 시각화 (2단 전용, 실제 비율) */}
+                                  {(() => {
+                                    const cols = smallCalc.horizontalCount;
+                                    const stackCount = f.stackCount || 2;
+                                    const itemW = f.smallW; // mm
+                                    const itemH = f.smallH; // mm
+                                    // 전체 영역 (원단 폭 × 재단물 2단 높이 + 손실)
+                                    const lossR = (f.lossRight||0) * 10; // cm → mm
+                                    const lossT = (f.lossTop||0) * 10;
+                                    const totalDrawW = widthMM; // 원단 폭 실치수
+                                    const totalDrawH = lossT + itemH * stackCount; // 상단 손실 + 2단만큼
+                                    // SVG 크기 (실제 비율 유지)
+                                    const maxSvgW = 320;
+                                    const scale = maxSvgW / totalDrawW;
+                                    const svgW = maxSvgW + 60; // 좌측 라벨 공간
+                                    const svgH = totalDrawH * scale + 60; // 상단 라벨 공간
+                                    const ox = 40; // 원점 x
+                                    const oy = 30; // 원점 y
+                                    return (
+                                      <div className="bg-slate-50 rounded-lg p-2 border border-slate-200">
+                                        <div className="text-[10px] font-bold text-slate-600 mb-1 text-center">📐 원단 배치도 (소) · {stackCount}단 실측 비율</div>
+                                        <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full h-auto">
+                                          {/* 원단 전체 영역 (노랑) */}
+                                          <rect x={ox} y={oy} width={totalDrawW * scale} height={totalDrawH * scale} fill="#fef3c7" stroke="#d97706" strokeWidth="1.5"/>
+
+                                          {/* 상단 손실 A (빨강 빗금) */}
+                                          {lossT > 0 && (
+                                            <>
+                                              <rect x={ox} y={oy} width={totalDrawW * scale} height={lossT * scale} fill="#fecaca" stroke="#dc2626" strokeWidth="1" strokeDasharray="2,2" opacity="0.7"/>
+                                              <text x={ox + (totalDrawW * scale)/2} y={oy + (lossT * scale)/2 + 3} fontSize="9" fill="#b91c1c" textAnchor="middle" fontWeight="bold">A 손실 {f.lossTop}cm</text>
+                                            </>
+                                          )}
+
+                                          {/* 우측 손실 B (빨강 빗금) - 원단 폭이 너무 넓어서 우측 손실 있으면 */}
+                                          {lossR > 0 && (
+                                            <>
+                                              <rect x={ox + (totalDrawW - lossR) * scale} y={oy + lossT * scale} width={lossR * scale} height={(totalDrawH - lossT) * scale} fill="#fecaca" stroke="#dc2626" strokeWidth="1" strokeDasharray="2,2" opacity="0.7"/>
+                                              <text x={ox + (totalDrawW - lossR/2) * scale} y={oy + (lossT + (totalDrawH - lossT)/2) * scale + 3} fontSize="8" fill="#b91c1c" textAnchor="middle" fontWeight="bold" transform={`rotate(-90, ${ox + (totalDrawW - lossR/2) * scale}, ${oy + (lossT + (totalDrawH - lossT)/2) * scale + 3})`}>B {f.lossRight}cm</text>
+                                            </>
+                                          )}
+
+                                          {/* 재단물 (우측 손실 옆부터 좌측으로 딱 붙여 배치) + 번호 표시 */}
+                                          {Array.from({length: stackCount}).map((_, rowIdx) =>
+                                            Array.from({length: cols}).map((_, colIdx) => {
+                                              const rectX = ox + (totalDrawW - lossR - (colIdx + 1) * itemW) * scale;
+                                              const rectY = oy + (lossT + rowIdx * itemH) * scale;
+                                              const rectW = itemW * scale;
+                                              const rectH = itemH * scale;
+                                              // 번호: 1단은 1부터 cols까지, 2단은 cols+1부터 cols*2까지
+                                              const itemNum = rowIdx * cols + colIdx + 1;
+                                              // 폰트 크기 (재단물 크기에 비례)
+                                              const fontSize = Math.max(Math.min(rectW * 0.4, rectH * 0.5, 14), 6);
+                                              return (
+                                                <g key={`${rowIdx}-${colIdx}`}>
+                                                  <rect
+                                                    x={rectX} y={rectY} width={rectW} height={rectH}
+                                                    fill={(rowIdx + colIdx) % 2 === 0 ? '#86efac' : '#bbf7d0'}
+                                                    stroke="#16a34a" strokeWidth="0.5"/>
+                                                  <text x={rectX + rectW/2} y={rectY + rectH/2 + fontSize/3}
+                                                    fontSize={fontSize} fill="#14532d" textAnchor="middle" fontWeight="bold">{itemNum}</text>
+                                                </g>
+                                              );
+                                            })
+                                          )}
+
+                                          {/* ← 진행방향 표시 */}
+                                          <text x={ox + (totalDrawW - lossR) * scale / 2 + (cols * itemW * scale / 2)} y={oy + (lossT + itemH * stackCount) * scale - 4} fontSize="9" fill="#16a34a" textAnchor="middle" fontWeight="bold">← 진행방향</text>
+
+                                          {/* 폭 화살표 (위) */}
+                                          <line x1={ox} y1={oy - 10} x2={ox + totalDrawW * scale} y2={oy - 10} stroke="#475569" strokeWidth="1"/>
+                                          <polygon points={`${ox},${oy-10} ${ox+4},${oy-13} ${ox+4},${oy-7}`} fill="#475569"/>
+                                          <polygon points={`${ox+totalDrawW*scale},${oy-10} ${ox+totalDrawW*scale-4},${oy-13} ${ox+totalDrawW*scale-4},${oy-7}`} fill="#475569"/>
+                                          <text x={ox + (totalDrawW * scale)/2} y={oy - 16} fontSize="9" fill="#1e293b" textAnchor="middle" fontWeight="bold">폭 {f.fabricWidth}인치 ({widthMM.toFixed(0)}mm)</text>
+
+                                          {/* 세로(높이) 라벨 (왼쪽) */}
+                                          <text x={ox - 8} y={oy + (lossT * scale)/2 + 3} fontSize="8" fill="#b91c1c" textAnchor="end" fontWeight="bold">{f.lossTop}cm</text>
+                                          <text x={ox - 8} y={oy + (lossT + itemH/2) * scale + 3} fontSize="8" fill="#1e293b" textAnchor="end" fontWeight="bold">{itemH}mm</text>
+                                          {stackCount >= 2 && <text x={ox - 8} y={oy + (lossT + itemH + itemH/2) * scale + 3} fontSize="8" fill="#1e293b" textAnchor="end" fontWeight="bold">{itemH}mm</text>}
+                                        </svg>
+                                        <div className="text-[10px] text-slate-500 text-center mt-1">
+                                          {f.smallW}×{f.smallH}mm · <strong className="text-green-700">{cols}</strong>개/단 × <strong className="text-green-700">{smallCalc.verticalStacks}</strong>단 × <strong className="text-green-700">{stackCount}</strong>층 = <strong className="text-green-700">{smallCalc.totalCount}</strong>개
+                                        </div>
+                                        <div className="text-[9px] text-slate-400 text-center mt-0.5">
+                                          ※ 시각화는 {stackCount}단 기준 (실제 {smallCalc.verticalStacks}단 반복 × {stackCount}층)
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
                               )}
                               {largeCalc && (
@@ -5383,7 +5760,7 @@ ${list}` }]
                                     <div>가로 {largeCalc.horizontalCount}줄 × 세로 {largeCalc.verticalStacks}단 × {f.stackCount}층</div>
                                   </div>
                                   <div className="text-2xl font-black text-green-600 my-2">{largeCalc.totalCount.toLocaleString()}개</div>
-                                  <div className="grid grid-cols-2 gap-2">
+                                  <div className="grid grid-cols-2 gap-2 mb-3">
                                     <div className="bg-green-100 rounded-lg px-3 py-2">
                                       <div className="text-xs text-slate-600">1개당 원가</div>
                                       <div className="text-lg font-bold text-green-700">{largeUnitCost.toFixed(1)}원</div>
@@ -5393,6 +5770,90 @@ ${list}` }]
                                       <div className="text-lg font-bold text-blue-700">{largeCalc.totalCount > 0 ? (f.fabricYards / largeCalc.totalCount).toFixed(4) : '0'}Y</div>
                                     </div>
                                   </div>
+                                  {/* 📐 원단 배치 시각화 (2단 전용, 실제 비율) */}
+                                  {(() => {
+                                    const cols = largeCalc.horizontalCount;
+                                    const stackCount = f.stackCount || 2;
+                                    const itemW = f.largeW; // mm
+                                    const itemH = f.largeH; // mm
+                                    const lossR = (f.lossRight||0) * 10;
+                                    const lossT = (f.lossTop||0) * 10;
+                                    const totalDrawW = widthMM;
+                                    const totalDrawH = lossT + itemH * stackCount;
+                                    const maxSvgW = 320;
+                                    const scale = maxSvgW / totalDrawW;
+                                    const svgW = maxSvgW + 60;
+                                    const svgH = totalDrawH * scale + 60;
+                                    const ox = 40;
+                                    const oy = 30;
+                                    return (
+                                      <div className="bg-slate-50 rounded-lg p-2 border border-slate-200">
+                                        <div className="text-[10px] font-bold text-slate-600 mb-1 text-center">📐 원단 배치도 (대) · {stackCount}단 실측 비율</div>
+                                        <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full h-auto">
+                                          {/* 원단 전체 영역 */}
+                                          <rect x={ox} y={oy} width={totalDrawW * scale} height={totalDrawH * scale} fill="#fef3c7" stroke="#d97706" strokeWidth="1.5"/>
+
+                                          {/* 상단 손실 A */}
+                                          {lossT > 0 && (
+                                            <>
+                                              <rect x={ox} y={oy} width={totalDrawW * scale} height={lossT * scale} fill="#fecaca" stroke="#dc2626" strokeWidth="1" strokeDasharray="2,2" opacity="0.7"/>
+                                              <text x={ox + (totalDrawW * scale)/2} y={oy + (lossT * scale)/2 + 3} fontSize="9" fill="#b91c1c" textAnchor="middle" fontWeight="bold">A 손실 {f.lossTop}cm</text>
+                                            </>
+                                          )}
+
+                                          {/* 우측 손실 B */}
+                                          {lossR > 0 && (
+                                            <>
+                                              <rect x={ox + (totalDrawW - lossR) * scale} y={oy + lossT * scale} width={lossR * scale} height={(totalDrawH - lossT) * scale} fill="#fecaca" stroke="#dc2626" strokeWidth="1" strokeDasharray="2,2" opacity="0.7"/>
+                                              <text x={ox + (totalDrawW - lossR/2) * scale} y={oy + (lossT + (totalDrawH - lossT)/2) * scale + 3} fontSize="8" fill="#b91c1c" textAnchor="middle" fontWeight="bold" transform={`rotate(-90, ${ox + (totalDrawW - lossR/2) * scale}, ${oy + (lossT + (totalDrawH - lossT)/2) * scale + 3})`}>B {f.lossRight}cm</text>
+                                            </>
+                                          )}
+
+                                          {/* 재단물 (우측 손실 옆부터 좌측으로 딱 붙여) + 번호 표시 */}
+                                          {Array.from({length: stackCount}).map((_, rowIdx) =>
+                                            Array.from({length: cols}).map((_, colIdx) => {
+                                              const rectX = ox + (totalDrawW - lossR - (colIdx + 1) * itemW) * scale;
+                                              const rectY = oy + (lossT + rowIdx * itemH) * scale;
+                                              const rectW = itemW * scale;
+                                              const rectH = itemH * scale;
+                                              const itemNum = rowIdx * cols + colIdx + 1;
+                                              const fontSize = Math.max(Math.min(rectW * 0.4, rectH * 0.5, 14), 6);
+                                              return (
+                                                <g key={`${rowIdx}-${colIdx}`}>
+                                                  <rect
+                                                    x={rectX} y={rectY} width={rectW} height={rectH}
+                                                    fill={(rowIdx + colIdx) % 2 === 0 ? '#fda4af' : '#fecdd3'}
+                                                    stroke="#e11d48" strokeWidth="0.5"/>
+                                                  <text x={rectX + rectW/2} y={rectY + rectH/2 + fontSize/3}
+                                                    fontSize={fontSize} fill="#881337" textAnchor="middle" fontWeight="bold">{itemNum}</text>
+                                                </g>
+                                              );
+                                            })
+                                          )}
+
+                                          {/* ← 진행방향 표시 */}
+                                          <text x={ox + (totalDrawW - lossR) * scale / 2 + (cols * itemW * scale / 2)} y={oy + (lossT + itemH * stackCount) * scale - 4} fontSize="9" fill="#e11d48" textAnchor="middle" fontWeight="bold">← 진행방향</text>
+
+                                          {/* 폭 화살표 */}
+                                          <line x1={ox} y1={oy - 10} x2={ox + totalDrawW * scale} y2={oy - 10} stroke="#475569" strokeWidth="1"/>
+                                          <polygon points={`${ox},${oy-10} ${ox+4},${oy-13} ${ox+4},${oy-7}`} fill="#475569"/>
+                                          <polygon points={`${ox+totalDrawW*scale},${oy-10} ${ox+totalDrawW*scale-4},${oy-13} ${ox+totalDrawW*scale-4},${oy-7}`} fill="#475569"/>
+                                          <text x={ox + (totalDrawW * scale)/2} y={oy - 16} fontSize="9" fill="#1e293b" textAnchor="middle" fontWeight="bold">폭 {f.fabricWidth}인치 ({widthMM.toFixed(0)}mm)</text>
+
+                                          {/* 세로 라벨 */}
+                                          <text x={ox - 8} y={oy + (lossT * scale)/2 + 3} fontSize="8" fill="#b91c1c" textAnchor="end" fontWeight="bold">{f.lossTop}cm</text>
+                                          <text x={ox - 8} y={oy + (lossT + itemH/2) * scale + 3} fontSize="8" fill="#1e293b" textAnchor="end" fontWeight="bold">{itemH}mm</text>
+                                          {stackCount >= 2 && <text x={ox - 8} y={oy + (lossT + itemH + itemH/2) * scale + 3} fontSize="8" fill="#1e293b" textAnchor="end" fontWeight="bold">{itemH}mm</text>}
+                                        </svg>
+                                        <div className="text-[10px] text-slate-500 text-center mt-1">
+                                          {f.largeW}×{f.largeH}mm · <strong className="text-rose-700">{cols}</strong>개/단 × <strong className="text-rose-700">{largeCalc.verticalStacks}</strong>단 × <strong className="text-rose-700">{stackCount}</strong>층 = <strong className="text-rose-700">{largeCalc.totalCount}</strong>개
+                                        </div>
+                                        <div className="text-[9px] text-slate-400 text-center mt-0.5">
+                                          ※ 시각화는 {stackCount}단 기준 (실제 {largeCalc.verticalStacks}단 반복 × {stackCount}층)
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
                               )}
                               {!smallCalc && !largeCalc && (
@@ -7090,6 +7551,959 @@ ${list}` }]
                   </div>
                 )}
 
+                {/* 🚫 빠른 품절 토글 팝업 */}
+                {/* 🎨 색상별 상태 설정 팝업 (9-1 카드 색상 클릭 시) */}
+                {/* 🖨️ 라벨 인쇄 편집기 v20260424.06.11 - 헬퍼 연동, 한글 100% */}
+                {barcodePrintPopup && (() => {
+                  const p = barcodePrintPopup.product;
+                  const barcodes = p.barcodes || {};
+                  const colors = p.colors || [];
+                  const positions = p.positions || {};
+                  const customColorNames = p.customColorNames || {};
+                  const selections = barcodePrintPopup.selections || {};
+                  
+                  // 라벨 옵션 (기본값)
+                  const opts = barcodePrintPopup.opts || {
+                    widthMm: 50, heightMm: 30,
+                    topText: 'LACEROOM',
+                    koreanName: '레이스룸',
+                    bottomText: '',
+                    showLogo: true,
+                    showKoreanName: true,
+                    showLabelName: true,
+                    showColorBadge: true,
+                    showPositionBadge: true,
+                    showBarcode: true,
+                    showBarcodeText: true,
+                    includeQR: false,
+                    qrUrl: 'https://www.youtube.com/@laceroom',
+                    qrLabel: '',
+                    qrSize: 75,
+                    labelNameSize: 38,
+                    badgeSize: 20,
+                    barcodeHeight: 70,
+                    margin: 8
+                  };
+                  const setOpts = (updater) => setBarcodePrintPopup({...barcodePrintPopup, opts: typeof updater === 'function' ? updater(opts) : {...opts, ...updater}});
+                  const setSelections = (updater) => setBarcodePrintPopup({...barcodePrintPopup, selections: typeof updater === 'function' ? updater(selections) : updater});
+                  
+                  const totalLabels = Object.values(selections).reduce((s,v) => s + (parseInt(v)||0), 0);
+                  const toPrint = colors
+                    .filter(c => barcodes[c] && (parseInt(selections[c])||0) > 0)
+                    .map(c => ({
+                      color: c,
+                      barcode: barcodes[c],
+                      labelName: p.labelName || p.name,
+                      copies: parseInt(selections[c])||0,
+                      colorText: (customColorNames[c] && customColorNames[c].trim()) ? customColorNames[c].trim() : c,
+                      positionText: positions[c] || ''
+                    }));
+                  
+                  // 라벨 크기 프리셋
+                  const sizePresets = [
+                    { name: '50×30mm', w: 50, h: 30, lns: 38, bcH: 70 },
+                    { name: '40×25mm', w: 40, h: 25, lns: 30, bcH: 55 },
+                    { name: '30×20mm', w: 30, h: 20, lns: 22, bcH: 40 },
+                    { name: '60×40mm', w: 60, h: 40, lns: 48, bcH: 95 }
+                  ];
+                  
+                  // 디자인 프리셋
+                  const designPresets = [
+                    { 
+                      key: 'default',
+                      icon: '⭐', name: '기본',
+                      desc: '로고+상품명+색상+위치+바코드',
+                      apply: { showLogo: true, showKoreanName: true, showLabelName: true, showColorBadge: true, showPositionBadge: true, showBarcode: true, showBarcodeText: true, includeQR: false }
+                    },
+                    {
+                      key: 'minimal',
+                      icon: '🎀', name: '미니멀',
+                      desc: '상품명+바코드만',
+                      apply: { showLogo: false, showKoreanName: false, showLabelName: true, showColorBadge: false, showPositionBadge: false, showBarcode: true, showBarcodeText: true, includeQR: false }
+                    },
+                    {
+                      key: 'with_qr',
+                      icon: '🔗', name: 'QR포함',
+                      desc: '기본 + 외부연결 QR',
+                      apply: { showLogo: true, showKoreanName: true, showLabelName: true, showColorBadge: true, showPositionBadge: true, showBarcode: true, showBarcodeText: true, includeQR: true }
+                    },
+                    {
+                      key: 'compact',
+                      icon: '📦', name: '컴팩트',
+                      desc: '상품명+색상+바코드',
+                      apply: { showLogo: false, showKoreanName: false, showLabelName: true, showColorBadge: true, showPositionBadge: false, showBarcode: true, showBarcodeText: true, includeQR: false }
+                    }
+                  ];
+                  
+                  // 사용자 프리셋 (localStorage)
+                  const userPresets = JSON.parse(localStorage.getItem('laceroom_label_presets') || '[]');
+                  const saveUserPreset = () => {
+                    const name = prompt('프리셋 이름을 입력하세요:', '내 디자인 1');
+                    if (!name) return;
+                    const newPreset = { key: 'user_' + Date.now(), icon: '💾', name, desc: '사용자 정의', apply: opts };
+                    const updated = [...userPresets, newPreset];
+                    localStorage.setItem('laceroom_label_presets', JSON.stringify(updated));
+                    setBarcodePrintPopup({...barcodePrintPopup}); // 리렌더
+                    alert(`✅ '${name}' 프리셋 저장 완료`);
+                  };
+                  const deleteUserPreset = (key) => {
+                    if (!confirm('이 프리셋을 삭제하시겠습니까?')) return;
+                    const updated = userPresets.filter(pr => pr.key !== key);
+                    localStorage.setItem('laceroom_label_presets', JSON.stringify(updated));
+                    setBarcodePrintPopup({...barcodePrintPopup}); // 리렌더
+                  };
+                  
+                  // 색상 → RGB 매핑 (미리보기용)
+                  const colorRGB = {
+                    '골드유광': '#FFD700', '골드반광': '#DAA520',
+                    '실버유광': '#DCDCDC', '실버반광': '#C0C0C0',
+                    '블랙유광': '#282828', '블랙반광': '#3C3C3C',
+                    '흑무광': '#141414',
+                    '로즈골드유광': '#E79A84', '로즈골드반광': '#D2826E',
+                    '다크골드유광': '#A07832', '다크골드반광': '#8C6428',
+                    '14K도금': '#D4AF37', '은': '#C8C8C8'
+                  };
+                  const getColorRGB = (name) => {
+                    const key = (name || '').replace(/\s/g, '');
+                    return colorRGB[key] || '#F0F0F0';
+                  };
+                  const getTextColor = (bgHex) => {
+                    const r = parseInt(bgHex.slice(1,3), 16);
+                    const g = parseInt(bgHex.slice(3,5), 16);
+                    const b = parseInt(bgHex.slice(5,7), 16);
+                    return (0.299*r + 0.587*g + 0.114*b) / 255 < 0.5 ? '#FFFFFF' : '#1E1E1E';
+                  };
+                  
+                  // 미리보기에 사용할 색상
+                  const previewColor = colors.find(c => barcodes[c] && (parseInt(selections[c])||0) > 0)
+                                       || colors.find(c => barcodes[c]) || colors[0] || '';
+                  const previewPos = positions[previewColor] || '';
+                  const previewBarcode = barcodes[previewColor] || '11500001001';
+                  const previewBg = getColorRGB(previewColor);
+                  const previewTextColor = getTextColor(previewBg);
+                  
+                  // 미리보기 비율 (8배 확대 - 실물과 비례 맞춤)
+                  const pvScale = 8;
+                  const pvW = opts.widthMm * pvScale;
+                  const pvH = opts.heightMm * pvScale;
+                  const pvMargin = opts.margin / 2;
+                  
+                  return (
+                    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.55)'}}
+                      onClick={()=>setBarcodePrintPopup(null)}>
+                      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[94vh] overflow-y-auto"
+                        onClick={e=>e.stopPropagation()}>
+                        
+                        {/* 헤더 */}
+                        <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-slate-100 sticky top-0 bg-white z-10">
+                          <div>
+                            <h3 className="text-base font-bold text-slate-900">🖨️ 라벨 인쇄 + 디자인 편집기</h3>
+                            <div className="text-[10px] text-slate-500 mt-0.5">v20260424.06.11 · 헬퍼 자동 인쇄 · 한글 100%</div>
+                          </div>
+                          <button onClick={()=>setBarcodePrintPopup(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
+                        </div>
+                        
+                        {/* 상품 정보 */}
+                        <div className="px-5 pt-3">
+                          <div className="flex items-center gap-3 bg-slate-50 rounded-xl p-3">
+                            {p.image ? (
+                              <img src={p.image} className="w-12 h-12 rounded-lg object-cover border" alt=""/>
+                            ) : (
+                              <div className="w-12 h-12 rounded-lg bg-white border flex items-center justify-center text-xl">{p.type==='hairpin'?'📌':'🎀'}</div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="font-bold text-slate-900 text-sm truncate">{p.name}</div>
+                              <div className="text-xs text-indigo-600 mt-0.5">🏷️ {p.labelName || '(라벨명 미등록)'}</div>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* 본문: 좌(설정) + 우(미리보기/색상수량) */}
+                        <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-3 px-5 py-3">
+                          
+                          {/* === 좌측: 디자인 프리셋 + 표시 항목 === */}
+                          <div className="space-y-3">
+                            
+                            {/* 디자인 프리셋 */}
+                            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-2.5">
+                              <div className="text-[11px] font-bold text-indigo-700 mb-1.5">⚡ 디자인 프리셋</div>
+                              <div className="space-y-1">
+                                {designPresets.map(pr => {
+                                  const isActive = Object.keys(pr.apply).every(k => opts[k] === pr.apply[k]);
+                                  return (
+                                    <button key={pr.key}
+                                      onClick={() => setOpts({...opts, ...pr.apply})}
+                                      className={`w-full text-left px-2 py-1.5 rounded-md transition ${
+                                        isActive ? 'bg-indigo-500 text-white' : 'bg-white border border-indigo-200 text-slate-700 hover:bg-indigo-100'
+                                      }`}>
+                                      <div className="text-[11px] font-bold">{pr.icon} {pr.name}</div>
+                                      <div className={`text-[9px] mt-0.5 ${isActive?'text-indigo-100':'text-slate-400'}`}>{pr.desc}</div>
+                                    </button>
+                                  );
+                                })}
+                                
+                                {userPresets.map(pr => (
+                                  <div key={pr.key} className="flex items-stretch gap-1">
+                                    <button onClick={() => setOpts({...opts, ...pr.apply})}
+                                      className="flex-1 text-left px-2 py-1.5 rounded-md bg-white border border-purple-200 text-slate-700 hover:bg-purple-50 transition">
+                                      <div className="text-[11px] font-bold">{pr.icon} {pr.name}</div>
+                                      <div className="text-[9px] text-slate-400 mt-0.5">{pr.desc}</div>
+                                    </button>
+                                    <button onClick={() => deleteUserPreset(pr.key)}
+                                      className="px-1.5 rounded-md bg-red-100 text-red-600 hover:bg-red-200 text-[10px] font-bold">✕</button>
+                                  </div>
+                                ))}
+                                
+                                <button onClick={saveUserPreset}
+                                  className="w-full text-center px-2 py-1.5 rounded-md border border-dashed border-slate-300 text-slate-500 hover:bg-white text-[10px] font-bold">
+                                  💾 현재 설정 저장
+                                </button>
+                              </div>
+                            </div>
+                            
+                            {/* 라벨 크기 */}
+                            <div className="bg-amber-50 border border-amber-200 rounded-xl p-2.5">
+                              <div className="text-[11px] font-bold text-amber-700 mb-1.5">📏 라벨 크기</div>
+                              <div className="grid grid-cols-2 gap-1">
+                                {sizePresets.map(s => {
+                                  const isActive = opts.widthMm===s.w && opts.heightMm===s.h;
+                                  return (
+                                    <button key={s.name} onClick={()=>setOpts({widthMm:s.w, heightMm:s.h, labelNameSize:s.lns, barcodeHeight:s.bcH})}
+                                      className={`px-1 py-1.5 rounded text-[10px] font-bold transition ${
+                                        isActive ? 'bg-amber-500 text-white' : 'bg-white border border-amber-200 text-slate-600 hover:bg-amber-100'
+                                      }`}>{s.name}</button>
+                                  );
+                                })}
+                              </div>
+                              <div className="flex gap-1 mt-1.5 items-center">
+                                <input type="number" value={opts.widthMm} min="20" max="100"
+                                  onChange={e=>setOpts({widthMm: parseInt(e.target.value)||50})}
+                                  className="flex-1 px-1 py-1 border border-amber-200 rounded text-[10px] text-center"/>
+                                <span className="text-[10px] text-amber-400">×</span>
+                                <input type="number" value={opts.heightMm} min="10" max="100"
+                                  onChange={e=>setOpts({heightMm: parseInt(e.target.value)||30})}
+                                  className="flex-1 px-1 py-1 border border-amber-200 rounded text-[10px] text-center"/>
+                                <span className="text-[10px] text-amber-600 font-bold">mm</span>
+                              </div>
+                            </div>
+                            
+                            {/* 표시 항목 */}
+                            <div className="bg-purple-50 border border-purple-200 rounded-xl p-2.5">
+                              <div className="text-[11px] font-bold text-purple-700 mb-1.5">🎨 표시 항목</div>
+                              <div className="space-y-1">
+                                {[
+                                  {key: 'showLogo', label: 'LACEROOM 로고'},
+                                  {key: 'showKoreanName', label: '한글 보조명 (레이스룸)'},
+                                  {key: 'showLabelName', label: '상품명 (큰글씨)'},
+                                  {key: 'showColorBadge', label: '색상 뱃지'},
+                                  {key: 'showPositionBadge', label: '진열위치 뱃지'},
+                                  {key: 'showBarcode', label: 'Code128 바코드'},
+                                  {key: 'showBarcodeText', label: '바코드 숫자'},
+                                  {key: 'includeQR', label: 'QR코드 (외부링크)'}
+                                ].map(item => (
+                                  <label key={item.key} className="flex items-center gap-1.5 cursor-pointer">
+                                    <input type="checkbox" checked={opts[item.key] !== false}
+                                      onChange={e=>setOpts({[item.key]: e.target.checked})}
+                                      className="w-3.5 h-3.5 accent-purple-500"/>
+                                    <span className="text-[11px] text-slate-700">{item.label}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+                            
+                            {/* 텍스트 */}
+                            <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5">
+                              <div className="text-[11px] font-bold text-slate-700 mb-1.5">✏️ 텍스트</div>
+                              <div className="space-y-1.5">
+                                <div>
+                                  <label className="text-[9px] text-slate-500 block mb-0.5">로고</label>
+                                  <input type="text" value={opts.topText||''}
+                                    onChange={e=>setOpts({topText: e.target.value})}
+                                    placeholder="LACEROOM" maxLength={20}
+                                    className="w-full px-2 py-1 border border-slate-200 rounded text-[10px]"/>
+                                </div>
+                                <div>
+                                  <label className="text-[9px] text-slate-500 block mb-0.5">한글 보조명</label>
+                                  <input type="text" value={opts.koreanName||''}
+                                    onChange={e=>setOpts({koreanName: e.target.value})}
+                                    placeholder="레이스룸" maxLength={10}
+                                    className="w-full px-2 py-1 border border-slate-200 rounded text-[10px]"/>
+                                </div>
+                                <div>
+                                  <label className="text-[9px] text-slate-500 block mb-0.5">하단 문구 (선택)</label>
+                                  <input type="text" value={opts.bottomText||''}
+                                    onChange={e=>setOpts({bottomText: e.target.value})}
+                                    placeholder="MADE IN KOREA" maxLength={30}
+                                    className="w-full px-2 py-1 border border-slate-200 rounded text-[10px]"/>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* QR 옵션 */}
+                            {opts.includeQR && (
+                              <div className="bg-red-50 border border-red-200 rounded-xl p-2.5">
+                                <div className="text-[11px] font-bold text-red-700 mb-1.5">🔗 QR 설정</div>
+                                <div className="space-y-1.5">
+                                  <input type="text" value={opts.qrUrl||''}
+                                    onChange={e=>setOpts({qrUrl: e.target.value})}
+                                    placeholder="https://..."
+                                    className="w-full px-2 py-1 border border-red-200 rounded text-[10px] font-mono"/>
+                                  <div className="grid grid-cols-2 gap-1.5">
+                                    <input type="text" value={opts.qrLabel||''}
+                                      onChange={e=>setOpts({qrLabel: e.target.value.slice(0,12)})}
+                                      placeholder="QR 라벨" maxLength={12}
+                                      className="w-full px-2 py-1 border border-red-200 rounded text-[10px]"/>
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-[9px] text-slate-500">크기</span>
+                                      <input type="range" value={opts.qrSize||75} min="40" max="120"
+                                        onChange={e=>setOpts({qrSize: parseInt(e.target.value)||75})}
+                                        className="flex-1 accent-red-500"/>
+                                      <span className="text-[9px] text-slate-500 w-6 text-right">{opts.qrSize}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          
+                          {/* === 우측: 미리보기 + 미세조정 + 색상수량 === */}
+                          <div className="space-y-3">
+                            
+                            {/* 미리보기 */}
+                            <div className="bg-slate-50 rounded-xl p-3">
+                              <div className="flex justify-between items-center mb-2">
+                                <span className="text-[11px] font-bold text-slate-600">📐 실시간 미리보기</span>
+                                <span className="text-[9px] text-slate-400">{opts.widthMm}×{opts.heightMm}mm @ 200dpi · 8배 확대</span>
+                              </div>
+                              <div className="flex justify-center bg-slate-200 rounded-lg p-3">
+                                <div className="bg-white border border-slate-300 relative" 
+                                  style={{
+                                    width: `${pvW}px`, height: `${pvH}px`,
+                                    padding: `${opts.margin}px`, boxSizing: 'border-box',
+                                    fontFamily: 'Malgun Gothic, sans-serif', color: '#000'
+                                  }}>
+                                  
+                                  {/* 상단 로고 */}
+                                  {(opts.showLogo || opts.showKoreanName) && (
+                                    <div className="flex justify-between items-baseline">
+                                      {opts.showLogo && <div style={{fontSize: '14px', fontWeight: 700, letterSpacing: '1px'}}>{opts.topText}</div>}
+                                      {opts.showKoreanName && <div style={{fontSize: '11px', color: '#666'}}>{opts.koreanName}</div>}
+                                    </div>
+                                  )}
+                                  
+                                  {/* 상품명 */}
+                                  {opts.showLabelName && (
+                                    <div style={{
+                                      marginTop: '4px',
+                                      fontSize: `${Math.min(opts.labelNameSize, pvW/(p.labelName?.length||p.name?.length||5)*1.6)}px`,
+                                      fontWeight: 700, lineHeight: 1.1
+                                    }}>{p.labelName || p.name || '상품명'}</div>
+                                  )}
+                                  
+                                  {/* 뱃지 */}
+                                  {(opts.showColorBadge || opts.showPositionBadge) && previewColor && (
+                                    <div className="flex gap-1 mt-1">
+                                      {opts.showColorBadge && (
+                                        <div style={{
+                                          background: previewBg, color: previewTextColor,
+                                          padding: '3px 10px', borderRadius: '4px',
+                                          fontSize: `${opts.badgeSize}px`, fontWeight: 700
+                                        }}>{previewColor}</div>
+                                      )}
+                                      {opts.showPositionBadge && previewPos && (
+                                        <div style={{
+                                          background: '#f0f0f0', color: '#000',
+                                          padding: '3px 10px', borderRadius: '4px',
+                                          fontSize: `${opts.badgeSize}px`, fontWeight: 700
+                                        }}>{previewPos}</div>
+                                      )}
+                                    </div>
+                                  )}
+                                  
+                                  {/* 하단: 바코드 + QR */}
+                                  <div style={{
+                                    display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end',
+                                    position: 'absolute', bottom: `${opts.margin}px`, left: `${opts.margin}px`, right: `${opts.margin}px`
+                                  }}>
+                                    {opts.showBarcode && (
+                                      <div style={{flex: opts.includeQR ? '0 1 auto' : '1 1 100%', marginRight: opts.includeQR ? '6px' : '0', minWidth: 0}}>
+                                        <div style={{
+                                          background: 'repeating-linear-gradient(90deg, #000 0, #000 1px, transparent 1px, transparent 3px)',
+                                          height: `${opts.barcodeHeight*0.9}px`,
+                                          width: opts.includeQR ? `${pvW * 0.60}px` : '100%',
+                                          minWidth: '80px'
+                                        }}></div>
+                                        {opts.showBarcodeText && (
+                                          <div style={{fontFamily: 'monospace', fontSize: '12px', marginTop: '4px', textAlign: 'center', fontWeight: 500}}>{previewBarcode}</div>
+                                        )}
+                                      </div>
+                                    )}
+                                    {opts.includeQR && (
+                                      <div className="flex items-center gap-1">
+                                        <div style={{
+                                          background: '#000', width: `${opts.qrSize*0.5}px`, height: `${opts.qrSize*0.5}px`,
+                                          backgroundImage: 'repeating-conic-gradient(#000 0 25%, #fff 0 50%)',
+                                          backgroundSize: '6px 6px'
+                                        }}></div>
+                                        {opts.qrLabel && <div style={{fontSize: '9px', fontWeight: 700}}>{opts.qrLabel}</div>}
+                                      </div>
+                                    )}
+                                  </div>
+                                  
+                                  {/* 하단 문구 */}
+                                  {opts.bottomText && (
+                                    <div style={{
+                                      position: 'absolute', bottom: '2px', left: 0, right: 0,
+                                      textAlign: 'center', fontSize: '8px', color: '#999'
+                                    }}>{opts.bottomText}</div>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="text-[9px] text-slate-400 mt-1.5 text-center">색상별로 자동 변경 · 실제 출력은 한글이 더 선명합니다</div>
+                            </div>
+                            
+                            {/* 미세조정 */}
+                            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3">
+                              <div className="text-[11px] font-bold text-yellow-700 mb-2">🎯 미세조정</div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <div className="flex justify-between text-[10px] mb-0.5">
+                                    <span className="text-slate-600">상품명 크기</span>
+                                    <span className="text-yellow-700 font-bold">{opts.labelNameSize}</span>
+                                  </div>
+                                  <input type="range" value={opts.labelNameSize} min="20" max="60"
+                                    onChange={e=>setOpts({labelNameSize: parseInt(e.target.value)||38})}
+                                    className="w-full accent-yellow-500"/>
+                                </div>
+                                <div>
+                                  <div className="flex justify-between text-[10px] mb-0.5">
+                                    <span className="text-slate-600">바코드 높이</span>
+                                    <span className="text-yellow-700 font-bold">{opts.barcodeHeight}</span>
+                                  </div>
+                                  <input type="range" value={opts.barcodeHeight} min="30" max="120"
+                                    onChange={e=>setOpts({barcodeHeight: parseInt(e.target.value)||70})}
+                                    className="w-full accent-yellow-500"/>
+                                </div>
+                                <div>
+                                  <div className="flex justify-between text-[10px] mb-0.5">
+                                    <span className="text-slate-600">전체 여백</span>
+                                    <span className="text-yellow-700 font-bold">{opts.margin}</span>
+                                  </div>
+                                  <input type="range" value={opts.margin} min="2" max="20"
+                                    onChange={e=>setOpts({margin: parseInt(e.target.value)||8})}
+                                    className="w-full accent-yellow-500"/>
+                                </div>
+                                <div>
+                                  <div className="flex justify-between text-[10px] mb-0.5">
+                                    <span className="text-slate-600">뱃지 크기</span>
+                                    <span className="text-yellow-700 font-bold">{opts.badgeSize}</span>
+                                  </div>
+                                  <input type="range" value={opts.badgeSize} min="14" max="32"
+                                    onChange={e=>setOpts({badgeSize: parseInt(e.target.value)||20})}
+                                    className="w-full accent-yellow-500"/>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* 색상별 수량 */}
+                            <div className="bg-cyan-50 border border-cyan-200 rounded-xl p-3">
+                              <div className="text-[11px] font-bold text-cyan-700 mb-2 flex items-center justify-between">
+                                <span>📋 색상별 출력 수량</span>
+                                <div className="flex gap-1">
+                                  <button onClick={()=>{
+                                    const next = {};
+                                    colors.forEach(c => { if (barcodes[c]) next[c] = 1; });
+                                    setSelections(next);
+                                  }} className="text-[10px] bg-cyan-500 hover:bg-cyan-600 text-white px-2 py-0.5 rounded font-bold">전체 1장</button>
+                                  <button onClick={()=>setSelections({})} className="text-[10px] bg-slate-300 hover:bg-slate-400 text-white px-2 py-0.5 rounded font-bold">해제</button>
+                                </div>
+                              </div>
+                              <div className="space-y-1 max-h-56 overflow-y-auto">
+                                {colors.length === 0 && <div className="text-xs text-slate-400 text-center py-3">등록된 색상이 없습니다</div>}
+                                {(() => {
+                                  // 색상 표시 순서 규칙
+                                  const colorOrder = [
+                                    '골드(유광)', '실버(유광)', '블랙(유광)', '로즈골드(유광)', '다크골드(유광)',
+                                    '골드(반광)', '실버(반광)', '블랙(반광)', '로즈골드(반광)', '다크골드(반광)',
+                                    '14k도금', '14K도금', '은', '흑무광'
+                                  ];
+                                  const getOrder = (c) => {
+                                    const idx = colorOrder.indexOf(c);
+                                    return idx === -1 ? 9999 : idx;
+                                  };
+                                  return [...colors].sort((a, b) => getOrder(a) - getOrder(b));
+                                })().map(color => {
+                                  const bc = barcodes[color];
+                                  const pos = positions[color] || '';
+                                  // 위치값에서 [ ] 제거하여 표시
+                                  const posDisplay = pos.replace(/^\[/, '').replace(/\]$/, '');
+                                  const qty = selections[color] || '';
+                                  const cBg = getColorRGB(color);
+                                  const cTxt = getTextColor(cBg);
+                                  // 커스텀 라벨 색상명 (입력됐으면 우선 표시)
+                                  const customColorNames = p.customColorNames || {};
+                                  const customName = customColorNames[color] || '';
+                                  const displayColorName = (customName && customName.trim()) ? customName.trim() : color;
+                                  // 반광 구분
+                                  const isMatte = color.includes('(반광)');
+                                  const rowBg = !bc ? 'bg-slate-50 border-slate-200 opacity-60' : 
+                                                isMatte ? 'bg-slate-100 border-slate-400' : 
+                                                'bg-white border-cyan-200';
+                                  return (
+                                    <div key={color} className={`flex items-center gap-2 rounded-lg p-2 border ${rowBg}`}>
+                                      <span style={{background:cBg, color:cTxt, padding:'2px 8px', borderRadius:'3px', fontSize:'11px', fontWeight:700}} title={color}>{displayColorName}</span>
+                                      {posDisplay && <span className="text-[10px] font-mono text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded font-bold">{posDisplay}</span>}
+                                      {bc ? (
+                                        <>
+                                          <span className="text-[10px] font-mono text-cyan-700 bg-cyan-100 px-1.5 py-0.5 rounded ml-auto">{bc}</span>
+                                          <input type="number" min="0" max="99" value={qty}
+                                            onChange={e=>setSelections(s=>({...s, [color]: e.target.value.replace(/\D/g,'').slice(0,2)}))}
+                                            placeholder="0"
+                                            className="w-12 px-1 py-1 rounded border border-cyan-200 text-xs text-center outline-none font-bold"/>
+                                          <span className="text-[10px] text-slate-400">장</span>
+                                          <button
+                                            onClick={()=>{
+                                              const n = parseInt(qty) || 1;
+                                              const singleItem = [{
+                                                color,
+                                                barcode: bc,
+                                                labelName: p.labelName || p.name,
+                                                copies: n,
+                                                colorText: displayColorName,
+                                                positionText: pos || ''
+                                              }];
+                                              printBarcodeBatch(singleItem, opts);
+                                            }}
+                                            title={`${displayColorName} ${qty||1}장 즉시 출력`}
+                                            className="bg-indigo-500 hover:bg-indigo-600 text-white rounded px-2 py-1 text-[10px] font-bold whitespace-nowrap">🖨️ 출력</button>
+                                        </>
+                                      ) : (
+                                        <span className="text-[10px] text-amber-600 font-bold ml-auto">⚠️ 바코드 미등록</span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                            
+                          </div>
+                        </div>
+                        
+                        {/* 푸터: 안내 + 버튼 */}
+                        <div className="px-5 pb-5">
+                          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-2.5 mb-3 text-[11px] text-emerald-700 flex items-center gap-2">
+                            <span className="text-base">⚡</span>
+                            <div>
+                              <div className="font-bold">Python 헬퍼가 자동 인쇄합니다</div>
+                              <div className="text-[10px] text-emerald-600">JSON 파일이 <strong>C:\laceroom-print\</strong> 에 다운로드되면 즉시 ZT230으로 인쇄</div>
+                            </div>
+                          </div>
+                          
+                          <div className="flex gap-2">
+                            <button onClick={()=>setBarcodePrintPopup(null)}
+                              className="flex-1 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl font-bold text-sm">취소</button>
+                            <button onClick={()=>{
+                              if (toPrint.length === 0) { alert('출력할 색상/수량을 지정해주세요'); return; }
+                              printBarcodeBatch(toPrint, opts);
+                              setBarcodePrintPopup(null);
+                            }}
+                              disabled={toPrint.length === 0}
+                              className={`flex-[2] py-2.5 rounded-xl font-bold text-sm ${toPrint.length===0?'bg-slate-200 text-slate-400 cursor-not-allowed':'bg-indigo-500 hover:bg-indigo-600 text-white shadow'}`}>
+                              🖨️ 인쇄 ({toPrint.length}종 · 총 {totalLabels}장)
+                            </button>
+                          </div>
+                        </div>
+                        
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* 인쇄 알림 토스트 */}
+                {printToast && (
+                  <div className="fixed bottom-6 right-6 z-[80] bg-emerald-500 text-white rounded-2xl shadow-2xl p-4 max-w-sm animate-pulse-slow">
+                    <div className="flex items-start gap-3">
+                      <span className="text-2xl">✅</span>
+                      <div className="flex-1">
+                        <div className="font-bold text-sm">라벨 다운로드 완료</div>
+                        <div className="text-xs mt-1 opacity-95">
+                          {printToast.count}종 · 총 <strong>{printToast.totalPrints}장</strong> 인쇄 예정
+                        </div>
+                        <div className="text-[10px] mt-1 opacity-85">
+                          📁 {printToast.filename}
+                        </div>
+                        <div className="text-[10px] mt-1.5 opacity-85">
+                          ⚡ 헬퍼가 자동으로 ZT230으로 인쇄합니다
+                        </div>
+                      </div>
+                      <button onClick={()=>setPrintToast(null)} className="text-white opacity-70 hover:opacity-100">✕</button>
+                    </div>
+                  </div>
+                )}
+
+                {colorStatusPopup && (() => {
+                  const p = colorStatusPopup.product;
+                  const c = colorStatusPopup.color;
+                  const soldoutItem = soldoutItems.find(i => i.name===p.name && i.color===c);
+                  const offItem = todayOffItems.find(i => i.name===p.name && i.color===c);
+                  const isSoldout = !!soldoutItem;
+                  const isOff = !!offItem;
+
+                  const soldoutReasons = p.type==='gocchang'
+                    ? ['원단품절 - 원단주문전','원단품절 - 원단주문완료','미싱작업중','도금중']
+                    : ['메인재료 품절 - 중국발주 필요','원자재 품절 - 핀대','중국 제작중','도금중'];
+                  const offReasons = ['품절','재고 부족','도금 대기','제작 중','출고 마감 이후'];
+
+                  const toggleSoldout = (reason) => {
+                    if (isSoldout) {
+                      // 품절 해제
+                      saveSoldoutItems(soldoutItems.filter(i => !(i.name===p.name && i.color===c)));
+                      // 사유가 "품절"인 오늘출발OFF도 자동 해제 (품절 때문에 자동 등록된 것만)
+                      const offItem = todayOffItems.find(i => i.name===p.name && i.color===c);
+                      if (offItem && offItem.reason === '품절') {
+                        saveTodayOffItems(todayOffItems.filter(i => !(i.name===p.name && i.color===c)));
+                      }
+                    } else {
+                      // 품절 등록
+                      const now = Date.now();
+                      const newSoldout = {
+                        id: now+Math.random(),
+                        type: p.type, name: p.name, color: c, size: p.sizes||'',
+                        date: new Date().toISOString().split('T')[0],
+                        reason: reason || soldoutReasons[0],
+                        createdAt: new Date().toISOString()
+                      };
+                      saveSoldoutItems([...soldoutItems, newSoldout]);
+                      // 오늘출발OFF가 아직 안 된 경우 자동 등록 (사유: "품절")
+                      if (!isOff) {
+                        saveTodayOffItems([...todayOffItems, {
+                          id: now+Math.random()+1,
+                          type: p.type, name: p.name, color: c, size: p.sizes||'',
+                          date: new Date().toISOString().split('T')[0],
+                          reason: '품절',
+                          createdAt: new Date().toISOString()
+                        }]);
+                      }
+                    }
+                  };
+
+                  const toggleOff = (reason) => {
+                    if (isOff) {
+                      saveTodayOffItems(todayOffItems.filter(i => !(i.name===p.name && i.color===c)));
+                    } else {
+                      saveTodayOffItems([...todayOffItems, {
+                        id: Date.now()+Math.random(),
+                        type: p.type, name: p.name, color: c, size: p.sizes||'',
+                        date: new Date().toISOString().split('T')[0],
+                        reason: reason || offReasons[0],
+                        createdAt: new Date().toISOString()
+                      }]);
+                    }
+                  };
+
+                  const updateReason = (type, newReason) => {
+                    if (type==='soldout') {
+                      saveSoldoutItems(soldoutItems.map(i =>
+                        (i.name===p.name && i.color===c) ? {...i, reason: newReason} : i
+                      ));
+                    } else {
+                      saveTodayOffItems(todayOffItems.map(i =>
+                        (i.name===p.name && i.color===c) ? {...i, reason: newReason} : i
+                      ));
+                    }
+                  };
+
+                  return (
+                    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.5)'}}
+                      onClick={()=>setColorStatusPopup(null)}>
+                      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-5 max-h-[90vh] overflow-y-auto"
+                        onClick={e=>e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-base font-bold text-slate-900">🎨 색상 설정</h3>
+                          <button onClick={()=>setColorStatusPopup(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
+                        </div>
+
+                        {/* 상품 정보 */}
+                        <div className="flex items-center gap-3 bg-slate-50 rounded-xl p-3 mb-4">
+                          {p.image ? (
+                            <img src={p.image} className="w-12 h-12 rounded-lg object-cover border" alt=""/>
+                          ) : (
+                            <div className="w-12 h-12 rounded-lg bg-white border flex items-center justify-center text-xl">{p.type==='hairpin'?'📌':'🎀'}</div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="font-bold text-slate-900 text-sm truncate">{p.name}</div>
+                            <div className="text-sm font-black text-purple-700 mt-0.5">🎨 {c}</div>
+                          </div>
+                        </div>
+
+                        {/* 🚫 품절 상태 */}
+                        <div className={`rounded-xl border-2 p-3 mb-3 ${isSoldout?'bg-red-50 border-red-300':'bg-white border-slate-200'}`}>
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="font-bold text-sm flex items-center gap-2">
+                              <span className="text-base">🚫</span>
+                              <span className={isSoldout?'text-red-700':'text-slate-700'}>품절 상태</span>
+                            </div>
+                            <button onClick={()=>toggleSoldout()}
+                              className={`px-3 py-1.5 rounded-lg font-bold text-xs transition ${
+                                isSoldout
+                                  ? 'bg-green-500 hover:bg-green-600 text-white'
+                                  : 'bg-red-500 hover:bg-red-600 text-white'
+                              }`}>
+                              {isSoldout ? '✅ 품절 해제' : '🚫 품절 처리'}
+                            </button>
+                          </div>
+                          {isSoldout && (
+                            <>
+                              <div className="text-[10px] text-red-600 mb-1">
+                                {soldoutItem.date} · {Math.floor((new Date()-new Date(soldoutItem.date))/(1000*60*60*24))}일째
+                              </div>
+                              <label className="block text-[11px] font-semibold text-slate-600 mb-1">품절 사유</label>
+                              <select value={soldoutItem.reason||''}
+                                onChange={e=>updateReason('soldout', e.target.value)}
+                                className="w-full px-2 py-1.5 rounded-lg border border-red-200 text-xs bg-white">
+                                {soldoutReasons.map(r=><option key={r} value={r}>{r}</option>)}
+                                {!soldoutReasons.includes(soldoutItem.reason) && soldoutItem.reason && (
+                                  <option value={soldoutItem.reason}>{soldoutItem.reason} (기존)</option>
+                                )}
+                              </select>
+                            </>
+                          )}
+                          {!isSoldout && !isOff && (
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 mt-2 text-[10px] text-blue-700">
+                              💡 품절 처리 시 오늘출발도 자동으로 불가 처리됩니다
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 🚚 오늘출발 상태 */}
+                        {/* 🚚 오늘출발 상태 */}
+                        {isOff && offItem.reason === '품절' && isSoldout ? (
+                          // 품절 연동 OFF - 단순 안내 (액션 불필요)
+                          <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-3 mb-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-xl">🔗</span>
+                              <div className="flex-1">
+                                <div className="font-bold text-sm text-amber-800">오늘출발 OFF (품절 자동연동)</div>
+                                <div className="text-[11px] text-amber-700">품절 해제 시 OFF도 자동으로 해제됩니다</div>
+                              </div>
+                            </div>
+                            <div className="bg-white border border-amber-200 rounded-lg p-2 text-[11px] text-slate-600">
+                              💡 OFF를 ON으로 바꾸려면 위에서 <strong>품절 해제</strong>를 먼저 해주세요.
+                            </div>
+                          </div>
+                        ) : (
+                          // 일반 OFF 상태
+                          <div className={`rounded-xl border-2 p-3 mb-3 ${isOff?'bg-red-50 border-red-300':'bg-blue-50 border-blue-300'}`}>
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="font-bold text-sm flex items-center gap-2">
+                                <span className="text-base">🚚</span>
+                                <span className={isOff?'text-red-700':'text-blue-700'}>
+                                  오늘출발 {isOff?'OFF (불가)':'ON (가능)'}
+                                </span>
+                              </div>
+                              <button onClick={()=>toggleOff()}
+                                className={`px-3 py-1.5 rounded-lg font-bold text-xs transition ${
+                                  isOff
+                                    ? 'bg-blue-500 hover:bg-blue-600 text-white'
+                                    : 'bg-red-500 hover:bg-red-600 text-white'
+                                }`}>
+                                {isOff ? '✅ ON으로 변경' : '❌ OFF 처리'}
+                              </button>
+                            </div>
+                            {isOff && (
+                              <>
+                                <div className="text-[10px] text-red-600 mb-1">
+                                  {offItem.date} · {Math.floor((new Date()-new Date(offItem.date))/(1000*60*60*24))}일째
+                                </div>
+                                <label className="block text-[11px] font-semibold text-slate-600 mb-1">OFF 사유</label>
+                                <select value={offItem.reason||''}
+                                  onChange={e=>updateReason('off', e.target.value)}
+                                  className="w-full px-2 py-1.5 rounded-lg border border-red-200 text-xs bg-white">
+                                  {offReasons.map(r=><option key={r} value={r}>{r}</option>)}
+                                  {!offReasons.includes(offItem.reason) && offItem.reason && (
+                                    <option value={offItem.reason}>{offItem.reason} (기존)</option>
+                                  )}
+                                </select>
+                              </>
+                            )}
+                          </div>
+                        )}
+
+                        <button onClick={()=>setColorStatusPopup(null)}
+                          className="w-full py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold text-sm">완료</button>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {quickSoldoutPopup && (() => {
+                  const p = quickSoldoutPopup.product;
+                  const currentSoldout = soldoutItems.filter(i => i.name === p.name);
+                  const soldoutColorSet = new Set(currentSoldout.map(i => i.color));
+                  const allColors = p.colors || [];
+                  return (
+                    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.5)'}}>
+                      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">🚫 품절 관리</h3>
+                          <button onClick={()=>setQuickSoldoutPopup(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
+                        </div>
+
+                        <div className="flex items-center gap-3 bg-slate-50 rounded-xl p-3 mb-4">
+                          {p.image ? (
+                            <img src={p.image} className="w-14 h-14 rounded-lg object-cover border" alt=""/>
+                          ) : (
+                            <div className="w-14 h-14 rounded-lg bg-white border flex items-center justify-center text-2xl">{p.type==='hairpin'?'📌':'🎀'}</div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="font-bold text-slate-900 text-sm truncate">{p.name}</div>
+                            <div className="text-xs text-slate-500">전체 {allColors.length}색 · 품절 {soldoutColorSet.size}색</div>
+                          </div>
+                        </div>
+
+                        {allColors.length === 0 ? (
+                          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700">
+                            ⚠️ 이 상품에 등록된 색상이 없습니다. 먼저 ✏️ 수정에서 색상을 등록해주세요.
+                          </div>
+                        ) : (
+                          <>
+                            <div className="text-xs font-bold text-slate-600 mb-2">색상별 품절 상태 (클릭하여 토글)</div>
+                            <div className="space-y-1.5 mb-4 max-h-64 overflow-y-auto">
+                              {allColors.map(color => {
+                                const isSoldout = soldoutColorSet.has(color);
+                                const item = currentSoldout.find(i => i.color === color);
+                                const days = item ? Math.floor((new Date()-new Date(item.date))/(1000*60*60*24)) : 0;
+                                return (
+                                  <label key={color} className={`flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition ${isSoldout?'bg-red-50 border-2 border-red-300':'bg-slate-50 border-2 border-slate-200 hover:border-red-200'}`}>
+                                    <input type="checkbox" checked={isSoldout}
+                                      onChange={()=>{
+                                        if (isSoldout) {
+                                          // 품절 해제
+                                          saveSoldoutItems(soldoutItems.filter(i => !(i.name===p.name && i.color===color)));
+                                        } else {
+                                          // 품절 등록 (기본 이유)
+                                          const newItem = {
+                                            id: Date.now() + Math.random(),
+                                            type: p.type,
+                                            name: p.name,
+                                            color,
+                                            size: p.sizes || '',
+                                            date: new Date().toISOString().split('T')[0],
+                                            reason: p.type==='gocchang' ? '원단품절 - 원단주문전' : '중국 제작중',
+                                            createdAt: new Date().toISOString()
+                                          };
+                                          saveSoldoutItems([...soldoutItems, newItem]);
+                                        }
+                                      }}
+                                      className="w-5 h-5 accent-red-500"/>
+                                    <div className="flex-1 min-w-0">
+                                      <div className={`text-sm font-semibold ${isSoldout?'text-red-700':'text-slate-700'}`}>{color}</div>
+                                      {isSoldout && (
+                                        <div className="text-[10px] text-red-500">🚫 품절 {days}일째 · {item.reason}</div>
+                                      )}
+                                      {!isSoldout && <div className="text-[10px] text-slate-400">✅ 판매 가능</div>}
+                                    </div>
+                                  </label>
+                                );
+                              })}
+                            </div>
+
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 text-[11px] text-blue-700">
+                              💡 체크 = 즉시 품절 / 체크 해제 = 즉시 해제<br/>
+                              상세 이유·날짜 변경은 9-2 품절 탭에서 가능합니다.
+                            </div>
+                          </>
+                        )}
+
+                        <button onClick={()=>setQuickSoldoutPopup(null)}
+                          className="w-full mt-4 py-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold text-sm">완료</button>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* 🚚 빠른 오늘출발OFF 토글 팝업 */}
+                {quickOffPopup && (() => {
+                  const p = quickOffPopup.product;
+                  const currentOff = todayOffItems.filter(i => i.name === p.name);
+                  const offColorSet = new Set(currentOff.map(i => i.color));
+                  const allColors = p.colors || [];
+                  return (
+                    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.5)'}}>
+                      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">🚚 오늘출발OFF 관리</h3>
+                          <button onClick={()=>setQuickOffPopup(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
+                        </div>
+
+                        <div className="flex items-center gap-3 bg-slate-50 rounded-xl p-3 mb-4">
+                          {p.image ? (
+                            <img src={p.image} className="w-14 h-14 rounded-lg object-cover border" alt=""/>
+                          ) : (
+                            <div className="w-14 h-14 rounded-lg bg-white border flex items-center justify-center text-2xl">{p.type==='hairpin'?'📌':'🎀'}</div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="font-bold text-slate-900 text-sm truncate">{p.name}</div>
+                            <div className="text-xs text-slate-500">전체 {allColors.length}색 · 오늘출발OFF {offColorSet.size}색</div>
+                          </div>
+                        </div>
+
+                        {allColors.length === 0 ? (
+                          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700">
+                            ⚠️ 이 상품에 등록된 색상이 없습니다. 먼저 ✏️ 수정에서 색상을 등록해주세요.
+                          </div>
+                        ) : (
+                          <>
+                            <div className="text-xs font-bold text-slate-600 mb-2">색상별 오늘출발OFF 상태 (클릭하여 토글)</div>
+                            <div className="space-y-1.5 mb-4 max-h-64 overflow-y-auto">
+                              {allColors.map(color => {
+                                const isOff = offColorSet.has(color);
+                                const item = currentOff.find(i => i.color === color);
+                                return (
+                                  <label key={color} className={`flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition ${isOff?'bg-blue-50 border-2 border-blue-300':'bg-slate-50 border-2 border-slate-200 hover:border-blue-200'}`}>
+                                    <input type="checkbox" checked={isOff}
+                                      onChange={()=>{
+                                        if (isOff) {
+                                          saveTodayOffItems(todayOffItems.filter(i => !(i.name===p.name && i.color===color)));
+                                        } else {
+                                          const newItem = {
+                                            id: Date.now() + Math.random(),
+                                            type: p.type,
+                                            name: p.name,
+                                            color,
+                                            size: p.sizes || '',
+                                            date: new Date().toISOString().split('T')[0],
+                                            reason: '재고 부족',
+                                            createdAt: new Date().toISOString()
+                                          };
+                                          saveTodayOffItems([...todayOffItems, newItem]);
+                                        }
+                                      }}
+                                      className="w-5 h-5 accent-blue-500"/>
+                                    <div className="flex-1 min-w-0">
+                                      <div className={`text-sm font-semibold ${isOff?'text-blue-700':'text-slate-700'}`}>{color}</div>
+                                      {isOff && <div className="text-[10px] text-blue-500">🚚 오늘출발 OFF · {item.date}</div>}
+                                      {!isOff && <div className="text-[10px] text-slate-400">✅ 오늘출발 가능</div>}
+                                    </div>
+                                  </label>
+                                );
+                              })}
+                            </div>
+
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 text-[11px] text-blue-700">
+                              💡 체크 = 오늘출발 OFF / 체크 해제 = 오늘출발 가능<br/>
+                              상세 설정은 9-3 오늘출발OFF 탭에서 가능합니다.
+                            </div>
+                          </>
+                        )}
+
+                        <button onClick={()=>setQuickOffPopup(null)}
+                          className="w-full mt-4 py-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold text-sm">완료</button>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* 상품관리 탭 */}
                 {activeMainTab === 'productMgmt' && (
                   <div className="flex-1 px-6 py-8">
@@ -7120,7 +8534,7 @@ ${list}` }]
                             const isEdit = !!masterPopup.id;
                             const form = masterPopup;
                             const setForm = (updater) => setMasterPopup(prev => typeof updater==='function'?updater(prev):updater);
-                            const hairpinColors = [{base:'골드',f:['유광','반광']},{base:'실버',f:['유광','반광']},{base:'블랙',f:['유광','반광']},{base:'로즈골드',f:['유광','반광']},{base:'다크골드',f:['유광','반광']},{base:'14K도금',f:['']},{base:'은',f:['']}];
+                            const hairpinColors = [{base:'골드',f:['유광','반광']},{base:'실버',f:['유광','반광']},{base:'블랙',f:['유광','반광']},{base:'흑무광',f:['']},{base:'로즈골드',f:['유광','반광']},{base:'다크골드',f:['유광','반광']},{base:'14K도금',f:['']},{base:'은',f:['']}];
                             const gocchangColors = ['블랙','화이트','베이지','그레이','아이보리','브라운','네이비','와인','카키','핑크','라벤더','민트','옐로우','기타'];
                             const toggleColor = (c) => setForm(p=>({...p,colors:p.colors.includes(c)?p.colors.filter(x=>x!==c):[...p.colors,c]}));
                             return (
@@ -7149,6 +8563,14 @@ ${list}` }]
                                           <label className="block text-xs font-semibold text-slate-600 mb-1">상품명 *</label>
                                           <input type="text" value={form.name||''} onChange={e=>setForm(p=>({...p,name:e.target.value}))}
                                             placeholder="예: 11.5 꼬임 반묶음" className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-purple-400 outline-none text-sm"/>
+                                          <div className="text-[10px] text-slate-500 mt-1">💡 셀메이트와 동일하게 사용. 9-1, 9-2, 9-3, 라벨 등에 표시</div>
+                                        </div>
+                                        <div>
+                                          <label className="block text-xs font-semibold text-slate-600 mb-1">도금거래처 상품명 <span className="text-slate-400 font-normal">(선택)</span></label>
+                                          <input type="text" value={form.platingOrderName||''} onChange={e=>setForm(p=>({...p,platingOrderName:e.target.value}))}
+                                            placeholder="비우면 위 상품명 사용 (예: 짧게)"
+                                            className="w-full px-3 py-2 rounded-xl border-2 border-orange-200 focus:border-orange-400 outline-none text-sm bg-orange-50"/>
+                                          <div className="text-[10px] text-slate-500 mt-1">💡 도금작업지시서(1-2)에만 적용. 비우면 기본 상품명 자동 사용</div>
                                         </div>
                                         <div>
                                           <label className="block text-xs font-semibold text-slate-600 mb-2">사용 가능 색상 (복수 선택)</label>
@@ -7171,6 +8593,29 @@ ${list}` }]
                                                   })}
                                                 </div>
                                               ))}
+                                            </div>
+                                          ) : form.hasFabricInfo === false ? (
+                                            // 원단 정보 없음 - 직접 입력
+                                            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                                              <div className="text-xs text-amber-700 mb-2">📝 색상을 직접 입력해주세요 (쉼표 또는 엔터로 구분)</div>
+                                              <textarea
+                                                value={form._colorsText !== undefined ? form._colorsText : (form.colors||[]).join(', ')}
+                                                onChange={e=>{
+                                                  const text = e.target.value;
+                                                  const colors = text.split(/[,\n]/).map(c=>c.trim()).filter(c=>c);
+                                                  setForm(p=>({...p, _colorsText: text, colors}));
+                                                }}
+                                                placeholder="예: 네이비, 블랙, 화이트&#10;또는 한 줄에 하나씩"
+                                                rows={2}
+                                                className="w-full px-3 py-2 rounded-lg border-2 border-amber-200 focus:border-amber-400 outline-none text-sm bg-white resize-none"/>
+                                              {(form.colors||[]).length > 0 && (
+                                                <div className="mt-2 flex flex-wrap gap-1">
+                                                  <span className="text-[10px] text-amber-600 font-bold">✓ 인식된 색상 {form.colors.length}개:</span>
+                                                  {form.colors.map(c=>(
+                                                    <span key={c} className="bg-white border border-amber-300 text-amber-700 text-xs px-2 py-0.5 rounded-full">{c}</span>
+                                                  ))}
+                                                </div>
+                                              )}
                                             </div>
                                           ) : (
                                             <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-700">
@@ -7195,40 +8640,216 @@ ${list}` }]
                                             placeholder="예: S, M, L" className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 outline-none text-sm"/>
                                         </div>
 
+                                        {/* 🔖 셀메이트 바코드 + 라벨 출력명 */}
+                                        <div className="bg-indigo-50 border-2 border-indigo-200 rounded-xl p-3 space-y-3">
+                                          <div>
+                                            <label className="block text-xs font-bold text-indigo-700 mb-1">🏷️ 라벨 출력명 <span className="text-slate-400 font-normal">(바코드 라벨에 표시 · 영문/숫자만)</span></label>
+                                            <input type="text" value={form.labelName||''}
+                                              onChange={e=>setForm(p=>({...p, labelName: e.target.value}))}
+                                              placeholder="예: METAL 2SEDAE"
+                                              list="labelNameList"
+                                              className="w-full px-3 py-2 rounded-xl border-2 border-indigo-200 outline-none text-sm bg-white"/>
+                                            <datalist id="labelNameList">
+                                              {[...new Set(masterProducts.map(p=>p.labelName).filter(Boolean))].map(name => (
+                                                <option key={name} value={name}/>
+                                              ))}
+                                            </datalist>
+                                            <div className="text-[10px] text-slate-500 mt-1">💡 과거 입력한 이름은 자동완성으로 선택 가능</div>
+                                          </div>
+
+                                          <div>
+                                            <label className="block text-xs font-bold text-indigo-700 mb-2">🔖 셀메이트 바코드 <span className="text-slate-400 font-normal">(11자리, 색상별 개별 입력)</span></label>
+                                            {(form.colors||[]).length === 0 ? (
+                                              <div className="bg-white border border-indigo-200 rounded-lg p-3 text-xs text-slate-500 text-center">
+                                                ⚠️ 색상을 먼저 등록해주세요
+                                              </div>
+                                            ) : (
+                                              <div className="space-y-1">
+                                                {(() => {
+                                                  // 색상 표시 순서 규칙
+                                                  const colorOrder = [
+                                                    '골드(유광)', '실버(유광)', '블랙(유광)', '로즈골드(유광)', '다크골드(유광)',
+                                                    '골드(반광)', '실버(반광)', '블랙(반광)', '로즈골드(반광)', '다크골드(반광)',
+                                                    '14k도금', '14K도금', '은', '흑무광'
+                                                  ];
+                                                  const getOrder = (c) => {
+                                                    const idx = colorOrder.indexOf(c);
+                                                    return idx === -1 ? 9999 : idx;
+                                                  };
+                                                  return [...(form.colors || [])].sort((a, b) => getOrder(a) - getOrder(b));
+                                                })().map(color => {
+                                                  const barcodes = form.barcodes || {};
+                                                  const positions = form.positions || {};
+                                                  const customColorNames = form.customColorNames || {};
+                                                  const val = barcodes[color] || '';
+                                                  const pos = positions[color] || '';
+                                                  const customColorName = customColorNames[color] || '';
+                                                  const posRaw = pos.replace(/^\[/, '').replace(/\]$/, '');
+                                                  // 반광 구분 (배경색 살짝 어둡게)
+                                                  const isMatte = color.includes('(반광)');
+                                                  const cardBg = isMatte ? 'bg-slate-100' : 'bg-white';
+                                                  const cardBorder = isMatte ? 'border-slate-400' : 'border-indigo-200';
+                                                  return (
+                                                    <div key={color} className={`${cardBg} rounded-lg p-2 border ${cardBorder}`}>
+                                                      {/* 1줄: 색상명 + 바코드 */}
+                                                      <div className="flex items-center gap-2 mb-1">
+                                                        <span className="text-xs font-semibold text-slate-700 min-w-[110px] truncate" title={color}>{color}</span>
+                                                        <input type="text" value={val}
+                                                          onChange={e=>{
+                                                            const digits = e.target.value.replace(/\D/g,'').slice(0,11);
+                                                            setForm(p=>({...p, barcodes: {...(p.barcodes||{}), [color]: digits}}));
+                                                          }}
+                                                          placeholder="11자리 바코드"
+                                                          maxLength={11}
+                                                          className={`flex-1 px-2 py-1 rounded border text-sm font-mono outline-none ${
+                                                            val.length===11 ? 'border-green-400 bg-green-50 text-green-700' :
+                                                            val.length>0 ? 'border-amber-300 bg-amber-50' :
+                                                            'border-slate-200'
+                                                          }`}/>
+                                                        <span className="text-[10px] text-slate-400 min-w-[30px]">{val.length}/11</span>
+                                                      </div>
+                                                      {/* 2줄: 라벨 색상명 */}
+                                                      <div className="flex items-center gap-2 mb-1">
+                                                        <span className="text-[10px] text-slate-500 min-w-[110px] text-right">라벨 색상명 →</span>
+                                                        <input type="text" value={customColorName}
+                                                          onChange={e=>{
+                                                            setForm(p=>({...p, customColorNames: {...(p.customColorNames||{}), [color]: e.target.value.slice(0,20)}}));
+                                                          }}
+                                                          onCompositionEnd={e=>{
+                                                            setForm(p=>({...p, customColorNames: {...(p.customColorNames||{}), [color]: e.target.value.slice(0,20)}}));
+                                                          }}
+                                                          placeholder={`${color} (비우면 원본 그대로)`}
+                                                          maxLength={20}
+                                                          title="라벨에 표시할 색상명 (예: ★골드(반광))"
+                                                          className="flex-1 px-2 py-1 rounded border border-pink-200 text-xs bg-pink-50 outline-none"/>
+                                                      </div>
+                                                      {/* 3줄: 진열 위치 */}
+                                                      <div className="flex items-center gap-2">
+                                                        <span className="text-[10px] text-slate-500 min-w-[110px] text-right">진열 위치 →</span>
+                                                        <span className="text-xs text-purple-600 font-bold">[</span>
+                                                        <input type="text" value={posRaw}
+                                                          onChange={e=>{
+                                                            const raw = e.target.value.slice(0, 6);
+                                                            const wrapped = raw ? `[${raw}]` : '';
+                                                            setForm(p=>({...p, positions: {...(p.positions||{}), [color]: wrapped}}));
+                                                          }}
+                                                          onCompositionEnd={e=>{
+                                                            const raw = e.target.value.slice(0, 6);
+                                                            const wrapped = raw ? `[${raw}]` : '';
+                                                            setForm(p=>({...p, positions: {...(p.positions||{}), [color]: wrapped}}));
+                                                          }}
+                                                          placeholder="노1"
+                                                          maxLength={6}
+                                                          title="진열 위치 내용 (대괄호는 자동)"
+                                                          className="flex-1 px-2 py-1 rounded border border-purple-200 text-xs text-center bg-purple-50 outline-none"/>
+                                                        <span className="text-xs text-purple-600 font-bold">]</span>
+                                                      </div>
+                                                    </div>
+                                                  );
+                                                })}
+                                              </div>
+                                            )}
+                                            <div className="text-[10px] text-slate-500 mt-2">
+                                              💡 셀메이트 <strong>11자리 바코드</strong> + 진열 위치 기호 <strong>[노1]</strong> 색상별 입력
+                                            </div>
+                                          </div>
+                                        </div>
+
                                         <div>
                                           <label className="block text-xs font-semibold text-slate-600 mb-1">📸 상품 이미지</label>
-                                          {form.image ? (
-                                            <div className="flex items-center gap-3">
-                                              <img src={form.image} alt="" className="w-20 h-20 object-cover rounded-lg border-2 border-slate-200"/>
-                                              <div className="flex flex-col gap-1">
-                                                <label className="text-xs text-blue-500 hover:bg-blue-50 px-2 py-1 rounded cursor-pointer border border-blue-200">
-                                                  이미지 변경
-                                                  <input type="file" accept="image/*" style={{display:'none'}}
-                                                    onChange={e=>{
-                                                      const file = e.target.files?.[0];
-                                                      if(!file) return;
-                                                      const reader = new FileReader();
-                                                      reader.onloadend = ()=>setForm(p=>({...p, image: reader.result}));
-                                                      reader.readAsDataURL(file);
-                                                    }}/>
-                                                </label>
-                                                <button onClick={()=>setForm(p=>({...p, image: null}))}
-                                                  className="text-xs text-red-500 hover:bg-red-50 px-2 py-1 rounded border border-red-200">삭제</button>
+
+                                          {/* 미리보기 */}
+                                          {form.image && (
+                                            <div className="flex items-center gap-3 mb-3 p-2 bg-slate-50 rounded-xl">
+                                              <img src={form.image} alt="" className="w-20 h-20 object-cover rounded-lg border-2 border-slate-200"
+                                                onError={(e)=>{e.target.style.display='none';e.target.nextElementSibling.style.display='flex';}}/>
+                                              <div className="hidden w-20 h-20 bg-red-50 border-2 border-red-200 rounded-lg items-center justify-center text-xs text-red-500">❌ 로드<br/>실패</div>
+                                              <div className="flex-1 min-w-0">
+                                                <div className="text-xs text-slate-500 truncate" title={form.image}>{form.image.startsWith('data:')?'📦 직접 업로드 (base64)':'🌐 GitHub URL'}</div>
+                                                <button onClick={()=>setForm(p=>({...p, image: null, _imgMode: undefined}))}
+                                                  className="text-xs text-red-500 hover:bg-red-50 px-2 py-1 rounded border border-red-200 mt-1">🗑️ 이미지 삭제</button>
                                               </div>
                                             </div>
-                                          ) : (
-                                            <label className="block w-full px-3 py-4 rounded-xl border-2 border-dashed border-slate-300 hover:border-blue-400 cursor-pointer text-center text-sm text-slate-500">
-                                              📁 이미지 파일 선택 (작업지시서·쇼핑몰에 활용)
-                                              <input type="file" accept="image/*" style={{display:'none'}}
-                                                onChange={e=>{
-                                                  const file = e.target.files?.[0];
-                                                  if(!file) return;
-                                                  const reader = new FileReader();
-                                                  reader.onloadend = ()=>setForm(p=>({...p, image: reader.result}));
-                                                  reader.readAsDataURL(file);
-                                                }}/>
-                                            </label>
                                           )}
+
+                                          {/* 업로드 방식 선택 */}
+                                          <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-3">
+                                            <div className="flex gap-2 mb-2">
+                                              <label className={`flex-1 flex items-center gap-2 p-2 rounded-lg cursor-pointer transition ${
+                                                (form._imgMode||'github') === 'github' ? 'bg-blue-100 border-2 border-blue-400' : 'bg-white border-2 border-transparent hover:bg-slate-50'
+                                              }`}>
+                                                <input type="radio" name="imgMode" checked={(form._imgMode||'github')==='github'}
+                                                  onChange={()=>setForm(p=>({...p, _imgMode: 'github'}))}
+                                                  className="w-4 h-4 accent-blue-500"/>
+                                                <div className="flex-1">
+                                                  <div className="text-xs font-bold text-slate-800">🌐 GitHub URL</div>
+                                                  <div className="text-[10px] text-slate-500">권장 · 용량 0</div>
+                                                </div>
+                                              </label>
+                                              <label className={`flex-1 flex items-center gap-2 p-2 rounded-lg cursor-pointer transition ${
+                                                form._imgMode === 'upload' ? 'bg-amber-100 border-2 border-amber-400' : 'bg-white border-2 border-transparent hover:bg-slate-50'
+                                              }`}>
+                                                <input type="radio" name="imgMode" checked={form._imgMode==='upload'}
+                                                  onChange={()=>setForm(p=>({...p, _imgMode: 'upload'}))}
+                                                  className="w-4 h-4 accent-amber-500"/>
+                                                <div className="flex-1">
+                                                  <div className="text-xs font-bold text-slate-800">📦 직접 업로드</div>
+                                                  <div className="text-[10px] text-slate-500">자동 압축</div>
+                                                </div>
+                                              </label>
+                                            </div>
+
+                                            {/* GitHub URL 모드 */}
+                                            {(form._imgMode||'github') === 'github' && (
+                                              <div className="space-y-2">
+                                                <div className="flex items-center gap-1">
+                                                  <span className="text-[11px] font-semibold text-slate-600 bg-white px-2 py-1.5 rounded-l-lg border border-r-0 border-slate-300">https://yslike1399-maker.github.io/plating/images/</span>
+                                                  <input type="text"
+                                                    value={form.image && !form.image.startsWith('data:') ? form.image.replace('https://yslike1399-maker.github.io/plating/images/','') : ''}
+                                                    onChange={e=>{
+                                                      const filename = e.target.value.trim();
+                                                      if (!filename) {
+                                                        setForm(p=>({...p, image: null}));
+                                                      } else {
+                                                        setForm(p=>({...p, image: `https://yslike1399-maker.github.io/plating/images/${filename}`}));
+                                                      }
+                                                    }}
+                                                    placeholder="11_5_gimt.jpg"
+                                                    className="flex-1 px-2 py-1.5 rounded-r-lg border border-slate-300 text-sm bg-white focus:border-blue-400 outline-none"/>
+                                                </div>
+                                                <details className="bg-white rounded-lg p-2 border border-blue-200">
+                                                  <summary className="text-[11px] text-blue-700 font-bold cursor-pointer">💡 이미지 추가 방법</summary>
+                                                  <ol className="text-[10px] text-slate-600 mt-2 space-y-0.5 pl-3 list-decimal">
+                                                    <li><a href="https://github.com/yslike1399-maker/plating/tree/main/images" target="_blank" className="text-blue-600 underline">GitHub images 폴더</a> 접속</li>
+                                                    <li>"Add file" → "Upload files" 클릭</li>
+                                                    <li>이미지 드래그 (영문 파일명 권장)</li>
+                                                    <li>"Commit changes" 클릭</li>
+                                                    <li>위에 파일명만 입력 (예: 11_5_gimt.jpg)</li>
+                                                  </ol>
+                                                </details>
+                                              </div>
+                                            )}
+
+                                            {/* 직접 업로드 모드 */}
+                                            {form._imgMode === 'upload' && (
+                                              <label className="block w-full px-3 py-4 rounded-xl border-2 border-dashed border-amber-300 hover:border-amber-500 cursor-pointer text-center text-sm text-amber-700 bg-amber-50">
+                                                📁 이미지 파일 선택 (자동 압축 600x600 JPEG)
+                                                <input type="file" accept="image/*" style={{display:'none'}}
+                                                  onChange={async e=>{
+                                                    const file = e.target.files?.[0];
+                                                    if(!file) return;
+                                                    try {
+                                                      const compressed = await compressImage(file);
+                                                      setForm(p=>({...p, image: compressed}));
+                                                    } catch (err) {
+                                                      console.error(err);
+                                                      alert('이미지 처리 실패');
+                                                    }
+                                                  }}/>
+                                                <div className="text-[10px] text-amber-600 mt-1">⚠️ localStorage 용량 차지함 (가급적 GitHub URL 권장)</div>
+                                              </label>
+                                            )}
+                                          </div>
                                         </div>
 
                                         {form.type === 'hairpin' && (
@@ -7317,6 +8938,57 @@ ${list}` }]
                                         {form.type === 'gocchang' && (
                                           <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-3 space-y-2">
                                             <div className="text-xs font-bold text-blue-700 mb-1">🎀 곱창밴드 전용 · 원단 연결</div>
+
+                                            {/* 원단 정보 유무 선택 */}
+                                            <div className="bg-white rounded-lg p-2 border border-blue-200">
+                                              <div className="flex gap-2">
+                                                <label className={`flex-1 flex items-center gap-2 p-2 rounded-lg cursor-pointer transition ${
+                                                  form.hasFabricInfo !== false ? 'bg-blue-100 border-2 border-blue-400' : 'bg-slate-50 border-2 border-transparent hover:bg-slate-100'
+                                                }`}>
+                                                  <input type="radio" name="hasFabric" checked={form.hasFabricInfo !== false}
+                                                    onChange={()=>setForm(p=>({...p, hasFabricInfo: true}))}
+                                                    className="w-4 h-4 accent-blue-500"/>
+                                                  <div className="flex-1">
+                                                    <div className="text-xs font-bold text-slate-800">🧵 원단 정보 있음</div>
+                                                    <div className="text-[10px] text-slate-500">신상품 · 원단 구매처 알고 있음</div>
+                                                  </div>
+                                                </label>
+                                                <label className={`flex-1 flex items-center gap-2 p-2 rounded-lg cursor-pointer transition ${
+                                                  form.hasFabricInfo === false ? 'bg-slate-200 border-2 border-slate-400' : 'bg-slate-50 border-2 border-transparent hover:bg-slate-100'
+                                                }`}>
+                                                  <input type="radio" name="hasFabric" checked={form.hasFabricInfo === false}
+                                                    onChange={()=>setForm(p=>({...p, hasFabricInfo: false, fabricSupplierId: '', fabricId: '', fabricName: '', fabricPrice: 0, fabricWidth: 0, yardsPerUnit: 0, _colorMapping: {}}))}
+                                                    className="w-4 h-4 accent-slate-500"/>
+                                                  <div className="flex-1">
+                                                    <div className="text-xs font-bold text-slate-700">📝 원단 정보 없음</div>
+                                                    <div className="text-[10px] text-slate-500">기존 판매 상품 · 정보 모름</div>
+                                                  </div>
+                                                </label>
+                                              </div>
+                                            </div>
+
+                                            {/* 원단 정보 없음 선택 시 - 메모만 */}
+                                            {form.hasFabricInfo === false && (
+                                              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                                                <div className="text-xs font-semibold text-amber-700 mb-2">💡 원단 정보 없이 등록</div>
+                                                <div className="text-[11px] text-slate-600 mb-2">
+                                                  원단/거래처 연결 없이 상품만 등록됩니다.<br/>
+                                                  나중에 원단 정보를 알게 되면 수정해서 "원단 정보 있음"으로 전환할 수 있어요.
+                                                </div>
+                                                <label className="block text-[11px] font-semibold text-slate-600 mb-1">원단 메모 (선택)</label>
+                                                <input type="text" value={form.fabricMemo||''}
+                                                  onChange={e=>setForm(p=>({...p, fabricMemo: e.target.value}))}
+                                                  placeholder="예: 민트색 쉬폰 · 시장에서 구매"
+                                                  className="w-full px-2 py-1.5 rounded-lg border border-amber-200 text-xs bg-white"/>
+                                                <div className="mt-2 bg-white border border-amber-200 rounded p-2">
+                                                  <div className="text-[10px] font-semibold text-amber-700 mb-1">⚠️ 원단 정보 없을 때 제한사항</div>
+                                                  <div className="text-[10px] text-slate-600">• 색상 매칭 불가 (사용 가능 색상 직접 입력 필요)<br/>• 4-3 요척 계산기 자동 연동 불가<br/>• 원가 자동 산출 불가</div>
+                                                </div>
+                                              </div>
+                                            )}
+
+                                            {/* 원단 정보 있음 선택 시 - 기존 UI */}
+                                            {form.hasFabricInfo !== false && (<>
                                             <div>
                                               <label className="block text-xs font-semibold text-slate-600 mb-1">거래처 선택</label>
                                               <select value={form.fabricSupplierId||''}
@@ -7460,6 +9132,7 @@ ${list}` }]
                                                 </div>
                                               );
                                             })()}
+                                            </>)}
                                           </div>
                                         )}
 
@@ -7493,6 +9166,8 @@ ${list}` }]
                                         springCost: form.springCost||'',
                                         pinCost: form.pinCost||'',
                                         platingCosts: form.platingCosts||{},
+                                        hasFabricInfo: form.type === 'gocchang' ? (form.hasFabricInfo !== false) : undefined,
+                                        fabricMemo: form.fabricMemo||'',
                                         fabricSupplierId: form.fabricSupplierId||'',
                                         fabricId: form.fabricId||'',
                                         fabricName: form.fabricName||'',
@@ -7500,6 +9175,12 @@ ${list}` }]
                                         fabricWidth: form.fabricWidth||0,
                                         yardsPerUnit: form.yardsPerUnit||0,
                                         colorMapping: form._colorMapping || {},
+                                        isFeatured: form.isFeatured || false,
+                                        labelName: form.labelName || '',
+                                        platingOrderName: form.platingOrderName || '',
+                                        barcodes: form.barcodes || {},
+                                        positions: form.positions || {},
+                                        customColorNames: form.customColorNames || {},
                                         legacyProductId: form.legacyProductId||null,
                                         createdAt: form.createdAt||new Date().toISOString()
                                       };
@@ -7509,7 +9190,7 @@ ${list}` }]
                                       if (item.type === 'hairpin') {
                                         const syncedProduct = {
                                           id: item.legacyProductId || item.id,
-                                          name: item.name,
+                                          name: (item.platingOrderName && item.platingOrderName.trim()) ? item.platingOrderName.trim() : item.name,
                                           grindRequired: item.grindRequired,
                                           image: item.image,
                                           platingCosts: item.platingCosts || {},
@@ -7608,6 +9289,122 @@ ${list}` }]
                               </div>
 
                             <div className="space-y-3">
+                              {/* ⭐ 집중관리 상품 섹션 (최상단) */}
+                              {(() => {
+                                const filter = form_masterFilter || 'all';
+                                const search = (form_masterSearch||'').toLowerCase().trim();
+                                let featuredItems = masterProducts.filter(p => p.isFeatured && (!search || p.name.toLowerCase().includes(search)));
+                                if (filter === 'hairpin') featuredItems = featuredItems.filter(p => p.type==='hairpin');
+                                if (filter === 'gocchang') featuredItems = featuredItems.filter(p => p.type==='gocchang');
+                                if (!featuredItems.length) return null;
+
+                                return (
+                                  <div className="bg-gradient-to-br from-yellow-50 to-amber-50 rounded-2xl border-2 border-yellow-300 overflow-hidden shadow">
+                                    <div className="bg-gradient-to-r from-yellow-400 to-amber-400 px-5 py-3 flex items-center justify-between">
+                                      <span className="font-black text-white text-sm flex items-center gap-2">
+                                        ⭐ 집중관리 상품
+                                        <span className="text-[10px] bg-white/30 px-2 py-0.5 rounded-full">MAIN</span>
+                                      </span>
+                                      <span className="text-xs text-white font-bold bg-white/20 px-2 py-0.5 rounded-full">{featuredItems.length}개</span>
+                                    </div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 p-4">
+                                      {featuredItems.sort((a,b)=>a.name.localeCompare(b.name)).map(p=>{
+                                        const soldoutColors = soldoutItems.filter(i=>i.name===p.name).map(i=>i.color);
+                                        const soldoutCount = soldoutColors.length;
+                                        const offCount = todayOffItems.filter(i=>i.name===p.name).length;
+                                        const totalColors = (p.colors||[]).length;
+                                        const isSoldout = soldoutCount > 0;
+                                        const isFullSoldout = isSoldout && totalColors > 0 && soldoutCount >= totalColors;
+                                        const isPartialSoldout = isSoldout && !isFullSoldout;
+                                        const isOff = offCount > 0;
+                                        const type = p.type;
+                                        return (
+                                          <div key={`featured-${p.id}`} className="bg-white rounded-xl border-2 border-yellow-400 hover:border-yellow-500 hover:shadow-lg shadow-yellow-100 transition-all overflow-hidden">
+                                            {p.image ? (
+                                              <div className="relative aspect-square bg-slate-50 overflow-hidden flex items-center justify-center">
+                                                <img src={p.image} alt={p.name} className={`max-w-full max-h-full object-contain ${isFullSoldout?'opacity-50 grayscale':isPartialSoldout?'opacity-80':''}`}/>
+                                                <div className="absolute top-1.5 left-1.5 flex flex-col gap-1 items-start">
+                                                  <button onClick={()=>saveMasterProducts(masterProducts.map(x=>x.id===p.id?{...x, isFeatured: false}:x))}
+                                                    title="집중관리 해제"
+                                                    className="text-base px-1.5 py-0.5 rounded-full shadow font-bold bg-yellow-400 text-white hover:bg-yellow-500 transition">
+                                                    ⭐
+                                                  </button>
+                                                  {p.type==='hairpin' && p.grindRequired && (
+                                                    <span className="bg-orange-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold shadow">연마</span>
+                                                  )}
+                                                </div>
+                                                <div className="absolute top-1.5 right-1.5 flex flex-col gap-1 items-end">
+                                                  {isFullSoldout && <span className="bg-red-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow animate-pulse">🚫 전체품절</span>}
+                                                  {isPartialSoldout && <span className="bg-orange-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow">🚫 {soldoutCount}/{totalColors} 품절</span>}
+                                                  {isOff && <span className="bg-blue-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow">🚚 오늘출발OFF {offCount}</span>}
+                                                </div>
+                                                {isFullSoldout && <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><div className="bg-red-600 text-white px-5 py-1.5 font-black text-sm rotate-[-20deg] border-2 border-white shadow-lg tracking-wider">SOLD OUT</div></div>}
+                                                {isPartialSoldout && <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><div className="bg-orange-400/90 text-white px-3 py-1 font-bold text-[11px] rotate-[-20deg] border-2 border-white shadow tracking-wide">Partial Sold</div></div>}
+                                              </div>
+                                            ) : (
+                                              <div className={`relative aspect-square flex items-center justify-center ${type==='hairpin'?'bg-orange-50':'bg-purple-50'}`}>
+                                                <span className="text-3xl opacity-40">{type==='hairpin'?'📌':'🎀'}</span>
+                                                <button onClick={()=>saveMasterProducts(masterProducts.map(x=>x.id===p.id?{...x, isFeatured: false}:x))}
+                                                  className="absolute top-1.5 left-1.5 text-base px-1.5 py-0.5 rounded-full shadow font-bold bg-yellow-400 text-white">⭐</button>
+                                              </div>
+                                            )}
+                                            <div className="p-2.5 space-y-1">
+                                              <div className="font-bold text-slate-900 text-xs truncate flex items-center gap-1" title={p.name}>
+                                                <span className="text-yellow-500">⭐</span>{p.name}
+                                              </div>
+                                              {p.colors && p.colors.length > 0 && (
+                                                <div className="flex flex-wrap gap-1 py-1">
+                                                  {p.colors.map(c=>{
+                                                    const isColorSoldout = soldoutColors.includes(c);
+                                                    const isColorOff = todayOffItems.some(i => i.name===p.name && i.color===c);
+                                                    return (
+                                                      <button key={c} onClick={()=>setColorStatusPopup({product: p, color: c})}
+                                                        className={`inline-flex items-stretch text-[10px] rounded overflow-hidden hover:shadow-sm transition cursor-pointer ${isColorSoldout?'border border-red-400 bg-red-50':'border border-slate-300 bg-white'}`}>
+                                                        <span className={`flex flex-col items-center justify-center text-white font-bold leading-none ${isColorOff?'bg-red-500':'bg-blue-500'}`} style={{fontSize:'8px', padding:'2px 3px'}}>
+                                                          <span>오늘</span><span>{isColorOff?'불가':'출발'}</span>
+                                                        </span>
+                                                        <span className={`px-1.5 py-0.5 font-semibold flex items-center ${isColorSoldout?'text-red-600 line-through decoration-2':'text-slate-700'}`}>{c}</span>
+                                                      </button>
+                                                    );
+                                                  })}
+                                                </div>
+                                              )}
+                                              {p.sizes && <div className="text-[10px] text-slate-400 truncate">사이즈: {p.sizes}</div>}
+                                            </div>
+                                            <div className="border-t border-slate-100 p-1.5 space-y-1">
+                                              <div className="flex gap-1">
+                                                <button onClick={()=>setQuickSoldoutPopup({product: p})}
+                                                  className={`flex-1 rounded py-1 text-[11px] font-bold transition flex items-center justify-center gap-0.5 ${isFullSoldout?'bg-red-600 hover:bg-red-700 text-white':isPartialSoldout?'bg-orange-500 hover:bg-orange-600 text-white':'bg-slate-100 hover:bg-red-100 text-slate-600 hover:text-red-600'}`}>🚫 품절{soldoutCount>0?` ${soldoutCount}`:''}</button>
+                                                <button onClick={()=>setQuickOffPopup({product: p})}
+                                                  className={`flex-1 rounded py-1 text-[11px] font-bold transition flex items-center justify-center gap-0.5 ${isOff?'bg-blue-500 hover:bg-blue-600 text-white':'bg-slate-100 hover:bg-blue-100 text-slate-600 hover:text-blue-600'}`}>🚚 오늘출발{offCount>0?` ${offCount}`:''}</button>
+                                              </div>
+                                              <div className="flex gap-1">
+                                                <button onClick={()=>setMasterPopup({...p, _colorMapping: p.colorMapping||{}})}
+                                                  className="flex-1 bg-blue-500 hover:bg-blue-600 text-white rounded py-1 text-[11px] font-bold">✏️ 수정</button>
+                                                {(() => {
+                                                  const hasAnyBarcode = p.barcodes && Object.values(p.barcodes).some(v => v && v.length === 11);
+                                                  return hasAnyBarcode ? (
+                                                    <button onClick={()=>setBarcodePrintPopup({product: p, selections: {}})}
+                                                      title="바코드 출력"
+                                                      className="bg-indigo-500 hover:bg-indigo-600 text-white rounded px-2 py-1 text-[11px] font-bold">🖨️</button>
+                                                  ) : (
+                                                    <button onClick={()=>setMasterPopup({...p, _colorMapping: p.colorMapping||{}})}
+                                                      title="바코드 미등록 - 수정에서 등록"
+                                                      className="bg-slate-100 hover:bg-indigo-100 text-slate-400 hover:text-indigo-500 border border-slate-200 rounded px-2 py-1 text-[11px] font-bold">🔖</button>
+                                                  );
+                                                })()}
+                                                <button onClick={()=>{if(soldoutCount>0||offCount>0) return alert('품절/OFF 기록이 있어 삭제할 수 없습니다'); if(confirm(`[${p.name}] 삭제?`)) saveMasterProducts(masterProducts.filter(x=>x.id!==p.id));}}
+                                                  className="bg-red-50 hover:bg-red-100 text-red-500 border border-red-200 rounded px-2 py-1 text-[11px] font-bold">🗑️</button>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+
                               {/* 타입별 그룹핑 */}
                               {[['hairpin','📌 헤어핀'],['gocchang','🎀 곱창밴드']].map(([type,label])=>{
                                 const filter = form_masterFilter || 'all';
@@ -7635,6 +9432,7 @@ ${list}` }]
                                         const isOff = offCount > 0;
                                         return (
                                           <div key={p.id} className={`bg-white rounded-xl border-2 transition-all overflow-hidden ${
+                                            p.isFeatured ? 'border-yellow-400 hover:border-yellow-500 hover:shadow-lg shadow-yellow-100' :
                                             isFullSoldout ? 'border-red-500 hover:border-red-700 hover:shadow-lg bg-red-50/30' :
                                             isPartialSoldout ? 'border-orange-300 hover:border-orange-500 hover:shadow-lg' :
                                             isOff ? 'border-blue-300 hover:border-blue-500 hover:shadow-lg' :
@@ -7644,9 +9442,19 @@ ${list}` }]
                                             {p.image ? (
                                               <div className="relative aspect-square bg-slate-50 overflow-hidden flex items-center justify-center">
                                                 <img src={p.image} alt={p.name} className={`max-w-full max-h-full object-contain ${isFullSoldout?'opacity-50 grayscale':isPartialSoldout?'opacity-80':''}`}/>
-                                                {p.type==='hairpin' && p.grindRequired && (
-                                                  <span className="absolute top-1.5 left-1.5 bg-orange-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold shadow">연마</span>
-                                                )}
+                                                {/* 좌측 상단: 별표 + 연마 */}
+                                                <div className="absolute top-1.5 left-1.5 flex flex-col gap-1 items-start">
+                                                  <button onClick={(e)=>{e.stopPropagation(); saveMasterProducts(masterProducts.map(x=>x.id===p.id?{...x, isFeatured: !p.isFeatured}:x));}}
+                                                    title={p.isFeatured ? '집중관리 해제' : '집중관리로 설정'}
+                                                    className={`text-base px-1.5 py-0.5 rounded-full shadow font-bold transition ${
+                                                      p.isFeatured ? 'bg-yellow-400 text-white hover:bg-yellow-500' : 'bg-white/90 text-slate-300 hover:bg-yellow-50 hover:text-yellow-500 border border-slate-200'
+                                                    }`}>
+                                                    ⭐
+                                                  </button>
+                                                  {p.type==='hairpin' && p.grindRequired && (
+                                                    <span className="bg-orange-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold shadow">연마</span>
+                                                  )}
+                                                </div>
                                                 {/* 우측 상단 상태 배지 */}
                                                 <div className="absolute top-1.5 right-1.5 flex flex-col gap-1 items-end">
                                                   {isFullSoldout && (
@@ -7674,6 +9482,15 @@ ${list}` }]
                                             ) : (
                                               <div className={`relative aspect-square flex items-center justify-center ${type==='hairpin'?'bg-orange-50':'bg-purple-50'}`}>
                                                 <span className="text-3xl opacity-40">{type==='hairpin'?'📌':'🎀'}</span>
+                                                <div className="absolute top-1.5 left-1.5">
+                                                  <button onClick={(e)=>{e.stopPropagation(); saveMasterProducts(masterProducts.map(x=>x.id===p.id?{...x, isFeatured: !p.isFeatured}:x));}}
+                                                    title={p.isFeatured ? '집중관리 해제' : '집중관리로 설정'}
+                                                    className={`text-base px-1.5 py-0.5 rounded-full shadow font-bold transition ${
+                                                      p.isFeatured ? 'bg-yellow-400 text-white hover:bg-yellow-500' : 'bg-white/90 text-slate-300 hover:bg-yellow-50 hover:text-yellow-500 border border-slate-200'
+                                                    }`}>
+                                                    ⭐
+                                                  </button>
+                                                </div>
                                                 <div className="absolute top-1.5 right-1.5 flex flex-col gap-1 items-end">
                                                   {isFullSoldout && <span className="bg-red-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow animate-pulse">🚫 전체품절</span>}
                                                   {isPartialSoldout && <span className="bg-orange-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow">🚫 {soldoutCount}/{totalColors}</span>}
@@ -7682,28 +9499,41 @@ ${list}` }]
                                               </div>
                                             )}
 
-                                            {/* 품절 색상 리스트 (부분 품절일 때만) */}
-                                            {isPartialSoldout && (
-                                              <div className="bg-orange-50 border-t border-orange-200 px-2 py-1">
-                                                <div className="text-[9px] text-orange-600 font-bold mb-0.5">품절 색상:</div>
-                                                <div className="flex flex-wrap gap-0.5">
-                                                  {soldoutColors.slice(0,5).map((c,i)=>(
-                                                    <span key={i} className="text-[9px] bg-white border border-orange-300 text-orange-700 px-1 py-0.5 rounded font-semibold">{c}</span>
-                                                  ))}
-                                                  {soldoutColors.length>5 && <span className="text-[9px] text-orange-400">+{soldoutColors.length-5}</span>}
-                                                </div>
-                                              </div>
-                                            )}
-
                                             {/* 정보 영역 */}
                                             <div className="p-2.5 space-y-1">
                                               <div className="font-bold text-slate-900 text-xs truncate" title={p.name}>{p.name}</div>
-                                              <div className="flex flex-wrap gap-1">
-                                                {p.colors.slice(0,3).map(c=>(
-                                                  <span key={c} className="text-[9px] bg-slate-100 text-slate-600 px-1 py-0.5 rounded">{c}</span>
-                                                ))}
-                                                {p.colors.length>3 && <span className="text-[9px] text-slate-400">+{p.colors.length-3}</span>}
-                                              </div>
+
+                                              {/* 전체 색상 리스트 (품절/오늘출발 상태 포함 · 클릭으로 토글) */}
+                                              {p.colors && p.colors.length > 0 && (
+                                                <div className="flex flex-wrap gap-1 py-1">
+                                                  {p.colors.map(c=>{
+                                                    const isColorSoldout = soldoutColors.includes(c);
+                                                    const isColorOff = todayOffItems.some(i => i.name===p.name && i.color===c);
+                                                    return (
+                                                      <button key={c}
+                                                        onClick={()=>setColorStatusPopup({product: p, color: c})}
+                                                        className={`inline-flex items-stretch text-[10px] rounded overflow-hidden hover:shadow-sm transition cursor-pointer ${
+                                                          isColorSoldout
+                                                            ? 'border border-red-400 bg-red-50'
+                                                            : 'border border-slate-300 bg-white'
+                                                        }`}>
+                                                        <span className={`flex flex-col items-center justify-center text-white font-bold leading-none ${
+                                                          isColorOff ? 'bg-red-500' : 'bg-blue-500'
+                                                        }`} style={{fontSize:'8px', padding:'2px 3px'}}>
+                                                          <span>오늘</span>
+                                                          <span>{isColorOff ? '불가' : '출발'}</span>
+                                                        </span>
+                                                        <span className={`px-1.5 py-0.5 font-semibold flex items-center ${
+                                                          isColorSoldout ? 'text-red-600 line-through decoration-2' : 'text-slate-700'
+                                                        }`}>
+                                                          {c}
+                                                        </span>
+                                                      </button>
+                                                    );
+                                                  })}
+                                                </div>
+                                              )}
+
                                               {p.sizes && <div className="text-[10px] text-slate-400 truncate">사이즈: {p.sizes}</div>}
                                               {p.fabricName && (
                                                 <div className="bg-blue-50 border border-blue-200 rounded px-1.5 py-0.5 text-[10px]">
@@ -7719,17 +9549,48 @@ ${list}` }]
                                             </div>
 
                                             {/* 액션 버튼 */}
-                                            <div className="border-t border-slate-100 p-1.5 flex gap-1">
-                                              <button onClick={()=>setMasterPopup({...p, _colorMapping: p.colorMapping||{}})}
-                                                className="flex-1 bg-blue-500 hover:bg-blue-600 text-white rounded py-1 text-[11px] font-bold flex items-center justify-center gap-0.5">
-                                                ✏️ 수정
-                                              </button>
-                                              <button onClick={()=>{
-                                                if(soldoutCount>0||offCount>0) return alert('이 상품으로 등록된 품절/OFF 기록이 있어 삭제할 수 없습니다.\\n먼저 해당 기록을 정리해주세요.');
-                                                if(confirm(`[${p.name}] 삭제?`)) saveMasterProducts(masterProducts.filter(x=>x.id!==p.id));
-                                              }} className="bg-red-50 hover:bg-red-100 text-red-500 border border-red-200 rounded px-2 py-1 text-[11px] font-bold">
-                                                🗑️
-                                              </button>
+                                            <div className="border-t border-slate-100 p-1.5 space-y-1">
+                                              <div className="flex gap-1">
+                                                <button onClick={()=>setQuickSoldoutPopup({product: p})}
+                                                  className={`flex-1 rounded py-1 text-[11px] font-bold transition flex items-center justify-center gap-0.5 ${
+                                                    isFullSoldout ? 'bg-red-600 hover:bg-red-700 text-white' :
+                                                    isPartialSoldout ? 'bg-orange-500 hover:bg-orange-600 text-white' :
+                                                    'bg-slate-100 hover:bg-red-100 text-slate-600 hover:text-red-600'
+                                                  }`}>
+                                                  🚫 품절{soldoutCount>0?` ${soldoutCount}`:''}
+                                                </button>
+                                                <button onClick={()=>setQuickOffPopup({product: p})}
+                                                  className={`flex-1 rounded py-1 text-[11px] font-bold transition flex items-center justify-center gap-0.5 ${
+                                                    isOff ? 'bg-blue-500 hover:bg-blue-600 text-white' :
+                                                    'bg-slate-100 hover:bg-blue-100 text-slate-600 hover:text-blue-600'
+                                                  }`}>
+                                                  🚚 오늘출발{offCount>0?` ${offCount}`:''}
+                                                </button>
+                                              </div>
+                                              <div className="flex gap-1">
+                                                <button onClick={()=>setMasterPopup({...p, _colorMapping: p.colorMapping||{}})}
+                                                  className="flex-1 bg-blue-500 hover:bg-blue-600 text-white rounded py-1 text-[11px] font-bold flex items-center justify-center gap-0.5">
+                                                  ✏️ 수정
+                                                </button>
+                                                {(() => {
+                                                  const hasAnyBarcode = p.barcodes && Object.values(p.barcodes).some(v => v && v.length === 11);
+                                                  return hasAnyBarcode ? (
+                                                    <button onClick={()=>setBarcodePrintPopup({product: p, selections: {}})}
+                                                      title="바코드 출력"
+                                                      className="bg-indigo-500 hover:bg-indigo-600 text-white rounded px-2 py-1 text-[11px] font-bold">🖨️</button>
+                                                  ) : (
+                                                    <button onClick={()=>setMasterPopup({...p, _colorMapping: p.colorMapping||{}})}
+                                                      title="바코드 미등록 - 수정에서 등록"
+                                                      className="bg-slate-100 hover:bg-indigo-100 text-slate-400 hover:text-indigo-500 border border-slate-200 rounded px-2 py-1 text-[11px] font-bold">🔖</button>
+                                                  );
+                                                })()}
+                                                <button onClick={()=>{
+                                                  if(soldoutCount>0||offCount>0) return alert('이 상품으로 등록된 품절/OFF 기록이 있어 삭제할 수 없습니다.\\n먼저 해당 기록을 정리해주세요.');
+                                                  if(confirm(`[${p.name}] 삭제?`)) saveMasterProducts(masterProducts.filter(x=>x.id!==p.id));
+                                                }} className="bg-red-50 hover:bg-red-100 text-red-500 border border-red-200 rounded px-2 py-1 text-[11px] font-bold">
+                                                  🗑️
+                                                </button>
+                                              </div>
                                             </div>
                                           </div>
                                         );
@@ -7984,6 +9845,15 @@ ${list}` }]
                                             <div className="text-lg font-black leading-none">{daysSince}</div>
                                             <div className="text-xs font-bold leading-none mt-0.5">일째</div>
                                           </div>
+                                          {/* 9-1 이미지 - 연동된 경우만 표시 */}
+                                          {(() => {
+                                            const linked = masterProducts.find(mp => mp.name === name);
+                                            if (!linked || !linked.image) return null;
+                                            return (
+                                              <img src={linked.image} alt={name}
+                                                className="shrink-0 w-14 h-14 rounded-lg object-cover border-2 border-red-200 shadow-sm"/>
+                                            );
+                                          })()}
                                           <span className={`text-slate-400 text-xs transition-transform ${isExpanded?'rotate-90':''} shrink-0`} style={{display:'inline-block'}}>▶</span>
                                           <span className="text-xs font-bold text-red-600 shrink-0">🚫 품절</span>
                                           <span className="font-bold text-slate-900 text-sm truncate">{name}</span>
@@ -8262,10 +10132,31 @@ ${list}` }]
                                             <div className="text-lg font-black leading-none">{daysSince}</div>
                                             <div className="text-xs font-bold leading-none mt-0.5">일째</div>
                                           </div>
+                                          {/* 9-1 이미지 - 연동된 경우만 표시 */}
+                                          {(() => {
+                                            const linked = masterProducts.find(mp => mp.name === name);
+                                            if (!linked || !linked.image) return null;
+                                            return (
+                                              <img src={linked.image} alt={name}
+                                                className="shrink-0 w-14 h-14 rounded-lg object-cover border-2 border-blue-200 shadow-sm"/>
+                                            );
+                                          })()}
                                           <span className={`text-slate-400 text-xs transition-transform ${isExpanded?'rotate-90':''} shrink-0`} style={{display:'inline-block'}}>▶</span>
                                           <span className="text-xs font-bold text-blue-600 shrink-0">🚚 오늘출발OFF</span>
                                           <span className="font-bold text-slate-900 text-sm truncate">{name}</span>
                                           <span className="bg-blue-100 text-blue-600 text-xs px-2 py-0.5 rounded-full font-bold shrink-0">{items.length}가지</span>
+                                          {(() => {
+                                            const linked = masterProducts.find(mp => mp.name === name);
+                                            return linked ? (
+                                              <span className="bg-green-100 text-green-700 text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0 border border-green-300">
+                                                ✅ 9-1 연동됨
+                                              </span>
+                                            ) : (
+                                              <span className="bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0 border border-amber-300">
+                                                ⚠️ 9-1 미등록 (참고용)
+                                              </span>
+                                            );
+                                          })()}
                                         </div>
                                         <div className="flex items-center gap-3 shrink-0">
                                           {!isExpanded && (
@@ -8609,21 +10500,37 @@ ${list}` }]
                                       const thisMonth=new Date(today.getFullYear(),today.getMonth(),expense.payDay);
                                       const diff=Math.ceil((thisMonth-today)/(1000*60*60*24));
                                       const isUrgent=diff>=0&&diff<=2; const isWarning=diff>=0&&diff<=5;
+                                      const monthKey = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+                                      const isCompleted = (expense.completedMonths||[]).includes(monthKey);
+                                      const isOverdue = !isCompleted && diff < 0;
+                                      const overdueDays = isOverdue ? Math.abs(diff) : 0;
                                       return (
-                                        <tr key={expense.id} className={`border-b border-slate-100 ${idx%2===0?'bg-white':'bg-slate-50'} ${isUrgent?'!bg-red-50':''} hover:bg-rose-50`}>
+                                        <tr key={expense.id} className={`border-b border-slate-100 ${idx%2===0?'bg-white':'bg-slate-50'} ${isOverdue?'!bg-red-100 animate-pulse':isCompleted?'!bg-green-50':isUrgent?'!bg-red-50':''} hover:bg-rose-50`}>
                                           <td className="py-3 px-4"><span className="bg-rose-100 text-rose-600 text-xs px-2 py-0.5 rounded-full font-semibold">
                                             {expense.category==='카드'?'💳':expense.category==='보험료'?'🛡️':expense.category==='자동차'?'🚗':expense.category==='대출이자'?'🏦':expense.category==='통신비'?'📱':expense.category==='임대료'?'🏠':expense.category==='리스/렌탈'?'🔑':expense.category==='구독서비스'?'📺':'💰'} {expense.category}
                                           </span></td>
-                                          <td className="py-3 px-4 font-medium text-slate-900">{expense.content}</td>
-                                          <td className={`py-3 px-4 text-right font-bold ${expense.amount>=1000000?'text-red-600':'text-slate-800'}`}>{expense.amount.toLocaleString()}원{expense.amount>=1000000&&<span className="ml-1 text-xs">🚨</span>}</td>
+                                          <td className={`py-3 px-4 font-medium ${isCompleted?'text-slate-400 line-through':isOverdue?'text-red-700 font-bold':'text-slate-900'}`}>{expense.content}</td>
+                                          <td className={`py-3 px-4 text-right font-bold ${isCompleted?'text-slate-400':isOverdue?'text-red-700':expense.amount>=1000000?'text-red-600':'text-slate-800'}`}>{expense.amount.toLocaleString()}원{!isCompleted&&expense.amount>=1000000&&<span className="ml-1 text-xs">🚨</span>}</td>
                                           <td className="py-3 px-4 text-center text-slate-600">매월 {expense.payDay}일</td>
                                           <td className="py-3 px-4 text-center">
-                                            {diff<0?<span className="text-xs text-slate-300">완료</span>
-                                              :<span className={`text-xs font-bold px-2 py-0.5 rounded-full ${isUrgent?'bg-red-100 text-red-600':isWarning?'bg-amber-100 text-amber-600':'bg-slate-100 text-slate-500'}`}>{diff===0?'오늘!':`D-${diff}`}</span>}
+                                            {isCompleted ? <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full font-bold">✅ 결제완료</span>
+                                              : isOverdue ? <span className="text-xs bg-red-600 text-white px-2 py-0.5 rounded-full font-black animate-pulse shadow-lg">🚨 연체 {overdueDays}일</span>
+                                              : <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${isUrgent?'bg-red-100 text-red-600':isWarning?'bg-amber-100 text-amber-600':'bg-slate-100 text-slate-500'}`}>{diff===0?'오늘!':`D-${diff}`}</span>}
                                           </td>
                                           <td className="py-3 px-4 text-xs text-slate-400">{expense.note||'-'}</td>
                                           <td className="py-3 px-4 text-center">
                                             <div className="flex gap-1 justify-center">
+                                              <button onClick={()=>{
+                                                const completedMonths = expense.completedMonths || [];
+                                                const updated = isCompleted
+                                                  ? completedMonths.filter(m => m !== monthKey)
+                                                  : [...completedMonths, monthKey];
+                                                saveFixedExpenses(fixedExpenses.map(e=>e.id===expense.id?{...e, completedMonths: updated}:e));
+                                              }}
+                                                className={`p-1.5 rounded-lg text-xs font-bold ${isCompleted?'text-green-600 bg-green-50 hover:bg-green-100':isOverdue?'text-white bg-red-600 hover:bg-red-700 animate-pulse':'text-slate-500 bg-slate-100 hover:bg-green-100 hover:text-green-600'}`}
+                                                title={isCompleted?'완료 해제':'결제 완료 처리'}>
+                                                {isCompleted?'↩️':'✅'}
+                                              </button>
                                               <button onClick={()=>setEditExpensePopup({...expense,_type:'life'})} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg"><Edit /></button>
                                               <button onClick={()=>{if(confirm('삭제?'))saveFixedExpenses(fixedExpenses.filter(e=>e.id!==expense.id));}} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg"><Trash /></button>
                                             </div>
@@ -8710,21 +10617,37 @@ ${list}` }]
                                       const thisMonth=new Date(today.getFullYear(),today.getMonth(),expense.payDay);
                                       const diff=Math.ceil((thisMonth-today)/(1000*60*60*24));
                                       const isUrgent=diff>=0&&diff<=2; const isWarning=diff>=0&&diff<=5;
+                                      const monthKey = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+                                      const isCompleted = (expense.completedMonths||[]).includes(monthKey);
+                                      const isOverdue = !isCompleted && diff < 0;
+                                      const overdueDays = isOverdue ? Math.abs(diff) : 0;
                                       return (
-                                        <tr key={expense.id} className={`border-b border-slate-100 ${idx%2===0?'bg-white':'bg-slate-50'} hover:bg-blue-50`}>
+                                        <tr key={expense.id} className={`border-b border-slate-100 ${idx%2===0?'bg-white':'bg-slate-50'} ${isOverdue?'!bg-red-100 animate-pulse':isCompleted?'!bg-green-50':isUrgent?'!bg-red-50':''} hover:bg-blue-50`}>
                                           <td className="py-3 px-4"><span className="bg-blue-100 text-blue-600 text-xs px-2 py-0.5 rounded-full font-semibold">
                                             {expense.category==='카드'?'💳':expense.category==='보험료'?'🛡️':expense.category==='자동차'?'🚗':expense.category==='대출이자'?'🏦':expense.category==='통신비'?'📱':expense.category==='임대료'?'🏠':expense.category==='리스/렌탈'?'🔑':expense.category==='구독서비스'?'📺':'💰'} {expense.category}
                                           </span></td>
-                                          <td className="py-3 px-4 font-medium text-slate-900">{expense.content}</td>
-                                          <td className={`py-3 px-4 text-right font-bold ${expense.amount>=2000000?'text-red-600':'text-slate-800'}`}>{expense.amount.toLocaleString()}원{expense.amount>=2000000&&<span className="ml-1 text-xs">🚨</span>}</td>
+                                          <td className={`py-3 px-4 font-medium ${isCompleted?'text-slate-400 line-through':isOverdue?'text-red-700 font-bold':'text-slate-900'}`}>{expense.content}</td>
+                                          <td className={`py-3 px-4 text-right font-bold ${isCompleted?'text-slate-400':isOverdue?'text-red-700':expense.amount>=2000000?'text-red-600':'text-slate-800'}`}>{expense.amount.toLocaleString()}원{!isCompleted&&expense.amount>=2000000&&<span className="ml-1 text-xs">🚨</span>}</td>
                                           <td className="py-3 px-4 text-center text-slate-600">매월 {expense.payDay}일</td>
                                           <td className="py-3 px-4 text-center">
-                                            {diff<0?<span className="text-xs text-slate-300">완료</span>
-                                              :<span className={`text-xs font-bold px-2 py-0.5 rounded-full ${isUrgent?'bg-red-100 text-red-600':isWarning?'bg-amber-100 text-amber-600':'bg-slate-100 text-slate-500'}`}>{diff===0?'오늘!':`D-${diff}`}</span>}
+                                            {isCompleted ? <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full font-bold">✅ 결제완료</span>
+                                              : isOverdue ? <span className="text-xs bg-red-600 text-white px-2 py-0.5 rounded-full font-black animate-pulse shadow-lg">🚨 연체 {overdueDays}일</span>
+                                              : <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${isUrgent?'bg-red-100 text-red-600':isWarning?'bg-amber-100 text-amber-600':'bg-slate-100 text-slate-500'}`}>{diff===0?'오늘!':`D-${diff}`}</span>}
                                           </td>
                                           <td className="py-3 px-4 text-xs text-slate-400">{expense.note||'-'}</td>
                                           <td className="py-3 px-4 text-center">
                                             <div className="flex gap-1 justify-center">
+                                              <button onClick={()=>{
+                                                const completedMonths = expense.completedMonths || [];
+                                                const updated = isCompleted
+                                                  ? completedMonths.filter(m => m !== monthKey)
+                                                  : [...completedMonths, monthKey];
+                                                saveBizExpenses(bizExpenses.map(e=>e.id===expense.id?{...e, completedMonths: updated}:e));
+                                              }}
+                                                className={`p-1.5 rounded-lg text-xs font-bold ${isCompleted?'text-green-600 bg-green-50 hover:bg-green-100':isOverdue?'text-white bg-red-600 hover:bg-red-700 animate-pulse':'text-slate-500 bg-slate-100 hover:bg-green-100 hover:text-green-600'}`}
+                                                title={isCompleted?'완료 해제':'결제 완료 처리'}>
+                                                {isCompleted?'↩️':'✅'}
+                                              </button>
                                               <button onClick={()=>setEditExpensePopup({...expense,_type:'biz'})} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg"><Edit /></button>
                                               <button onClick={()=>{if(confirm('삭제?'))saveBizExpenses(bizExpenses.filter(e=>e.id!==expense.id));}} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg"><Trash /></button>
                                             </div>
@@ -8884,7 +10807,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260421.94</p>
+                <p>© 2026 LACEROOM통합관리 v20260424.06.11</p>
               </footer>
             </div>
           </div>
