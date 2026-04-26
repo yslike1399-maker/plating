@@ -498,7 +498,7 @@ ${list}` }]
 
           // 🖼️ 이미지 자동 압축 함수 (최대 600x600, JPEG 75%)
           // 🖨️ 라벨 인쇄 (헬퍼와 통신 · JSON 다운로드 방식 · 한글 100% 지원)
-          // v20260424.06.14 - ZPL 직접생성 폐지, Python 헬퍼가 PNG 렌더링 후 ZT230 인쇄
+          // v20260424.06.15 - ZPL 직접생성 폐지, Python 헬퍼가 PNG 렌더링 후 ZT230 인쇄
           const downloadLabelJson = (labels) => {
             if (!labels || labels.length === 0) {
               alert('인쇄할 라벨이 없습니다.');
@@ -522,7 +522,7 @@ ${list}` }]
             }));
             
             const data = {
-              version: 'v20260424.06.14',
+              version: 'v20260424.06.15',
               created_at: new Date().toISOString(),
               label_count: enriched.length,
               total_print_count: enriched.reduce((s, l) => s + l.copies, 0),
@@ -1806,7 +1806,7 @@ ${list}` }]
                 <div className="px-4 py-4 border-b border-slate-100">
                   <div>
                     <div className="text-sm font-bold text-slate-900 leading-tight">LACEROOM통합관리</div>
-                    <div className="text-xs text-slate-400">v20260424.06.14</div>
+                    <div className="text-xs text-slate-400">v20260424.06.15</div>
                   </div>
                 </div>
 
@@ -7633,7 +7633,7 @@ ${list}` }]
 
                 {/* 🚫 빠른 품절 토글 팝업 */}
                 {/* 🎨 색상별 상태 설정 팝업 (9-1 카드 색상 클릭 시) */}
-                {/* 🖨️ 라벨 인쇄 편집기 v20260424.06.14 - 헬퍼 연동, 한글 100% */}
+                {/* 🖨️ 라벨 인쇄 편집기 v20260424.06.15 - 헬퍼 연동, 한글 100% */}
                 {barcodePrintPopup && (() => {
                   const p = barcodePrintPopup.product;
                   const barcodes = p.barcodes || {};
@@ -7778,7 +7778,7 @@ ${list}` }]
                         <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-slate-100 sticky top-0 bg-white z-10">
                           <div>
                             <h3 className="text-base font-bold text-slate-900">🖨️ 라벨 인쇄 + 디자인 편집기</h3>
-                            <div className="text-[10px] text-slate-500 mt-0.5">v20260424.06.14 · 헬퍼 자동 인쇄 · 한글 100%</div>
+                            <div className="text-[10px] text-slate-500 mt-0.5">v20260424.06.15 · 헬퍼 자동 인쇄 · 한글 100%</div>
                           </div>
                           <button onClick={()=>setBarcodePrintPopup(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
                         </div>
@@ -8618,20 +8618,21 @@ ${list}` }]
                             const gocchangColors = ['블랙','화이트','베이지','그레이','아이보리','브라운','네이비','와인','카키','핑크','라벤더','민트','옐로우','기타'];
                             const toggleColor = (c) => setForm(p=>({...p,colors:p.colors.includes(c)?p.colors.filter(x=>x!==c):[...p.colors,c]}));
                             return (
-                              <div className="fixed inset-0 z-50 flex items-center justify-center" style={{background:'rgba(0,0,0,0.5)'}}>
-                                <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg mx-4 p-8 max-h-screen overflow-y-auto">
-                                  <div className="flex items-center justify-between mb-5">
-                                    <h3 className="text-lg font-bold text-slate-900">{isEdit?'✏️ 상품 수정':'📦 신상품 등록'}</h3>
-                                    <button onClick={() => setMasterPopup(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
+                              <div className="fixed inset-0 z-50 flex items-center justify-center" style={{background:'rgba(0,0,0,0.6)'}}>
+                                <div className="bg-white shadow-2xl w-full max-w-lg mx-4 p-6 max-h-screen overflow-y-auto" style={{borderRadius:'2px'}}>
+                                  <div className="flex items-center justify-between mb-6 pb-4 border-b border-black">
+                                    <h3 className="text-xl font-black text-black tracking-tight">{isEdit?'상품 수정':'신상품 등록'}</h3>
+                                    <button onClick={() => setMasterPopup(null)} className="text-neutral-400 hover:text-black text-2xl font-light w-7 h-7 flex items-center justify-center">×</button>
                                   </div>
-                                  <div className="space-y-4">
+                                  <div className="space-y-5">
                                     {/* 상품 타입 */}
                                     <div>
-                                      <label className="block text-xs font-semibold text-slate-600 mb-2">상품 타입 *</label>
+                                      <label className="block text-[11px] font-bold text-black mb-2 uppercase tracking-wider">상품 타입</label>
                                       <div className="grid grid-cols-2 gap-2">
-                                        {[['hairpin','📌 헤어핀'],['gocchang','🎀 곱창밴드']].map(([val,label])=>(
+                                        {[['hairpin','헤어핀'],['gocchang','곱창밴드']].map(([val,label])=>(
                                           <button key={val} onClick={()=>setForm(p=>({...p,type:val,colors:[]}))}
-                                            className={`py-2.5 rounded-xl text-sm font-bold border-2 transition-all ${form.type===val?'border-purple-500 bg-purple-50 text-purple-700':'border-slate-200 text-slate-500'}`}>
+                                            className={`py-3 text-sm font-bold border transition-all ${form.type===val?'border-black bg-black text-white':'border-neutral-300 text-neutral-700 hover:border-black'}`}
+                                            style={{borderRadius:'2px'}}>
                                             {label}
                                           </button>
                                         ))}
@@ -8640,48 +8641,49 @@ ${list}` }]
                                     {form.type && (
                                       <>
                                         <div>
-                                          <label className="block text-xs font-semibold text-slate-600 mb-1">상품명 *</label>
+                                          <label className="block text-[11px] font-bold text-black mb-2 uppercase tracking-wider">상품명 *</label>
                                           <input type="text" value={form.name||''} onChange={e=>setForm(p=>({...p,name:e.target.value}))}
-                                            placeholder="예: 11.5 꼬임 반묶음" className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-purple-400 outline-none text-sm"/>
-                                          <div className="text-[10px] text-slate-500 mt-1">💡 셀메이트와 동일하게 사용. 9-1, 9-2, 9-3, 라벨 등에 표시</div>
+                                            placeholder="예: 11.5 꼬임 반묶음" className="w-full px-3 py-2.5 border border-neutral-300 focus:border-black outline-none text-sm" style={{borderRadius:'2px'}}/>
+                                          <div className="text-[10px] text-neutral-500 mt-1.5">셀메이트와 동일하게 사용. 9-1, 9-2, 9-3, 라벨 등에 표시</div>
                                         </div>
                                         <div>
-                                          <label className="block text-xs font-semibold text-slate-600 mb-1">도금거래처 상품명 <span className="text-slate-400 font-normal">(선택)</span></label>
+                                          <label className="block text-[11px] font-bold text-black mb-2 uppercase tracking-wider">도금거래처 상품명 <span className="text-neutral-400 font-normal normal-case tracking-normal">(선택)</span></label>
                                           <input type="text" value={form.platingOrderName||''} onChange={e=>setForm(p=>({...p,platingOrderName:e.target.value}))}
-                                            placeholder="비우면 위 상품명 사용 (예: 짧게)"
-                                            className="w-full px-3 py-2 rounded-xl border-2 border-orange-200 focus:border-orange-400 outline-none text-sm bg-orange-50"/>
-                                          <div className="text-[10px] text-slate-500 mt-1">💡 도금작업지시서(1-2)에만 적용. 비우면 기본 상품명 자동 사용</div>
+                                            placeholder="비우면 위 상품명 사용"
+                                            className="w-full px-3 py-2.5 border border-neutral-300 focus:border-black outline-none text-sm bg-neutral-50" style={{borderRadius:'2px'}}/>
+                                          <div className="text-[10px] text-neutral-500 mt-1.5">도금작업지시서(1-2)에만 적용. 비우면 기본 상품명 자동 사용</div>
                                         </div>
                                         <div>
-                                          <label className="block text-xs font-semibold text-slate-600 mb-2">사용 가능 색상 (복수 선택)</label>
+                                          <label className="block text-[11px] font-bold text-black mb-2 uppercase tracking-wider">사용 가능 색상</label>
                                           {form.type==='hairpin' ? (
                                             <div className="space-y-2">
-                                              {/* ⚡ 빠른 선택 */}
-                                              <div className="flex flex-wrap gap-1.5 bg-purple-50 border border-purple-200 rounded-xl p-2">
-                                                <span className="text-[10px] font-bold text-purple-700 self-center mr-1">⚡ 빠른 선택:</span>
+                                              {/* 빠른 선택 - 무신사 스타일 */}
+                                              <div className="flex flex-wrap gap-1.5 bg-neutral-100 p-2 border border-neutral-200" style={{borderRadius:'2px'}}>
+                                                <span className="text-[10px] font-bold text-black self-center mr-1 uppercase tracking-wider">빠른 선택</span>
                                                 <button onClick={()=>{
                                                   const all = ['골드(유광)','골드(반광)','실버(유광)','실버(반광)','블랙(유광)','블랙(반광)','로즈골드(유광)','로즈골드(반광)','다크골드(유광)','다크골드(반광)','14K도금','은','흑무광'];
                                                   setForm(p=>({...p, colors: all}));
-                                                }} className="text-[10px] bg-white border border-purple-300 text-purple-700 px-2 py-1 rounded-full hover:bg-purple-100">전체</button>
+                                                }} className="text-[10px] bg-white border border-neutral-300 text-black px-2.5 py-1 hover:bg-black hover:text-white font-medium" style={{borderRadius:'2px'}}>전체</button>
                                                 <button onClick={()=>{
                                                   const all = ['골드(유광)','실버(유광)','블랙(유광)','로즈골드(유광)','다크골드(유광)'];
                                                   setForm(p=>({...p, colors: all}));
-                                                }} className="text-[10px] bg-white border border-purple-300 text-purple-700 px-2 py-1 rounded-full hover:bg-purple-100">전체 유광</button>
+                                                }} className="text-[10px] bg-white border border-neutral-300 text-black px-2.5 py-1 hover:bg-black hover:text-white font-medium" style={{borderRadius:'2px'}}>전체 유광</button>
                                                 <button onClick={()=>{
                                                   const all = ['골드(반광)','실버(반광)','블랙(반광)','로즈골드(반광)','다크골드(반광)'];
                                                   setForm(p=>({...p, colors: all}));
-                                                }} className="text-[10px] bg-white border border-purple-300 text-purple-700 px-2 py-1 rounded-full hover:bg-purple-100">전체 반광</button>
+                                                }} className="text-[10px] bg-white border border-neutral-300 text-black px-2.5 py-1 hover:bg-black hover:text-white font-medium" style={{borderRadius:'2px'}}>전체 반광</button>
                                                 <button onClick={()=>{
                                                   const all = ['골드(유광)','실버(유광)','블랙(유광)','로즈골드(유광)','다크골드(유광)'];
                                                   setForm(p=>({...p, colors: all}));
-                                                }} className="text-[10px] bg-white border border-purple-300 text-purple-700 px-2 py-1 rounded-full hover:bg-purple-100">기본</button>
+                                                }} className="text-[10px] bg-white border border-neutral-300 text-black px-2.5 py-1 hover:bg-black hover:text-white font-medium" style={{borderRadius:'2px'}}>기본</button>
                                                 {(form.colors||[]).length > 0 && (
                                                   <button onClick={()=>setForm(p=>({...p, colors: []}))}
-                                                    className="text-[10px] bg-white border border-rose-300 text-rose-600 px-2 py-1 rounded-full hover:bg-rose-50 ml-auto">전체 해제</button>
+                                                    className="text-[10px] bg-white border border-neutral-300 text-neutral-500 px-2.5 py-1 hover:bg-neutral-200 font-medium ml-auto" style={{borderRadius:'2px'}}>전체 해제</button>
                                                 )}
                                               </div>
                                               
-                                              {/* 색상 카드 리스트 */}
+                                              {/* 색상 카드 리스트 - 2열 그리드, 무신사 스타일 */}
+                                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                               {(() => {
                                                 const colorOrder = [
                                                   '골드(유광)','실버(유광)','블랙(유광)','로즈골드(유광)','다크골드(유광)',
@@ -8693,7 +8695,7 @@ ${list}` }]
                                                   const bi = colorOrder.indexOf(b);
                                                   return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
                                                 });
-                                                return sortedColors.map(color => {
+                                                return sortedColors.map((color, idx) => {
                                                   const barcodes = form.barcodes || {};
                                                   const positions = form.positions || {};
                                                   const customColorNames = form.customColorNames || {};
@@ -8704,15 +8706,27 @@ ${list}` }]
                                                   const isMatte = color.includes('(반광)');
                                                   const isMulti = isMultiStageColor(color);
                                                   const factoryDisplay = getFactoryColorDisplay(color);
+                                                  // 얼룩말 패턴 (짝수/홀수 인덱스)
+                                                  const zebraBg = idx % 2 === 0 ? 'bg-white' : 'bg-neutral-50';
+                                                  const matteOverride = isMatte ? 'bg-neutral-100' : zebraBg;
+                                                  const isFocused = form._focusedColor === color;
                                                   return (
-                                                    <div key={color} className={`rounded-xl p-2.5 border-2 ${isMatte?'bg-slate-100 border-slate-300':'bg-white border-indigo-200'}`}>
-                                                      {/* 색상명 + 삭제 + 공장 매핑 */}
+                                                    <div key={color}
+                                                      onClick={()=>setForm(p=>({...p, _focusedColor: color}))}
+                                                      className={`p-3 cursor-pointer transition-all ${matteOverride} ${
+                                                        isFocused 
+                                                          ? 'border-2 border-black ring-1 ring-black' 
+                                                          : 'border border-neutral-200 hover:border-neutral-400'
+                                                      }`}
+                                                      style={{borderRadius:'2px'}}>
+                                                      {/* 색상명 + 삭제 */}
                                                       <div className="flex items-center justify-between mb-2">
-                                                        <div className="flex items-center gap-2">
-                                                          <span className="text-sm font-bold text-slate-800">{color}</span>
-                                                          {isMulti && <span className="text-[9px] bg-amber-100 border border-amber-300 text-amber-800 px-1.5 py-0.5 rounded-full font-bold">⚠️ 2단계 공정</span>}
+                                                        <div className="flex items-center gap-2 min-w-0">
+                                                          <span className="text-sm font-bold text-black tracking-tight truncate">{color}</span>
+                                                          {isMulti && <span className="text-[9px] bg-black text-white px-1.5 py-0.5 font-bold whitespace-nowrap" style={{borderRadius:'2px'}}>2단계</span>}
                                                         </div>
-                                                        <button onClick={()=>{
+                                                        <button onClick={(e)=>{
+                                                          e.stopPropagation();
                                                           setForm(p=>{
                                                             const newColors = (p.colors||[]).filter(c=>c!==color);
                                                             const newBarcodes = {...(p.barcodes||{})}; delete newBarcodes[color];
@@ -8720,68 +8734,75 @@ ${list}` }]
                                                             const newCustom = {...(p.customColorNames||{})}; delete newCustom[color];
                                                             return {...p, colors: newColors, barcodes: newBarcodes, positions: newPositions, customColorNames: newCustom};
                                                           });
-                                                        }} className="text-rose-400 hover:text-rose-600 text-sm" title="색상 제거">✕</button>
+                                                        }} className="text-neutral-400 hover:text-black text-sm font-bold w-5 h-5 flex items-center justify-center" title="제거">×</button>
                                                       </div>
-                                                      {/* 공장 매핑 (읽기 전용) */}
-                                                      <div className="text-[10px] text-slate-500 mb-1.5 pl-1">
-                                                        🏭 도금공장 의뢰: <span className="font-mono font-bold text-slate-700">{factoryDisplay}</span>
-                                                        {isMulti && <span className="text-amber-700"> (동착 후 청솔코팅에서 흑무광 마감)</span>}
+                                                      {/* 공장 매핑 */}
+                                                      <div className="text-[10px] text-neutral-500 mb-2 font-mono">
+                                                        도금: <span className="font-bold text-neutral-800">{factoryDisplay}</span>
+                                                        {isMulti && <div className="text-[9px] text-neutral-600 mt-0.5">→ 청솔코팅 흑무광 마감</div>}
                                                       </div>
-                                                      {/* 바코드 + 위치 (한 줄) */}
+                                                      {/* 바코드 */}
                                                       <div className="flex items-center gap-1.5 mb-1.5">
-                                                        <span className="text-[10px] text-slate-500 w-12 shrink-0">바코드</span>
+                                                        <span className="text-[10px] text-neutral-500 w-10 shrink-0 font-medium">바코드</span>
                                                         <input type="text" value={val}
+                                                          onClick={(e)=>e.stopPropagation()}
                                                           onChange={e=>{
                                                             const digits = e.target.value.replace(/\D/g,'').slice(0,11);
-                                                            setForm(p=>({...p, barcodes: {...(p.barcodes||{}), [color]: digits}}));
+                                                            setForm(p=>({...p, barcodes: {...(p.barcodes||{}), [color]: digits}, _focusedColor: color}));
                                                           }}
                                                           placeholder="11자리"
                                                           maxLength={11}
-                                                          className={`flex-1 px-2 py-1 rounded border text-xs font-mono outline-none ${
-                                                            val.length===11 ? 'border-green-400 bg-green-50 text-green-700' :
-                                                            val.length>0 ? 'border-amber-300 bg-amber-50' :
-                                                            'border-slate-200'
-                                                          }`}/>
-                                                        <span className="text-[9px] text-slate-400 min-w-[26px]">{val.length}/11</span>
+                                                          className={`flex-1 px-2 py-1 border text-xs font-mono outline-none focus:border-black ${
+                                                            val.length===11 ? 'border-black bg-white' :
+                                                            val.length>0 ? 'border-amber-400 bg-amber-50' :
+                                                            'border-neutral-300 bg-white'
+                                                          }`}
+                                                          style={{borderRadius:'2px'}}/>
+                                                        <span className="text-[9px] text-neutral-400 min-w-[26px] font-mono">{val.length}/11</span>
                                                       </div>
                                                       {/* 위치 */}
                                                       <div className="flex items-center gap-1.5 mb-1.5">
-                                                        <span className="text-[10px] text-slate-500 w-12 shrink-0">위치</span>
-                                                        <span className="text-xs text-purple-600 font-bold">[</span>
+                                                        <span className="text-[10px] text-neutral-500 w-10 shrink-0 font-medium">위치</span>
+                                                        <span className="text-xs text-neutral-700 font-bold">[</span>
                                                         <input type="text" value={posRaw}
+                                                          onClick={(e)=>e.stopPropagation()}
                                                           onChange={e=>{
                                                             const raw = e.target.value.slice(0, 6);
                                                             const wrapped = raw ? `[${raw}]` : '';
-                                                            setForm(p=>({...p, positions: {...(p.positions||{}), [color]: wrapped}}));
+                                                            setForm(p=>({...p, positions: {...(p.positions||{}), [color]: wrapped}, _focusedColor: color}));
                                                           }}
                                                           onCompositionEnd={e=>{
                                                             const raw = e.target.value.slice(0, 6);
                                                             const wrapped = raw ? `[${raw}]` : '';
-                                                            setForm(p=>({...p, positions: {...(p.positions||{}), [color]: wrapped}}));
+                                                            setForm(p=>({...p, positions: {...(p.positions||{}), [color]: wrapped}, _focusedColor: color}));
                                                           }}
                                                           placeholder="노1"
                                                           maxLength={6}
-                                                          className="flex-1 px-2 py-1 rounded border border-purple-200 text-xs text-center bg-purple-50 outline-none"/>
-                                                        <span className="text-xs text-purple-600 font-bold">]</span>
+                                                          className="flex-1 px-2 py-1 border border-neutral-300 text-xs text-center bg-white outline-none focus:border-black"
+                                                          style={{borderRadius:'2px'}}/>
+                                                        <span className="text-xs text-neutral-700 font-bold">]</span>
                                                       </div>
-                                                      {/* 라벨 색상명 */}
+                                                      {/* 라벨명 */}
                                                       <div className="flex items-center gap-1.5">
-                                                        <span className="text-[10px] text-slate-500 w-12 shrink-0">라벨명</span>
+                                                        <span className="text-[10px] text-neutral-500 w-10 shrink-0 font-medium">라벨</span>
                                                         <input type="text" value={customName}
+                                                          onClick={(e)=>e.stopPropagation()}
                                                           onChange={e=>{
-                                                            setForm(p=>({...p, customColorNames: {...(p.customColorNames||{}), [color]: e.target.value.slice(0,20)}}));
+                                                            setForm(p=>({...p, customColorNames: {...(p.customColorNames||{}), [color]: e.target.value.slice(0,20)}, _focusedColor: color}));
                                                           }}
                                                           onCompositionEnd={e=>{
-                                                            setForm(p=>({...p, customColorNames: {...(p.customColorNames||{}), [color]: e.target.value.slice(0,20)}}));
+                                                            setForm(p=>({...p, customColorNames: {...(p.customColorNames||{}), [color]: e.target.value.slice(0,20)}, _focusedColor: color}));
                                                           }}
                                                           placeholder={`기본: ${color}`}
                                                           maxLength={20}
-                                                          className="flex-1 px-2 py-1 rounded border border-pink-200 text-xs bg-pink-50 outline-none"/>
+                                                          className="flex-1 px-2 py-1 border border-neutral-300 text-xs bg-white outline-none focus:border-black"
+                                                          style={{borderRadius:'2px'}}/>
                                                       </div>
                                                     </div>
                                                   );
                                                 });
                                               })()}
+                                              </div>
                                               
                                               {/* + 색상 추가 버튼 */}
                                               <button onClick={()=>setColorAddModal(true)}
@@ -8837,25 +8858,6 @@ ${list}` }]
                                           <label className="block text-xs font-semibold text-slate-600 mb-1">사이즈 옵션 <span className="text-slate-400 font-normal">(쉼표 구분, 없으면 생략)</span></label>
                                           <input type="text" value={form.sizes||''} onChange={e=>setForm(p=>({...p,sizes:e.target.value}))}
                                             placeholder="예: S, M, L" className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 outline-none text-sm"/>
-                                        </div>
-
-                                        {/* 🔖 셀메이트 바코드 + 라벨 출력명 */}
-                                        <div className="bg-indigo-50 border-2 border-indigo-200 rounded-xl p-3 space-y-3">
-                                          <div>
-                                            <label className="block text-xs font-bold text-indigo-700 mb-1">🏷️ 라벨 출력명 <span className="text-slate-400 font-normal">(바코드 라벨에 표시 · 영문/숫자만)</span></label>
-                                            <input type="text" value={form.labelName||''}
-                                              onChange={e=>setForm(p=>({...p, labelName: e.target.value}))}
-                                              placeholder="예: METAL 2SEDAE"
-                                              list="labelNameList"
-                                              className="w-full px-3 py-2 rounded-xl border-2 border-indigo-200 outline-none text-sm bg-white"/>
-                                            <datalist id="labelNameList">
-                                              {[...new Set(masterProducts.map(p=>p.labelName).filter(Boolean))].map(name => (
-                                                <option key={name} value={name}/>
-                                              ))}
-                                            </datalist>
-                                            <div className="text-[10px] text-slate-500 mt-1">💡 과거 입력한 이름은 자동완성으로 선택 가능</div>
-                                          </div>
-
                                         </div>
 
                                         <div>
@@ -10994,7 +10996,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260424.06.14</p>
+                <p>© 2026 LACEROOM통합관리 v20260424.06.15</p>
               </footer>
             </div>
           </div>
