@@ -457,7 +457,7 @@ ${list}` }]
 
           // 🖼️ 이미지 자동 압축 함수 (최대 600x600, JPEG 75%)
           // 🖨️ 라벨 인쇄 (헬퍼와 통신 · JSON 다운로드 방식 · 한글 100% 지원)
-          // v20260424.06.11 - ZPL 직접생성 폐지, Python 헬퍼가 PNG 렌더링 후 ZT230 인쇄
+          // v20260424.06.12 - ZPL 직접생성 폐지, Python 헬퍼가 PNG 렌더링 후 ZT230 인쇄
           const downloadLabelJson = (labels) => {
             if (!labels || labels.length === 0) {
               alert('인쇄할 라벨이 없습니다.');
@@ -481,7 +481,7 @@ ${list}` }]
             }));
             
             const data = {
-              version: 'v20260424.06.11',
+              version: 'v20260424.06.12',
               created_at: new Date().toISOString(),
               label_count: enriched.length,
               total_print_count: enriched.reduce((s, l) => s + l.copies, 0),
@@ -1203,22 +1203,40 @@ ${list}` }]
                 worksheet.mergeCells(`D${startRow}:D${endRow}`);
               }
 
-              // 이미지 추가
+              // 이미지 추가 (base64 검증 강화)
               if (product.image) {
                 try {
-                  const imageId = workbook.addImage({
-                    base64: product.image,
-                    extension: 'png',
-                  });
-
-                  const imageHeight = (endRow - startRow + 1) * 32;
-                  worksheet.addImage(imageId, {
-                    tl: { col: 2, row: startRow - 1 },
-                    ext: { width: 80, height: Math.min(imageHeight * 0.9, 80) },
-                    editAs: 'oneCell'
-                  });
+                  // base64 형식 검증
+                  let imgData = product.image;
+                  
+                  // data:image/...;base64, 접두사 처리
+                  let extension = 'png';
+                  if (imgData.startsWith('data:image/')) {
+                    const match = imgData.match(/^data:image\/(\w+);base64,(.+)$/);
+                    if (match) {
+                      extension = match[1] === 'jpg' ? 'jpeg' : match[1];
+                      imgData = match[2];
+                    }
+                  }
+                  
+                  // base64 유효성 검증 (4의 배수, 유효 문자만)
+                  if (imgData && imgData.length > 0 && imgData.length % 4 === 0 && /^[A-Za-z0-9+/]+=*$/.test(imgData)) {
+                    const imageId = workbook.addImage({
+                      base64: imgData,
+                      extension: extension,
+                    });
+                    const imageHeight = (endRow - startRow + 1) * 32;
+                    worksheet.addImage(imageId, {
+                      tl: { col: 2, row: startRow - 1 },
+                      ext: { width: 80, height: Math.min(imageHeight * 0.9, 80) },
+                      editAs: 'oneCell'
+                    });
+                  } else {
+                    console.warn('이미지 base64 형식 오류, 건너뜀:', product.productName);
+                  }
                 } catch (e) {
-                  console.error('이미지 추가 실패:', e);
+                  console.error(`이미지 추가 실패 (${product.productName}):`, e);
+                  // 이미지 실패해도 엑셀 생성은 계속 진행
                 }
               }
 
@@ -1352,9 +1370,20 @@ ${list}` }]
 
                 if (product.productImage) {
                   try {
-                    const imageId = workbook.addImage({ base64: product.productImage, extension: 'png' });
-                    worksheet.addImage(imageId, { tl: { col: 1, row: rowNum - 1 }, ext: { width: 100, height: 75 } });
-                  } catch (e) {}
+                    let imgData = product.productImage;
+                    let extension = 'png';
+                    if (imgData.startsWith('data:image/')) {
+                      const match = imgData.match(/^data:image\/(\w+);base64,(.+)$/);
+                      if (match) {
+                        extension = match[1] === 'jpg' ? 'jpeg' : match[1];
+                        imgData = match[2];
+                      }
+                    }
+                    if (imgData && imgData.length > 0 && imgData.length % 4 === 0 && /^[A-Za-z0-9+/]+=*$/.test(imgData)) {
+                      const imageId = workbook.addImage({ base64: imgData, extension: extension });
+                      worksheet.addImage(imageId, { tl: { col: 1, row: rowNum - 1 }, ext: { width: 100, height: 75 } });
+                    }
+                  } catch (e) { console.error('재도금 이미지 실패:', e); }
                 }
 
                 const colorDisplayName = getColorDisplayName(item.color);
@@ -1726,7 +1755,7 @@ ${list}` }]
                 <div className="px-4 py-4 border-b border-slate-100">
                   <div>
                     <div className="text-sm font-bold text-slate-900 leading-tight">LACEROOM통합관리</div>
-                    <div className="text-xs text-slate-400">v20260424.06.11</div>
+                    <div className="text-xs text-slate-400">v20260424.06.12</div>
                   </div>
                 </div>
 
@@ -7553,7 +7582,7 @@ ${list}` }]
 
                 {/* 🚫 빠른 품절 토글 팝업 */}
                 {/* 🎨 색상별 상태 설정 팝업 (9-1 카드 색상 클릭 시) */}
-                {/* 🖨️ 라벨 인쇄 편집기 v20260424.06.11 - 헬퍼 연동, 한글 100% */}
+                {/* 🖨️ 라벨 인쇄 편집기 v20260424.06.12 - 헬퍼 연동, 한글 100% */}
                 {barcodePrintPopup && (() => {
                   const p = barcodePrintPopup.product;
                   const barcodes = p.barcodes || {};
@@ -7698,7 +7727,7 @@ ${list}` }]
                         <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-slate-100 sticky top-0 bg-white z-10">
                           <div>
                             <h3 className="text-base font-bold text-slate-900">🖨️ 라벨 인쇄 + 디자인 편집기</h3>
-                            <div className="text-[10px] text-slate-500 mt-0.5">v20260424.06.11 · 헬퍼 자동 인쇄 · 한글 100%</div>
+                            <div className="text-[10px] text-slate-500 mt-0.5">v20260424.06.12 · 헬퍼 자동 인쇄 · 한글 100%</div>
                           </div>
                           <button onClick={()=>setBarcodePrintPopup(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
                         </div>
@@ -10807,7 +10836,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260424.06.11</p>
+                <p>© 2026 LACEROOM통합관리 v20260424.06.12</p>
               </footer>
             </div>
           </div>
