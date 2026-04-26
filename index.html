@@ -498,7 +498,7 @@ ${list}` }]
 
           // 🖼️ 이미지 자동 압축 함수 (최대 600x600, JPEG 75%)
           // 🖨️ 라벨 인쇄 (헬퍼와 통신 · JSON 다운로드 방식 · 한글 100% 지원)
-          // v20260424.06.17 - ZPL 직접생성 폐지, Python 헬퍼가 PNG 렌더링 후 ZT230 인쇄
+          // v20260424.06.18 - ZPL 직접생성 폐지, Python 헬퍼가 PNG 렌더링 후 ZT230 인쇄
           const downloadLabelJson = (labels) => {
             if (!labels || labels.length === 0) {
               alert('인쇄할 라벨이 없습니다.');
@@ -522,7 +522,7 @@ ${list}` }]
             }));
             
             const data = {
-              version: 'v20260424.06.17',
+              version: 'v20260424.06.18',
               created_at: new Date().toISOString(),
               label_count: enriched.length,
               total_print_count: enriched.reduce((s, l) => s + l.copies, 0),
@@ -1806,7 +1806,7 @@ ${list}` }]
                 <div className="px-4 py-4 border-b border-slate-100">
                   <div>
                     <div className="text-sm font-bold text-slate-900 leading-tight">LACEROOM통합관리</div>
-                    <div className="text-xs text-slate-400">v20260424.06.17</div>
+                    <div className="text-xs text-slate-400">v20260424.06.18</div>
                   </div>
                 </div>
 
@@ -7633,7 +7633,7 @@ ${list}` }]
 
                 {/* 🚫 빠른 품절 토글 팝업 */}
                 {/* 🎨 색상별 상태 설정 팝업 (9-1 카드 색상 클릭 시) */}
-                {/* 🖨️ 라벨 인쇄 편집기 v20260424.06.17 - 헬퍼 연동, 한글 100% */}
+                {/* 🖨️ 라벨 인쇄 편집기 v20260424.06.18 - 헬퍼 연동, 한글 100% */}
                 {barcodePrintPopup && (() => {
                   const p = barcodePrintPopup.product;
                   const barcodes = p.barcodes || {};
@@ -7778,7 +7778,7 @@ ${list}` }]
                         <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-slate-100 sticky top-0 bg-white z-10">
                           <div>
                             <h3 className="text-base font-bold text-slate-900">🖨️ 라벨 인쇄 + 디자인 편집기</h3>
-                            <div className="text-[10px] text-slate-500 mt-0.5">v20260424.06.17 · 헬퍼 자동 인쇄 · 한글 100%</div>
+                            <div className="text-[10px] text-slate-500 mt-0.5">v20260424.06.18 · 헬퍼 자동 인쇄 · 한글 100%</div>
                           </div>
                           <button onClick={()=>setBarcodePrintPopup(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
                         </div>
@@ -8641,10 +8641,26 @@ ${list}` }]
                                     {form.type && (
                                       <>
                                         <div>
-                                          <label className="block text-[11px] font-bold text-black mb-2 uppercase tracking-wider">상품명 *</label>
+                                          <div className="flex items-center justify-between mb-2">
+                                            <label className="block text-[11px] font-bold text-black uppercase tracking-wider">상품명 *</label>
+                                            {isEdit && (
+                                              <button onClick={()=>{
+                                                if(!confirm(`"${form.name||'이 상품'}"의 등록일을 현재 시각으로 갱신할까요?\n\n→ 9-1 진열에서 최상단으로 이동합니다.`)) return;
+                                                setForm(p=>({...p, createdAt: new Date().toISOString()}));
+                                                alert('등록일 갱신됨!\n저장 후 진열 최상단으로 이동합니다.');
+                                              }} className="text-[10px] bg-white border border-neutral-700 text-black px-2.5 py-1 hover:bg-black hover:text-white font-bold uppercase tracking-wider transition" style={{borderRadius:'2px'}} title="등록일을 현재 시각으로 변경 (진열 최상단)">
+                                                ⟳ 등록일 갱신
+                                              </button>
+                                            )}
+                                          </div>
                                           <input type="text" value={form.name||''} onChange={e=>setForm(p=>({...p,name:e.target.value}))}
                                             placeholder="예: 11.5 꼬임 반묶음" className="w-full px-3 py-2.5 border border-neutral-300 focus:border-black outline-none text-sm" style={{borderRadius:'2px'}}/>
-                                          <div className="text-[10px] text-neutral-500 mt-1.5">셀메이트와 동일하게 사용. 9-1, 9-2, 9-3, 라벨 등에 표시</div>
+                                          <div className="text-[10px] text-neutral-500 mt-1.5">
+                                            셀메이트와 동일하게 사용. 9-1, 9-2, 9-3, 라벨 등에 표시
+                                            {isEdit && form.createdAt && (
+                                              <span className="ml-2 text-neutral-400">· 등록일: {new Date(form.createdAt).toLocaleDateString('ko-KR')}</span>
+                                            )}
+                                          </div>
                                         </div>
                                         <div>
                                           <label className="block text-[11px] font-bold text-black mb-2 uppercase tracking-wider">도금거래처 상품명 <span className="text-neutral-400 font-normal normal-case tracking-normal">(선택)</span></label>
@@ -8739,8 +8755,15 @@ ${list}` }]
                                                             else locked.add(color);
                                                             return {...p, lockedColors: Array.from(locked)};
                                                           });
-                                                        }} className={`text-xs w-5 h-5 flex items-center justify-center shrink-0 ${isFocused?'text-white':'text-neutral-600 hover:text-black'}`} title={isLocked?'잠금 해제':'잠그기 (실수 삭제 방지)'}>
-                                                          {isLocked ? '🔒' : '🔓'}
+                                                        }} 
+                                                        className={`text-[9px] px-1.5 py-0.5 font-black uppercase tracking-wider shrink-0 transition-all ${
+                                                          isLocked
+                                                            ? (isFocused?'bg-amber-400 text-black':'bg-amber-400 text-black border border-amber-500')
+                                                            : (isFocused?'bg-neutral-700 text-neutral-300 border border-neutral-600':'bg-white text-neutral-500 border border-neutral-300 hover:border-black')
+                                                        }`}
+                                                        style={{borderRadius:'2px'}}
+                                                        title={isLocked?'잠금 상태 (실수 삭제 방지) - 클릭하여 해제':'잠그기 (실수 삭제 방지)'}>
+                                                          {isLocked ? '🔒 LOCK' : 'OPEN'}
                                                         </button>
                                                         {/* 삭제 (잠금 시 비활성) */}
                                                         <button onClick={(e)=>{
@@ -8871,15 +8894,15 @@ ${list}` }]
                                               )}
                                             </div>
                                           ) : (
-                                            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-700">
-                                              💡 곱창밴드는 <strong>"원단 연결"</strong> 섹션 하단의 색상 매칭에서 관리됩니다.<br/>
+                                            <div className="bg-neutral-100 border border-neutral-300 p-3 text-xs text-neutral-700" style={{borderRadius:'2px'}}>
+                                              곱창밴드는 <strong className="text-black">"원단 연결"</strong> 섹션 하단의 색상 매칭에서 관리됩니다.<br/>
                                               원단을 먼저 선택하면 거래처 색상에서 체크 + 우리 색상명을 입력할 수 있어요.
                                               {(form.colors||[]).length > 0 && (
-                                                <div className="mt-2 pt-2 border-t border-blue-200">
-                                                  <div className="font-semibold">현재 등록된 색상 ({form.colors.length}개):</div>
+                                                <div className="mt-2 pt-2 border-t border-neutral-300">
+                                                  <div className="font-bold text-black">현재 등록된 색상 ({form.colors.length}개):</div>
                                                   <div className="flex flex-wrap gap-1 mt-1">
                                                     {form.colors.map(c=>(
-                                                      <span key={c} className="bg-white border border-blue-300 text-blue-700 px-2 py-0.5 rounded-full">{c}</span>
+                                                      <span key={c} className="bg-white border border-neutral-400 text-black px-2 py-0.5 text-[10px] font-medium" style={{borderRadius:'2px'}}>{c}</span>
                                                     ))}
                                                   </div>
                                                 </div>
@@ -9073,32 +9096,32 @@ ${list}` }]
                                         )}
 
                                         {form.type === 'gocchang' && (
-                                          <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-3 space-y-2">
-                                            <div className="text-xs font-bold text-blue-700 mb-1">🎀 곱창밴드 전용 · 원단 연결</div>
+                                          <div className="bg-neutral-50 border border-neutral-300 p-3 space-y-2" style={{borderRadius:'2px'}}>
+                                            <div className="text-[11px] font-bold text-black mb-1 uppercase tracking-wider border-b border-neutral-300 pb-2">곱창밴드 전용 · 원단 연결</div>
 
                                             {/* 원단 정보 유무 선택 */}
-                                            <div className="bg-white rounded-lg p-2 border border-blue-200">
+                                            <div className="bg-white p-2 border border-neutral-200" style={{borderRadius:'2px'}}>
                                               <div className="flex gap-2">
-                                                <label className={`flex-1 flex items-center gap-2 p-2 rounded-lg cursor-pointer transition ${
-                                                  form.hasFabricInfo !== false ? 'bg-blue-100 border-2 border-blue-400' : 'bg-slate-50 border-2 border-transparent hover:bg-slate-100'
-                                                }`}>
+                                                <label className={`flex-1 flex items-center gap-2 p-2 cursor-pointer transition ${
+                                                  form.hasFabricInfo !== false ? 'bg-black text-white' : 'bg-white border border-neutral-300 hover:border-black'
+                                                }`} style={{borderRadius:'2px'}}>
                                                   <input type="radio" name="hasFabric" checked={form.hasFabricInfo !== false}
                                                     onChange={()=>setForm(p=>({...p, hasFabricInfo: true}))}
-                                                    className="w-4 h-4 accent-blue-500"/>
+                                                    className="w-4 h-4 accent-black"/>
                                                   <div className="flex-1">
-                                                    <div className="text-xs font-bold text-slate-800">🧵 원단 정보 있음</div>
-                                                    <div className="text-[10px] text-slate-500">신상품 · 원단 구매처 알고 있음</div>
+                                                    <div className={`text-xs font-bold ${form.hasFabricInfo !== false?'text-white':'text-black'}`}>원단 정보 있음</div>
+                                                    <div className={`text-[10px] ${form.hasFabricInfo !== false?'text-neutral-300':'text-neutral-500'}`}>신상품 · 원단 구매처 알고 있음</div>
                                                   </div>
                                                 </label>
-                                                <label className={`flex-1 flex items-center gap-2 p-2 rounded-lg cursor-pointer transition ${
-                                                  form.hasFabricInfo === false ? 'bg-slate-200 border-2 border-slate-400' : 'bg-slate-50 border-2 border-transparent hover:bg-slate-100'
-                                                }`}>
+                                                <label className={`flex-1 flex items-center gap-2 p-2 cursor-pointer transition ${
+                                                  form.hasFabricInfo === false ? 'bg-black text-white' : 'bg-white border border-neutral-300 hover:border-black'
+                                                }`} style={{borderRadius:'2px'}}>
                                                   <input type="radio" name="hasFabric" checked={form.hasFabricInfo === false}
                                                     onChange={()=>setForm(p=>({...p, hasFabricInfo: false, fabricSupplierId: '', fabricId: '', fabricName: '', fabricPrice: 0, fabricWidth: 0, yardsPerUnit: 0, _colorMapping: {}}))}
-                                                    className="w-4 h-4 accent-slate-500"/>
+                                                    className="w-4 h-4 accent-black"/>
                                                   <div className="flex-1">
-                                                    <div className="text-xs font-bold text-slate-700">📝 원단 정보 없음</div>
-                                                    <div className="text-[10px] text-slate-500">기존 판매 상품 · 정보 모름</div>
+                                                    <div className={`text-xs font-bold ${form.hasFabricInfo === false?'text-white':'text-black'}`}>원단 정보 없음</div>
+                                                    <div className={`text-[10px] ${form.hasFabricInfo === false?'text-neutral-300':'text-neutral-500'}`}>기존 판매 상품 · 정보 모름</div>
                                                   </div>
                                                 </label>
                                               </div>
@@ -9644,7 +9667,7 @@ ${list}` }]
                                       <span className="text-xs text-slate-500 font-semibold">{items.length}개</span>
                                     </div>
                                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 p-4">
-                                      {items.sort((a,b)=>a.name.localeCompare(b.name)).map(p=>{
+                                      {items.sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||'')).map(p=>{
                                         const soldoutColors = soldoutItems.filter(i=>i.name===p.name).map(i=>i.color);
                                         const soldoutCount = soldoutColors.length;
                                         const offCount = todayOffItems.filter(i=>i.name===p.name).length;
@@ -11030,7 +11053,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260424.06.17</p>
+                <p>© 2026 LACEROOM통합관리 v20260424.06.18</p>
               </footer>
             </div>
           </div>
