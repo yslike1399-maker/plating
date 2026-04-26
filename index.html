@@ -55,6 +55,46 @@
         const FINISH_OPTIONS = ['유광', '반무광'];
         const GRIND_OPTIONS = ['연마', '연마 제외', '연마 완료'];
 
+        // 판매 색상 ↔ 공장 색상 매핑 테이블 (업계 표준)
+        // 9-1에서 사용하는 판매 색상명 → 도금공장에서 사용하는 색상+마감
+        const SALE_TO_FACTORY_MAP = {
+          '골드(유광)':       { factoryColor: '대금',           factoryFinish: '유광',   note: '' },
+          '골드(반광)':       { factoryColor: '대금',           factoryFinish: '반무광', note: '' },
+          '실버(유광)':       { factoryColor: '니켈',           factoryFinish: '유광',   note: '' },
+          '실버(반광)':       { factoryColor: '니켈',           factoryFinish: '반무광', note: '' },
+          '블랙(유광)':       { factoryColor: '흑진주',         factoryFinish: '유광',   note: '' },
+          '블랙(반광)':       { factoryColor: '흑진주',         factoryFinish: '반무광', note: '' },
+          '다크골드(유광)':   { factoryColor: '흑골드',         factoryFinish: '유광',   note: '' },
+          '다크골드(반광)':   { factoryColor: '흑골드',         factoryFinish: '반무광', note: '' },
+          '로즈골드(유광)':   { factoryColor: '로즈골드 대용금', factoryFinish: '유광',   note: '' },
+          '로즈골드(반광)':   { factoryColor: '로즈골드 대용금', factoryFinish: '반무광', note: '' },
+          '14K도금':          { factoryColor: '14k대용금',      factoryFinish: '유광',   note: '' },
+          '은':               { factoryColor: '은',             factoryFinish: '유광',   note: '' },
+          '흑무광':           { factoryColor: '동착',           factoryFinish: '',       note: '동착 후 청솔코팅으로 보내 흑무광 마감' },
+        };
+
+        // 판매 색상 → 공장 색상 표시명 변환
+        const getFactoryColorDisplay = (saleColor) => {
+          const map = SALE_TO_FACTORY_MAP[saleColor];
+          if (!map) return saleColor;
+          if (!map.factoryFinish) return map.factoryColor;
+          return `${map.factoryColor}(${map.factoryFinish})`;
+        };
+
+        // 판매 색상 → 공장 색상 객체 (color, finish 분리)
+        const getFactoryColor = (saleColor) => {
+          const map = SALE_TO_FACTORY_MAP[saleColor];
+          if (!map) return { color: saleColor, finish: '' };
+          return { color: map.factoryColor, finish: map.factoryFinish };
+        };
+
+        // 흑무광 같은 2단계 공정 색상인지 확인
+        const isMultiStageColor = (saleColor) => {
+          const map = SALE_TO_FACTORY_MAP[saleColor];
+          return !!(map && map.note);
+        };
+
+
         // 화면 표시용 (직원용 - 설명 포함, 줄바꿈)
         const getColorDisplayName = (name) => {
           const color = COLOR_DEFS.find(c => c.name === name);
@@ -151,6 +191,7 @@
             } catch { return []; }
           });
           const [masterPopup, setMasterPopup] = useState(null);
+          const [colorAddModal, setColorAddModal] = useState(false); // 9-1 색상 추가 모달
           const [quickSoldoutPopup, setQuickSoldoutPopup] = useState(null); // {product, reason}
           const [quickOffPopup, setQuickOffPopup] = useState(null); // {product, reason, estimatedDate}
           const [colorStatusPopup, setColorStatusPopup] = useState(null); // {product, color}
@@ -457,7 +498,7 @@ ${list}` }]
 
           // 🖼️ 이미지 자동 압축 함수 (최대 600x600, JPEG 75%)
           // 🖨️ 라벨 인쇄 (헬퍼와 통신 · JSON 다운로드 방식 · 한글 100% 지원)
-          // v20260424.06.13 - ZPL 직접생성 폐지, Python 헬퍼가 PNG 렌더링 후 ZT230 인쇄
+          // v20260424.06.14 - ZPL 직접생성 폐지, Python 헬퍼가 PNG 렌더링 후 ZT230 인쇄
           const downloadLabelJson = (labels) => {
             if (!labels || labels.length === 0) {
               alert('인쇄할 라벨이 없습니다.');
@@ -481,7 +522,7 @@ ${list}` }]
             }));
             
             const data = {
-              version: 'v20260424.06.13',
+              version: 'v20260424.06.14',
               created_at: new Date().toISOString(),
               label_count: enriched.length,
               total_print_count: enriched.reduce((s, l) => s + l.copies, 0),
@@ -1765,7 +1806,7 @@ ${list}` }]
                 <div className="px-4 py-4 border-b border-slate-100">
                   <div>
                     <div className="text-sm font-bold text-slate-900 leading-tight">LACEROOM통합관리</div>
-                    <div className="text-xs text-slate-400">v20260424.06.13</div>
+                    <div className="text-xs text-slate-400">v20260424.06.14</div>
                   </div>
                 </div>
 
@@ -7592,7 +7633,7 @@ ${list}` }]
 
                 {/* 🚫 빠른 품절 토글 팝업 */}
                 {/* 🎨 색상별 상태 설정 팝업 (9-1 카드 색상 클릭 시) */}
-                {/* 🖨️ 라벨 인쇄 편집기 v20260424.06.13 - 헬퍼 연동, 한글 100% */}
+                {/* 🖨️ 라벨 인쇄 편집기 v20260424.06.14 - 헬퍼 연동, 한글 100% */}
                 {barcodePrintPopup && (() => {
                   const p = barcodePrintPopup.product;
                   const barcodes = p.barcodes || {};
@@ -7737,7 +7778,7 @@ ${list}` }]
                         <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-slate-100 sticky top-0 bg-white z-10">
                           <div>
                             <h3 className="text-base font-bold text-slate-900">🖨️ 라벨 인쇄 + 디자인 편집기</h3>
-                            <div className="text-[10px] text-slate-500 mt-0.5">v20260424.06.13 · 헬퍼 자동 인쇄 · 한글 100%</div>
+                            <div className="text-[10px] text-slate-500 mt-0.5">v20260424.06.14 · 헬퍼 자동 인쇄 · 한글 100%</div>
                           </div>
                           <button onClick={()=>setBarcodePrintPopup(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
                         </div>
@@ -8614,24 +8655,143 @@ ${list}` }]
                                         <div>
                                           <label className="block text-xs font-semibold text-slate-600 mb-2">사용 가능 색상 (복수 선택)</label>
                                           {form.type==='hairpin' ? (
-                                            <div className="space-y-2 bg-slate-50 rounded-xl p-3">
-                                              {hairpinColors.map(({base,f})=>(
-                                                <div key={base} className="flex items-center gap-3 flex-wrap">
-                                                  <span className="text-xs font-bold text-slate-700 w-16 shrink-0">{base}</span>
-                                                  {f[0]==='' ? (
-                                                    <label className="flex items-center gap-1.5 cursor-pointer">
-                                                      <input type="checkbox" checked={(form.colors||[]).includes(base)} onChange={()=>toggleColor(base)} className="w-4 h-4 accent-purple-500"/>
-                                                      <span className={`text-xs px-2 py-0.5 rounded-full border ${(form.colors||[]).includes(base)?'bg-purple-100 border-purple-400 text-purple-700':'border-slate-300 text-slate-600'}`}>{base}</span>
-                                                    </label>
-                                                  ) : f.map(fin=>{
-                                                    const cs=`${base}(${fin})`;
-                                                    return <label key={fin} className="flex items-center gap-1.5 cursor-pointer">
-                                                      <input type="checkbox" checked={(form.colors||[]).includes(cs)} onChange={()=>toggleColor(cs)} className="w-4 h-4 accent-purple-500"/>
-                                                      <span className={`text-xs px-2 py-0.5 rounded-full border ${(form.colors||[]).includes(cs)?'bg-purple-100 border-purple-400 text-purple-700':'border-slate-300 text-slate-600'}`}>{fin}</span>
-                                                    </label>;
-                                                  })}
-                                                </div>
-                                              ))}
+                                            <div className="space-y-2">
+                                              {/* ⚡ 빠른 선택 */}
+                                              <div className="flex flex-wrap gap-1.5 bg-purple-50 border border-purple-200 rounded-xl p-2">
+                                                <span className="text-[10px] font-bold text-purple-700 self-center mr-1">⚡ 빠른 선택:</span>
+                                                <button onClick={()=>{
+                                                  const all = ['골드(유광)','골드(반광)','실버(유광)','실버(반광)','블랙(유광)','블랙(반광)','로즈골드(유광)','로즈골드(반광)','다크골드(유광)','다크골드(반광)','14K도금','은','흑무광'];
+                                                  setForm(p=>({...p, colors: all}));
+                                                }} className="text-[10px] bg-white border border-purple-300 text-purple-700 px-2 py-1 rounded-full hover:bg-purple-100">전체</button>
+                                                <button onClick={()=>{
+                                                  const all = ['골드(유광)','실버(유광)','블랙(유광)','로즈골드(유광)','다크골드(유광)'];
+                                                  setForm(p=>({...p, colors: all}));
+                                                }} className="text-[10px] bg-white border border-purple-300 text-purple-700 px-2 py-1 rounded-full hover:bg-purple-100">전체 유광</button>
+                                                <button onClick={()=>{
+                                                  const all = ['골드(반광)','실버(반광)','블랙(반광)','로즈골드(반광)','다크골드(반광)'];
+                                                  setForm(p=>({...p, colors: all}));
+                                                }} className="text-[10px] bg-white border border-purple-300 text-purple-700 px-2 py-1 rounded-full hover:bg-purple-100">전체 반광</button>
+                                                <button onClick={()=>{
+                                                  const all = ['골드(유광)','실버(유광)','블랙(유광)','로즈골드(유광)','다크골드(유광)'];
+                                                  setForm(p=>({...p, colors: all}));
+                                                }} className="text-[10px] bg-white border border-purple-300 text-purple-700 px-2 py-1 rounded-full hover:bg-purple-100">기본</button>
+                                                {(form.colors||[]).length > 0 && (
+                                                  <button onClick={()=>setForm(p=>({...p, colors: []}))}
+                                                    className="text-[10px] bg-white border border-rose-300 text-rose-600 px-2 py-1 rounded-full hover:bg-rose-50 ml-auto">전체 해제</button>
+                                                )}
+                                              </div>
+                                              
+                                              {/* 색상 카드 리스트 */}
+                                              {(() => {
+                                                const colorOrder = [
+                                                  '골드(유광)','실버(유광)','블랙(유광)','로즈골드(유광)','다크골드(유광)',
+                                                  '골드(반광)','실버(반광)','블랙(반광)','로즈골드(반광)','다크골드(반광)',
+                                                  '14K도금','은','흑무광'
+                                                ];
+                                                const sortedColors = [...(form.colors||[])].sort((a,b) => {
+                                                  const ai = colorOrder.indexOf(a);
+                                                  const bi = colorOrder.indexOf(b);
+                                                  return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+                                                });
+                                                return sortedColors.map(color => {
+                                                  const barcodes = form.barcodes || {};
+                                                  const positions = form.positions || {};
+                                                  const customColorNames = form.customColorNames || {};
+                                                  const val = barcodes[color] || '';
+                                                  const pos = positions[color] || '';
+                                                  const customName = customColorNames[color] || '';
+                                                  const posRaw = pos.replace(/^\[/, '').replace(/\]$/, '');
+                                                  const isMatte = color.includes('(반광)');
+                                                  const isMulti = isMultiStageColor(color);
+                                                  const factoryDisplay = getFactoryColorDisplay(color);
+                                                  return (
+                                                    <div key={color} className={`rounded-xl p-2.5 border-2 ${isMatte?'bg-slate-100 border-slate-300':'bg-white border-indigo-200'}`}>
+                                                      {/* 색상명 + 삭제 + 공장 매핑 */}
+                                                      <div className="flex items-center justify-between mb-2">
+                                                        <div className="flex items-center gap-2">
+                                                          <span className="text-sm font-bold text-slate-800">{color}</span>
+                                                          {isMulti && <span className="text-[9px] bg-amber-100 border border-amber-300 text-amber-800 px-1.5 py-0.5 rounded-full font-bold">⚠️ 2단계 공정</span>}
+                                                        </div>
+                                                        <button onClick={()=>{
+                                                          setForm(p=>{
+                                                            const newColors = (p.colors||[]).filter(c=>c!==color);
+                                                            const newBarcodes = {...(p.barcodes||{})}; delete newBarcodes[color];
+                                                            const newPositions = {...(p.positions||{})}; delete newPositions[color];
+                                                            const newCustom = {...(p.customColorNames||{})}; delete newCustom[color];
+                                                            return {...p, colors: newColors, barcodes: newBarcodes, positions: newPositions, customColorNames: newCustom};
+                                                          });
+                                                        }} className="text-rose-400 hover:text-rose-600 text-sm" title="색상 제거">✕</button>
+                                                      </div>
+                                                      {/* 공장 매핑 (읽기 전용) */}
+                                                      <div className="text-[10px] text-slate-500 mb-1.5 pl-1">
+                                                        🏭 도금공장 의뢰: <span className="font-mono font-bold text-slate-700">{factoryDisplay}</span>
+                                                        {isMulti && <span className="text-amber-700"> (동착 후 청솔코팅에서 흑무광 마감)</span>}
+                                                      </div>
+                                                      {/* 바코드 + 위치 (한 줄) */}
+                                                      <div className="flex items-center gap-1.5 mb-1.5">
+                                                        <span className="text-[10px] text-slate-500 w-12 shrink-0">바코드</span>
+                                                        <input type="text" value={val}
+                                                          onChange={e=>{
+                                                            const digits = e.target.value.replace(/\D/g,'').slice(0,11);
+                                                            setForm(p=>({...p, barcodes: {...(p.barcodes||{}), [color]: digits}}));
+                                                          }}
+                                                          placeholder="11자리"
+                                                          maxLength={11}
+                                                          className={`flex-1 px-2 py-1 rounded border text-xs font-mono outline-none ${
+                                                            val.length===11 ? 'border-green-400 bg-green-50 text-green-700' :
+                                                            val.length>0 ? 'border-amber-300 bg-amber-50' :
+                                                            'border-slate-200'
+                                                          }`}/>
+                                                        <span className="text-[9px] text-slate-400 min-w-[26px]">{val.length}/11</span>
+                                                      </div>
+                                                      {/* 위치 */}
+                                                      <div className="flex items-center gap-1.5 mb-1.5">
+                                                        <span className="text-[10px] text-slate-500 w-12 shrink-0">위치</span>
+                                                        <span className="text-xs text-purple-600 font-bold">[</span>
+                                                        <input type="text" value={posRaw}
+                                                          onChange={e=>{
+                                                            const raw = e.target.value.slice(0, 6);
+                                                            const wrapped = raw ? `[${raw}]` : '';
+                                                            setForm(p=>({...p, positions: {...(p.positions||{}), [color]: wrapped}}));
+                                                          }}
+                                                          onCompositionEnd={e=>{
+                                                            const raw = e.target.value.slice(0, 6);
+                                                            const wrapped = raw ? `[${raw}]` : '';
+                                                            setForm(p=>({...p, positions: {...(p.positions||{}), [color]: wrapped}}));
+                                                          }}
+                                                          placeholder="노1"
+                                                          maxLength={6}
+                                                          className="flex-1 px-2 py-1 rounded border border-purple-200 text-xs text-center bg-purple-50 outline-none"/>
+                                                        <span className="text-xs text-purple-600 font-bold">]</span>
+                                                      </div>
+                                                      {/* 라벨 색상명 */}
+                                                      <div className="flex items-center gap-1.5">
+                                                        <span className="text-[10px] text-slate-500 w-12 shrink-0">라벨명</span>
+                                                        <input type="text" value={customName}
+                                                          onChange={e=>{
+                                                            setForm(p=>({...p, customColorNames: {...(p.customColorNames||{}), [color]: e.target.value.slice(0,20)}}));
+                                                          }}
+                                                          onCompositionEnd={e=>{
+                                                            setForm(p=>({...p, customColorNames: {...(p.customColorNames||{}), [color]: e.target.value.slice(0,20)}}));
+                                                          }}
+                                                          placeholder={`기본: ${color}`}
+                                                          maxLength={20}
+                                                          className="flex-1 px-2 py-1 rounded border border-pink-200 text-xs bg-pink-50 outline-none"/>
+                                                      </div>
+                                                    </div>
+                                                  );
+                                                });
+                                              })()}
+                                              
+                                              {/* + 색상 추가 버튼 */}
+                                              <button onClick={()=>setColorAddModal(true)}
+                                                className="w-full py-2.5 rounded-xl border-2 border-dashed border-purple-300 text-purple-600 hover:bg-purple-50 hover:border-purple-400 text-sm font-bold">
+                                                + 색상 추가
+                                              </button>
+                                              
+                                              {(form.colors||[]).length === 0 && (
+                                                <div className="text-center text-xs text-slate-400 py-2">색상을 선택하거나 추가하세요</div>
+                                              )}
                                             </div>
                                           ) : form.hasFabricInfo === false ? (
                                             // 원단 정보 없음 - 직접 입력
@@ -8696,102 +8856,6 @@ ${list}` }]
                                             <div className="text-[10px] text-slate-500 mt-1">💡 과거 입력한 이름은 자동완성으로 선택 가능</div>
                                           </div>
 
-                                          <div>
-                                            <label className="block text-xs font-bold text-indigo-700 mb-2">🔖 셀메이트 바코드 <span className="text-slate-400 font-normal">(11자리, 색상별 개별 입력)</span></label>
-                                            {(form.colors||[]).length === 0 ? (
-                                              <div className="bg-white border border-indigo-200 rounded-lg p-3 text-xs text-slate-500 text-center">
-                                                ⚠️ 색상을 먼저 등록해주세요
-                                              </div>
-                                            ) : (
-                                              <div className="space-y-1">
-                                                {(() => {
-                                                  // 색상 표시 순서 규칙
-                                                  const colorOrder = [
-                                                    '골드(유광)', '실버(유광)', '블랙(유광)', '로즈골드(유광)', '다크골드(유광)',
-                                                    '골드(반광)', '실버(반광)', '블랙(반광)', '로즈골드(반광)', '다크골드(반광)',
-                                                    '14k도금', '14K도금', '은', '흑무광'
-                                                  ];
-                                                  const getOrder = (c) => {
-                                                    const idx = colorOrder.indexOf(c);
-                                                    return idx === -1 ? 9999 : idx;
-                                                  };
-                                                  return [...(form.colors || [])].sort((a, b) => getOrder(a) - getOrder(b));
-                                                })().map(color => {
-                                                  const barcodes = form.barcodes || {};
-                                                  const positions = form.positions || {};
-                                                  const customColorNames = form.customColorNames || {};
-                                                  const val = barcodes[color] || '';
-                                                  const pos = positions[color] || '';
-                                                  const customColorName = customColorNames[color] || '';
-                                                  const posRaw = pos.replace(/^\[/, '').replace(/\]$/, '');
-                                                  // 반광 구분 (배경색 살짝 어둡게)
-                                                  const isMatte = color.includes('(반광)');
-                                                  const cardBg = isMatte ? 'bg-slate-100' : 'bg-white';
-                                                  const cardBorder = isMatte ? 'border-slate-400' : 'border-indigo-200';
-                                                  return (
-                                                    <div key={color} className={`${cardBg} rounded-lg p-2 border ${cardBorder}`}>
-                                                      {/* 1줄: 색상명 + 바코드 */}
-                                                      <div className="flex items-center gap-2 mb-1">
-                                                        <span className="text-xs font-semibold text-slate-700 min-w-[110px] truncate" title={color}>{color}</span>
-                                                        <input type="text" value={val}
-                                                          onChange={e=>{
-                                                            const digits = e.target.value.replace(/\D/g,'').slice(0,11);
-                                                            setForm(p=>({...p, barcodes: {...(p.barcodes||{}), [color]: digits}}));
-                                                          }}
-                                                          placeholder="11자리 바코드"
-                                                          maxLength={11}
-                                                          className={`flex-1 px-2 py-1 rounded border text-sm font-mono outline-none ${
-                                                            val.length===11 ? 'border-green-400 bg-green-50 text-green-700' :
-                                                            val.length>0 ? 'border-amber-300 bg-amber-50' :
-                                                            'border-slate-200'
-                                                          }`}/>
-                                                        <span className="text-[10px] text-slate-400 min-w-[30px]">{val.length}/11</span>
-                                                      </div>
-                                                      {/* 2줄: 라벨 색상명 */}
-                                                      <div className="flex items-center gap-2 mb-1">
-                                                        <span className="text-[10px] text-slate-500 min-w-[110px] text-right">라벨 색상명 →</span>
-                                                        <input type="text" value={customColorName}
-                                                          onChange={e=>{
-                                                            setForm(p=>({...p, customColorNames: {...(p.customColorNames||{}), [color]: e.target.value.slice(0,20)}}));
-                                                          }}
-                                                          onCompositionEnd={e=>{
-                                                            setForm(p=>({...p, customColorNames: {...(p.customColorNames||{}), [color]: e.target.value.slice(0,20)}}));
-                                                          }}
-                                                          placeholder={`${color} (비우면 원본 그대로)`}
-                                                          maxLength={20}
-                                                          title="라벨에 표시할 색상명 (예: ★골드(반광))"
-                                                          className="flex-1 px-2 py-1 rounded border border-pink-200 text-xs bg-pink-50 outline-none"/>
-                                                      </div>
-                                                      {/* 3줄: 진열 위치 */}
-                                                      <div className="flex items-center gap-2">
-                                                        <span className="text-[10px] text-slate-500 min-w-[110px] text-right">진열 위치 →</span>
-                                                        <span className="text-xs text-purple-600 font-bold">[</span>
-                                                        <input type="text" value={posRaw}
-                                                          onChange={e=>{
-                                                            const raw = e.target.value.slice(0, 6);
-                                                            const wrapped = raw ? `[${raw}]` : '';
-                                                            setForm(p=>({...p, positions: {...(p.positions||{}), [color]: wrapped}}));
-                                                          }}
-                                                          onCompositionEnd={e=>{
-                                                            const raw = e.target.value.slice(0, 6);
-                                                            const wrapped = raw ? `[${raw}]` : '';
-                                                            setForm(p=>({...p, positions: {...(p.positions||{}), [color]: wrapped}}));
-                                                          }}
-                                                          placeholder="노1"
-                                                          maxLength={6}
-                                                          title="진열 위치 내용 (대괄호는 자동)"
-                                                          className="flex-1 px-2 py-1 rounded border border-purple-200 text-xs text-center bg-purple-50 outline-none"/>
-                                                        <span className="text-xs text-purple-600 font-bold">]</span>
-                                                      </div>
-                                                    </div>
-                                                  );
-                                                })}
-                                              </div>
-                                            )}
-                                            <div className="text-[10px] text-slate-500 mt-2">
-                                              💡 셀메이트 <strong>11자리 바코드</strong> + 진열 위치 기호 <strong>[노1]</strong> 색상별 입력
-                                            </div>
-                                          </div>
                                         </div>
 
                                         <div>
@@ -9258,8 +9322,92 @@ ${list}` }]
                               </div>
                             );
                           })()}
-
-                          {/* 헤더 */}
+                          
+                          {/* 색상 추가 모달 */}
+                          {colorAddModal && masterPopup && masterPopup.type === 'hairpin' && (() => {
+                            const setForm = (updater) => setMasterPopup(prev => typeof updater==='function'?updater(prev):updater);
+                            const currentColors = new Set(masterPopup.colors || []);
+                            const addColor = (c) => {
+                              if (!currentColors.has(c)) {
+                                setForm(p=>({...p, colors: [...(p.colors||[]), c]}));
+                              }
+                            };
+                            const colorGroups = [
+                              { base: '골드', finishes: ['유광','반광'] },
+                              { base: '실버', finishes: ['유광','반광'] },
+                              { base: '블랙', finishes: ['유광','반광'] },
+                              { base: '로즈골드', finishes: ['유광','반광'] },
+                              { base: '다크골드', finishes: ['유광','반광'] },
+                            ];
+                            const singles = ['14K도금', '은', '흑무광'];
+                            return (
+                              <div className="fixed inset-0 z-[60] flex items-center justify-center" style={{background:'rgba(0,0,0,0.5)'}}>
+                                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-5 max-h-[90vh] overflow-y-auto">
+                                  <div className="flex items-center justify-between mb-4">
+                                    <h3 className="text-base font-bold text-slate-800">🎨 색상 추가</h3>
+                                    <button onClick={()=>setColorAddModal(false)} className="text-slate-400 hover:text-slate-600 text-xl">✕</button>
+                                  </div>
+                                  
+                                  {/* 마감 있는 색상 (5종 × 2 = 10) */}
+                                  <div className="mb-4">
+                                    <div className="text-xs font-bold text-slate-600 mb-2">🎨 마감 있는 색상</div>
+                                    <div className="space-y-1.5">
+                                      {colorGroups.map(({base, finishes}) => (
+                                        <div key={base} className="flex items-center gap-2">
+                                          <span className="text-xs font-semibold text-slate-700 w-20 shrink-0">{base}</span>
+                                          {finishes.map(fin => {
+                                            const cs = `${base}(${fin})`;
+                                            const exists = currentColors.has(cs);
+                                            return (
+                                              <button key={fin} onClick={()=>{ addColor(cs); }}
+                                                disabled={exists}
+                                                className={`flex-1 px-3 py-1.5 rounded-lg border-2 text-xs font-bold transition ${
+                                                  exists 
+                                                    ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed'
+                                                    : 'bg-white border-purple-300 text-purple-700 hover:bg-purple-50 hover:border-purple-400'
+                                                }`}>
+                                                {fin} {exists && '✓'}
+                                              </button>
+                                            );
+                                          })}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                  
+                                  {/* 단일 색상 */}
+                                  <div className="mb-4">
+                                    <div className="text-xs font-bold text-slate-600 mb-2">🎨 단일 색상</div>
+                                    <div className="grid grid-cols-3 gap-2">
+                                      {singles.map(c => {
+                                        const exists = currentColors.has(c);
+                                        const isMulti = isMultiStageColor(c);
+                                        return (
+                                          <button key={c} onClick={()=>addColor(c)}
+                                            disabled={exists}
+                                            className={`px-2 py-2 rounded-lg border-2 text-xs font-bold transition ${
+                                              exists
+                                                ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed'
+                                                : isMulti
+                                                  ? 'bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100'
+                                                  : 'bg-white border-purple-300 text-purple-700 hover:bg-purple-50'
+                                            }`}>
+                                            {c} {exists && '✓'}
+                                            {isMulti && <div className="text-[9px] text-amber-700 font-normal mt-0.5">2단계 공정</div>}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                  
+                                  <button onClick={()=>setColorAddModal(false)}
+                                    className="w-full py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-sm">
+                                    ✓ 완료
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })()}
                           <div className="flex items-center justify-between flex-wrap gap-2">
                             <div>
                               <span className="font-semibold text-slate-700">상품 마스터</span>
@@ -10846,7 +10994,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260424.06.13</p>
+                <p>© 2026 LACEROOM통합관리 v20260424.06.14</p>
               </footer>
             </div>
           </div>
