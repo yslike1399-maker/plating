@@ -1824,7 +1824,7 @@ ${list}` }]
                 <div className="px-4 py-4 border-b border-slate-100">
                   <div>
                     <div className="text-sm font-bold text-slate-900 leading-tight">LACEROOM통합관리</div>
-                    <div className="text-xs text-slate-400">v20260427.07.05</div>
+                    <div className="text-xs text-slate-400">v20260427.08.01</div>
                   </div>
                 </div>
 
@@ -9916,8 +9916,58 @@ ${list}` }]
                               <span className="ml-2 bg-black text-white text-xs px-2 py-0.5 font-bold" style={{borderRadius:'2px'}}>{masterProducts.length}개</span>
                               <p className="text-xs text-neutral-500 mt-0.5">등록된 상품은 일시품절·오늘출발OFF 등록 시 드롭다운으로 선택 가능</p>
                             </div>
-                            <button onClick={() => setMasterPopup({type:'',name:'',colors:[],sizes:'',memo:''})}
-                              className="px-4 py-2.5 bg-black hover:bg-neutral-800 text-white text-sm font-black uppercase tracking-wider" style={{borderRadius:'2px'}}>+ 신상품 등록</button>
+                            <div className="flex gap-2">
+                              <button onClick={() => {
+                                // 📤 봇 동기화: 텔레그램 봇용 상품 데이터 export
+                                const bcCount = masterProducts.filter(p => p.barcodes && Object.values(p.barcodes).some(v => v && v.length === 11)).length;
+                                if (bcCount === 0) {
+                                  alert('⚠️ 바코드가 등록된 상품이 없습니다.\n\n9-1 상품을 수정 → 색상별 바코드를 입력해주세요.');
+                                  return;
+                                }
+                                if (!confirm(`📤 텔레그램 봇 동기화\n\n바코드 등록 상품: ${bcCount}개\n전체 상품: ${masterProducts.length}개\n\nlaceroom_products.json 파일을 다운로드합니다.\n이 파일을 ADMINCOM PC의 봇 폴더에 넣으면 봇이 정확한 라벨을 출력합니다.\n\n진행하시겠습니까?`)) return;
+                                
+                                // 봇용 데이터: 바코드 있는 상품만, 출력에 필요한 필드만
+                                const botData = {
+                                  version: 'v20260427.08.01',
+                                  exported_at: new Date().toISOString(),
+                                  exported_by: 'LACEROOM 9-1',
+                                  product_count: 0,
+                                  products: masterProducts
+                                    .filter(p => p.barcodes && Object.values(p.barcodes).some(v => v && v.length === 11))
+                                    .map(p => ({
+                                      id: p.id,
+                                      name: p.name || '',
+                                      label_name: p.labelName || p.name || '',
+                                      type: p.type || 'hairpin',
+                                      colors: p.colors || [],
+                                      barcodes: p.barcodes || {},
+                                      positions: p.positions || {},
+                                      custom_color_names: p.customColorNames || {},
+                                      featured: !!p.isFeatured
+                                    }))
+                                };
+                                botData.product_count = botData.products.length;
+                                
+                                // JSON 다운로드
+                                const blob = new Blob([JSON.stringify(botData, null, 2)], {type: 'application/json'});
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = 'laceroom_products.json';
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                                URL.revokeObjectURL(url);
+                                
+                                setTimeout(() => {
+                                  alert(`✅ 봇 동기화 파일 생성 완료!\n\n파일명: laceroom_products.json\n상품 수: ${botData.product_count}개\n\n📂 다운로드 폴더에서 파일을 찾아\n봇 폴더로 옮겨주세요.\n(C:\\Users\\ADMINCOM\\Downloads에 저장됨)`);
+                                }, 300);
+                              }}
+                              className="px-4 py-2.5 bg-white border-2 border-black hover:bg-black hover:text-white text-black text-sm font-black uppercase tracking-wider transition-all" style={{borderRadius:'2px'}}
+                              title="텔레그램 봇용 상품 데이터를 JSON으로 내보냅니다">📤 봇 동기화</button>
+                              <button onClick={() => setMasterPopup({type:'',name:'',colors:[],sizes:'',memo:''})}
+                                className="px-4 py-2.5 bg-black hover:bg-neutral-800 text-white text-sm font-black uppercase tracking-wider" style={{borderRadius:'2px'}}>+ 신상품 등록</button>
+                            </div>
                           </div>
 
                           {/* 상품 목록 */}
@@ -11722,7 +11772,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260427.07.05</p>
+                <p>© 2026 LACEROOM통합관리 v20260427.08.01</p>
               </footer>
             </div>
           </div>
