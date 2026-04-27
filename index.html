@@ -155,6 +155,18 @@
           const saveAccessoryBarcodes = (next) => { setAccessoryBarcodes(next); localStorage.setItem('accessory_barcodes', JSON.stringify(next)); };
           const [accessoryPopup, setAccessoryPopup] = useState(null); // {id?, name, barcode, noticeLine1, noticeLine2, memo}
           const [accessoryPrintPopup, setAccessoryPrintPopup] = useState(null); // {accessory, copies}
+          
+          // 회사 정보 (영수증 헤더 등에 사용)
+          const [businessInfo, setBusinessInfo] = useState(() => {
+            try {
+              const raw = localStorage.getItem('business_info');
+              return raw ? JSON.parse(raw) : { companyName: '주식회사 골드', ceoName: '', businessNumber: '', address: '', phone: '' };
+            } catch { return { companyName: '주식회사 골드', ceoName: '', businessNumber: '', address: '', phone: '' }; }
+          });
+          const saveBusinessInfo = (next) => { setBusinessInfo(next); localStorage.setItem('business_info', JSON.stringify(next)); };
+          
+          // 프리랜서 영수증 발급 (체크된 작업 ID 목록)
+          const [receiptCheckedWorks, setReceiptCheckedWorks] = useState([]);
 
           // 상품 마스터 (9-1)
           const [masterProducts, setMasterProducts] = useState(() => {
@@ -504,7 +516,7 @@ ${list}` }]
 
           // 🖼️ 이미지 자동 압축 함수 (최대 600x600, JPEG 75%)
           // 🖨️ 라벨 인쇄 (헬퍼와 통신 · JSON 다운로드 방식 · 한글 100% 지원)
-          // v20260427.07.02 - ZPL 직접생성 폐지, Python 헬퍼가 PNG 렌더링 후 ZT230 인쇄
+          // v20260427.07.03 - ZPL 직접생성 폐지, Python 헬퍼가 PNG 렌더링 후 ZT230 인쇄
           const downloadLabelJson = (labels) => {
             if (!labels || labels.length === 0) {
               alert('인쇄할 라벨이 없습니다.');
@@ -528,7 +540,7 @@ ${list}` }]
             }));
             
             const data = {
-              version: 'v20260427.07.02',
+              version: 'v20260427.07.03',
               created_at: new Date().toISOString(),
               label_count: enriched.length,
               total_print_count: enriched.reduce((s, l) => s + l.copies, 0),
@@ -1812,7 +1824,7 @@ ${list}` }]
                 <div className="px-4 py-4 border-b border-slate-100">
                   <div>
                     <div className="text-sm font-bold text-slate-900 leading-tight">LACEROOM통합관리</div>
-                    <div className="text-xs text-slate-400">v20260427.07.02</div>
+                    <div className="text-xs text-slate-400">v20260427.07.03</div>
                   </div>
                 </div>
 
@@ -1841,7 +1853,7 @@ ${list}` }]
                     ['productMgmt', '상품관리', '9'],
                     ['fixedExpense', '고정지출', '10'],
                     ['subsidy', '정부/지자체 지원사업', '11'],
-                    ['userMgmt', '사용자 관리', '12'],
+                    ['userMgmt', '설정', '12'],
                   ].map(([tab, label, num]) => {
                     const hasUnreportedBonus = tab === 'salary' && salaryRecords.some(r => {
                       const paid = salaryPayments.filter(p => p.salaryRecordId === r.id).reduce((s, p) => s + p.amount, 0);
@@ -6274,8 +6286,22 @@ ${list}` }]
 
                     {/* 작업 내역 및 통계 */}
                                         {/* 작업 내역 및 통계 */}
-                    <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8">
-                      <h2 className="text-xl font-bold text-slate-900 mb-6">작업 내역 및 통계</h2>
+                    <div className={`grid gap-6 ${receiptCheckedWorks.length > 0 ? 'grid-cols-1 lg:grid-cols-[1fr_400px]' : 'grid-cols-1'}`}>
+                      <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8">
+                      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+                        <h2 className="text-xl font-bold text-slate-900">작업 내역 및 통계</h2>
+                        {receiptCheckedWorks.length > 0 && (
+                          <div className="flex items-center gap-2">
+                            <span className="px-3 py-1.5 bg-yellow-100 border border-yellow-400 text-yellow-800 text-xs font-bold" style={{borderRadius:'2px'}}>
+                              📄 {receiptCheckedWorks.length}건 선택됨
+                            </span>
+                            <button onClick={()=>setReceiptCheckedWorks([])}
+                              className="px-3 py-1.5 border border-neutral-300 hover:bg-neutral-100 text-xs font-bold text-neutral-600" style={{borderRadius:'2px'}}>
+                              ✕ 선택 해제
+                            </button>
+                          </div>
+                        )}
+                      </div>
                       
                       {freelancerWorks.length === 0 ? (
                         <div className="text-center py-12 text-slate-400">
@@ -6342,6 +6368,9 @@ ${list}` }]
                             <table className="w-full text-sm">
                               <thead>
                                 <tr className="border-b-2 border-slate-300">
+                                  <th className="text-center py-3 px-2 font-bold w-10 bg-yellow-50 border-r border-slate-200" title="영수증 발급용 체크박스">
+                                    <span className="text-[10px]">📄</span>
+                                  </th>
                                   <th className="text-left py-3 px-4 font-bold">날짜</th>
                                   <th className="text-left py-3 px-4 font-bold whitespace-nowrap">프리랜서명</th>
                                   <th className="text-left py-3 px-4 font-bold">품명</th>
@@ -6395,7 +6424,20 @@ ${list}` }]
                                     const barColors = ['#3b82f6','#10b981','#8b5cf6','#f59e0b','#ef4444','#06b6d4','#f97316','#ec4899'];
                                     const barColor = barColors[freelancerIdx % barColors.length] || '#94a3b8';
                                     return (
-                                      <tr key={work.id} className="border-b border-slate-200 hover:bg-slate-50" style={{borderLeft: `4px solid ${barColor}`}}>
+                                      <tr key={work.id} className={`border-b border-slate-200 hover:bg-slate-50 ${receiptCheckedWorks.includes(work.id) ? 'bg-yellow-50' : ''}`} style={{borderLeft: `4px solid ${barColor}`}}>
+                                        <td className="py-3 px-2 text-center bg-yellow-50/40 border-r border-slate-200">
+                                          <input type="checkbox"
+                                            checked={receiptCheckedWorks.includes(work.id)}
+                                            onChange={(e)=>{
+                                              if (e.target.checked) {
+                                                setReceiptCheckedWorks([...receiptCheckedWorks, work.id]);
+                                              } else {
+                                                setReceiptCheckedWorks(receiptCheckedWorks.filter(id=>id!==work.id));
+                                              }
+                                            }}
+                                            className="w-4 h-4 accent-black cursor-pointer"
+                                            title="영수증에 포함"/>
+                                        </td>
                                         <td className="py-3 px-4 whitespace-nowrap">{work.workDate}</td>
                                         <td className="py-3 px-4 font-semibold whitespace-nowrap">{freelancer?.name || '삭제된 프리랜서'}</td>
                                         <td className="py-3 px-4">{work.itemName}</td>
@@ -6492,8 +6534,182 @@ ${list}` }]
                         </>
                       )}
                     </div>
-
-                    {/* 프리랜서별 통계 - 별도 섹션 */}
+                    
+                    {/* 영수증 사이드 패널 (체크된 작업 있을 때만) */}
+                    {receiptCheckedWorks.length > 0 && (() => {
+                      const checkedItems = freelancerWorks
+                        .filter(w => receiptCheckedWorks.includes(w.id))
+                        .sort((a,b) => (a.workDate||'').localeCompare(b.workDate||''));
+                      // 모든 선택 항목이 같은 프리랜서인지 확인
+                      const freelancerIds = [...new Set(checkedItems.map(w=>w.freelancerId))];
+                      const sameFreelancer = freelancerIds.length === 1;
+                      const targetFreelancer = sameFreelancer ? freelancers.find(f=>f.id===freelancerIds[0]) : null;
+                      const totalAmount = checkedItems.reduce((s,w)=>s + (w.qty * w.unitPrice), 0);
+                      const totalTax = Math.round(totalAmount * 0.033);
+                      const totalNet = totalAmount - totalTax;
+                      const totalQty = checkedItems.reduce((s,w)=>s+w.qty, 0);
+                      const today = new Date().toLocaleDateString('ko-KR');
+                      
+                      const handleDownloadPng = async () => {
+                        try {
+                          const node = document.getElementById('receipt-preview');
+                          if (!node) return alert('영수증 영역을 찾을 수 없습니다');
+                          // html2canvas 동적 로드
+                          if (!window.html2canvas) {
+                            const script = document.createElement('script');
+                            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+                            document.head.appendChild(script);
+                            await new Promise((res,rej)=>{ script.onload=res; script.onerror=rej; });
+                          }
+                          const canvas = await window.html2canvas(node, {scale: 2, backgroundColor: '#ffffff'});
+                          const link = document.createElement('a');
+                          link.download = `영수증_${targetFreelancer?.name||'프리랜서'}_${today.replace(/\./g,'').replace(/\s/g,'')}.png`;
+                          link.href = canvas.toDataURL('image/png');
+                          link.click();
+                        } catch(err) {
+                          alert('이미지 생성 실패: ' + err.message);
+                        }
+                      };
+                      
+                      const handleShare = async () => {
+                        try {
+                          const node = document.getElementById('receipt-preview');
+                          if (!node) return alert('영수증 영역을 찾을 수 없습니다');
+                          if (!window.html2canvas) {
+                            const script = document.createElement('script');
+                            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+                            document.head.appendChild(script);
+                            await new Promise((res,rej)=>{ script.onload=res; script.onerror=rej; });
+                          }
+                          const canvas = await window.html2canvas(node, {scale: 2, backgroundColor: '#ffffff'});
+                          canvas.toBlob(async (blob) => {
+                            if (!blob) return alert('이미지 변환 실패');
+                            const file = new File([blob], `영수증_${targetFreelancer?.name||'프리랜서'}.png`, {type:'image/png'});
+                            if (navigator.canShare && navigator.canShare({files:[file]})) {
+                              try {
+                                await navigator.share({
+                                  files: [file],
+                                  title: '영수증',
+                                  text: `${targetFreelancer?.name||'프리랜서'} 영수증`
+                                });
+                              } catch(e) {
+                                if (e.name !== 'AbortError') alert('공유 취소됨 또는 실패');
+                              }
+                            } else {
+                              alert('이 기기에서는 직접 공유 불가\nPNG 다운로드를 이용해주세요');
+                            }
+                          });
+                        } catch(err) {
+                          alert('공유 실패: ' + err.message);
+                        }
+                      };
+                      
+                      return (
+                        <div className="bg-white border-2 border-black overflow-hidden flex flex-col" style={{borderRadius:'2px', position:'sticky', top:'1rem', alignSelf:'start', maxHeight:'calc(100vh - 2rem)'}}>
+                          <div className="bg-black px-5 py-3 flex items-center justify-between">
+                            <span className="font-black text-white text-sm uppercase tracking-wider">📄 영수증 미리보기</span>
+                            <button onClick={()=>setReceiptCheckedWorks([])}
+                              className="text-white hover:text-neutral-300 text-xl font-light w-7 h-7 flex items-center justify-center" title="닫기">×</button>
+                          </div>
+                          <div className="overflow-y-auto p-4">
+                            <div id="receipt-preview" className="bg-white p-5" style={{minWidth:'320px'}}>
+                              {/* 영수증 헤더 */}
+                              <div className="text-center pb-4 border-b-2 border-black mb-4">
+                                <div className="text-2xl font-black text-black tracking-tight">{businessInfo.companyName||'주식회사 골드'}</div>
+                                {businessInfo.ceoName && <div className="text-sm text-black mt-1">대표: {businessInfo.ceoName}</div>}
+                                {businessInfo.businessNumber && <div className="text-xs text-neutral-700 mt-0.5 font-mono">사업자등록번호: {businessInfo.businessNumber}</div>}
+                                {businessInfo.address && <div className="text-xs text-neutral-700 mt-0.5">{businessInfo.address}</div>}
+                                {businessInfo.phone && <div className="text-xs text-neutral-700 mt-0.5 font-mono">TEL: {businessInfo.phone}</div>}
+                              </div>
+                              
+                              {/* 영수증 제목 */}
+                              <div className="text-center mb-4">
+                                <div className="text-3xl font-black text-black tracking-widest">영 수 증</div>
+                                <div className="text-sm text-neutral-600 mt-1">발행일: {today}</div>
+                              </div>
+                              
+                              {/* 수령인 정보 */}
+                              {targetFreelancer ? (
+                                <div className="bg-neutral-50 border border-neutral-300 p-3 mb-4" style={{borderRadius:'2px'}}>
+                                  <div className="text-xs text-neutral-600 mb-1">수령인</div>
+                                  <div className="text-lg font-black text-black">{targetFreelancer.name} 님</div>
+                                  {targetFreelancer.phone && <div className="text-xs text-neutral-600 font-mono">{targetFreelancer.phone}</div>}
+                                </div>
+                              ) : (
+                                <div className="bg-amber-50 border border-amber-400 p-2 mb-4 text-xs text-amber-800" style={{borderRadius:'2px'}}>
+                                  ⚠️ 여러 프리랜서가 선택됨 - 한 명씩 선택해 발급 권장
+                                </div>
+                              )}
+                              
+                              {/* 영수증 표 */}
+                              <div className="border-2 border-black mb-3">
+                                <table className="w-full text-sm">
+                                  <thead>
+                                    <tr className="bg-black text-white">
+                                      <th className="py-2 px-2 font-black text-xs">날짜</th>
+                                      <th className="py-2 px-2 font-black text-xs text-left">품명</th>
+                                      <th className="py-2 px-2 font-black text-xs">수량</th>
+                                      <th className="py-2 px-2 font-black text-xs text-right">공임</th>
+                                      <th className="py-2 px-2 font-black text-xs text-right">금액</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {checkedItems.map((w, idx)=>(
+                                      <tr key={w.id} className={`border-t border-neutral-300 ${idx%2===0?'bg-white':'bg-neutral-50'}`}>
+                                        <td className="py-2 px-2 text-xs font-mono text-center whitespace-nowrap">{(w.workDate||'').slice(5)}</td>
+                                        <td className="py-2 px-2 text-sm font-bold text-black">{w.itemName}</td>
+                                        <td className="py-2 px-2 text-sm font-bold text-center font-mono">{w.qty.toLocaleString()}</td>
+                                        <td className="py-2 px-2 text-sm font-mono text-right">{w.unitPrice.toLocaleString()}</td>
+                                        <td className="py-2 px-2 text-sm font-black font-mono text-right">{(w.qty*w.unitPrice).toLocaleString()}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                              
+                              {/* 합계 */}
+                              <div className="border-2 border-black p-3 space-y-1.5" style={{borderRadius:'2px'}}>
+                                <div className="flex justify-between text-sm">
+                                  <span className="font-bold text-neutral-700">총 수량</span>
+                                  <span className="font-black font-mono">{totalQty.toLocaleString()} 개</span>
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                  <span className="font-bold text-neutral-700">총 금액</span>
+                                  <span className="font-black font-mono">{totalAmount.toLocaleString()} 원</span>
+                                </div>
+                                <div className="flex justify-between text-sm border-b border-neutral-300 pb-1.5">
+                                  <span className="font-bold text-red-700">세금 (3.3%)</span>
+                                  <span className="font-black font-mono text-red-700">- {totalTax.toLocaleString()} 원</span>
+                                </div>
+                                <div className="flex justify-between text-base pt-1">
+                                  <span className="font-black text-black">실지급액</span>
+                                  <span className="text-2xl font-black font-mono text-black">{totalNet.toLocaleString()} 원</span>
+                                </div>
+                              </div>
+                              
+                              {/* 비고 */}
+                              <div className="mt-3 text-xs text-neutral-500 text-center">
+                                위 금액을 정히 영수합니다.
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* 액션 버튼 */}
+                          <div className="border-t border-neutral-300 p-3 space-y-2 bg-neutral-50">
+                            <button onClick={handleDownloadPng}
+                              className="w-full py-2.5 bg-black hover:bg-neutral-800 text-white font-black text-sm uppercase tracking-wider" style={{borderRadius:'2px'}}>
+                              📥 PNG 이미지 저장
+                            </button>
+                            <button onClick={handleShare}
+                              className="w-full py-2.5 bg-white hover:bg-black hover:text-white border-2 border-black text-black font-black text-sm uppercase tracking-wider" style={{borderRadius:'2px'}}>
+                              📲 공유 (카톡 등)
+                            </button>
+                            <div className="text-[10px] text-neutral-500 text-center">위 영수증을 캡처해서 사용해도 됩니다</div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    </div>{/* end grid */}
                     <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8">
                       <h2 className="text-xl font-bold text-slate-900 mb-6">📊 프리랜서별 통계</h2>
                       {freelancers.length === 0 ? (
@@ -7797,7 +8013,7 @@ ${list}` }]
                   );
                 })()}
                 
-                {/* 🖨️ 라벨 인쇄 편집기 v20260427.07.02 - 헬퍼 연동, 한글 100% */}
+                {/* 🖨️ 라벨 인쇄 편집기 v20260427.07.03 - 헬퍼 연동, 한글 100% */}
                 {barcodePrintPopup && (() => {
                   const p = barcodePrintPopup.product;
                   const barcodes = p.barcodes || {};
@@ -7942,7 +8158,7 @@ ${list}` }]
                         <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-slate-100 sticky top-0 bg-white z-10">
                           <div>
                             <h3 className="text-base font-bold text-slate-900">🖨️ 라벨 인쇄 + 디자인 편집기</h3>
-                            <div className="text-[10px] text-slate-500 mt-0.5">v20260427.07.02 · 헬퍼 자동 인쇄 · 한글 100%</div>
+                            <div className="text-[10px] text-slate-500 mt-0.5">v20260427.07.03 · 헬퍼 자동 인쇄 · 한글 100%</div>
                           </div>
                           <button onClick={()=>setBarcodePrintPopup(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
                         </div>
@@ -11433,50 +11649,72 @@ ${list}` }]
 
                 {activeMainTab === 'userMgmt' && (
                   <div className="space-y-4">
-                    <div className="bg-white border border-neutral-300 p-12 text-center" style={{borderRadius:'2px'}}>
-                      <div className="max-w-md mx-auto">
-                        <div className="text-5xl mb-4">🔐</div>
-                        <h2 className="text-2xl font-black text-black tracking-tight mb-2">사용자 관리</h2>
-                        <div className="inline-block px-3 py-1 bg-amber-100 border border-amber-400 text-amber-800 text-xs font-bold mb-6 uppercase tracking-wider" style={{borderRadius:'2px'}}>
-                          준비중
+                    <h1 className="text-3xl font-black text-black tracking-tight">설정</h1>
+                    
+                    {/* 회사 정보 섹션 */}
+                    <div className="bg-white border border-neutral-300 overflow-hidden" style={{borderRadius:'2px'}}>
+                      <div className="bg-neutral-100 px-5 py-3 border-b border-neutral-300">
+                        <span className="font-black text-black text-sm uppercase tracking-wider">🏢 회사 정보</span>
+                        <p className="text-[11px] text-neutral-500 mt-0.5 normal-case tracking-normal">영수증, 발주서 등에 표시됩니다</p>
+                      </div>
+                      <div className="p-5">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-[11px] font-bold text-black mb-2 uppercase tracking-wider">상호명 *</label>
+                            <input type="text" value={businessInfo.companyName||''}
+                              onChange={e=>saveBusinessInfo({...businessInfo, companyName: e.target.value})}
+                              placeholder="주식회사 골드"
+                              className="w-full px-3 py-2.5 border border-neutral-300 focus:border-black outline-none text-sm" style={{borderRadius:'2px'}}/>
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-black mb-2 uppercase tracking-wider">대표자명</label>
+                            <input type="text" value={businessInfo.ceoName||''}
+                              onChange={e=>saveBusinessInfo({...businessInfo, ceoName: e.target.value})}
+                              placeholder="홍길동"
+                              className="w-full px-3 py-2.5 border border-neutral-300 focus:border-black outline-none text-sm" style={{borderRadius:'2px'}}/>
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-black mb-2 uppercase tracking-wider">사업자등록번호</label>
+                            <input type="text" value={businessInfo.businessNumber||''}
+                              onChange={e=>saveBusinessInfo({...businessInfo, businessNumber: e.target.value})}
+                              placeholder="000-00-00000"
+                              className="w-full px-3 py-2.5 border border-neutral-300 focus:border-black outline-none text-sm font-mono" style={{borderRadius:'2px'}}/>
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-black mb-2 uppercase tracking-wider">전화번호</label>
+                            <input type="text" value={businessInfo.phone||''}
+                              onChange={e=>saveBusinessInfo({...businessInfo, phone: e.target.value})}
+                              placeholder="000-0000-0000"
+                              className="w-full px-3 py-2.5 border border-neutral-300 focus:border-black outline-none text-sm font-mono" style={{borderRadius:'2px'}}/>
+                          </div>
+                          <div className="md:col-span-2">
+                            <label className="block text-[11px] font-bold text-black mb-2 uppercase tracking-wider">사업장 주소</label>
+                            <input type="text" value={businessInfo.address||''}
+                              onChange={e=>saveBusinessInfo({...businessInfo, address: e.target.value})}
+                              placeholder="경기도 양주시..."
+                              className="w-full px-3 py-2.5 border border-neutral-300 focus:border-black outline-none text-sm" style={{borderRadius:'2px'}}/>
+                          </div>
                         </div>
-                        <p className="text-sm text-neutral-600 leading-relaxed mb-6">
-                          여러 직원이 LACEROOM을 함께 사용할 때<br/>
-                          역할에 맞는 권한을 부여하는 기능을 준비 중이에요.
-                        </p>
-                        
-                        <div className="text-left bg-neutral-50 border border-neutral-200 p-4 mb-4" style={{borderRadius:'2px'}}>
-                          <div className="text-[11px] font-bold text-black mb-3 uppercase tracking-wider">예정 기능</div>
-                          <ul className="space-y-2 text-sm text-neutral-700">
-                            <li className="flex items-start gap-2">
-                              <span className="text-black font-bold mt-0.5">·</span>
-                              <span>사용자 등록/관리 (관리자/직원/알바)</span>
-                            </li>
-                            <li className="flex items-start gap-2">
-                              <span className="text-black font-bold mt-0.5">·</span>
-                              <span>기능별 권한 부여 (상품 수정, 발주 작성, 단가 수정 등)</span>
-                            </li>
-                            <li className="flex items-start gap-2">
-                              <span className="text-black font-bold mt-0.5">·</span>
-                              <span>로그인 / PIN 인증</span>
-                            </li>
-                            <li className="flex items-start gap-2">
-                              <span className="text-black font-bold mt-0.5">·</span>
-                              <span>조작 이력 추적 (누가 언제 무엇을 수정했는지)</span>
-                            </li>
-                          </ul>
-                        </div>
-                        
-                        <p className="text-xs text-neutral-400">
-                          현재는 모든 사용자가 모든 기능을 사용할 수 있습니다.
-                        </p>
+                        <div className="mt-3 text-[10px] text-neutral-500">자동 저장됩니다</div>
+                      </div>
+                    </div>
+                    
+                    {/* 사용자 관리 섹션 (준비중) */}
+                    <div className="bg-white border border-neutral-300 overflow-hidden" style={{borderRadius:'2px'}}>
+                      <div className="bg-neutral-100 px-5 py-3 border-b border-neutral-300 flex items-center gap-3">
+                        <span className="font-black text-black text-sm uppercase tracking-wider">🔐 사용자 관리</span>
+                        <span className="px-2 py-0.5 bg-amber-100 border border-amber-400 text-amber-800 text-[10px] font-bold uppercase tracking-wider" style={{borderRadius:'2px'}}>준비중</span>
+                      </div>
+                      <div className="p-5 text-sm text-neutral-600 leading-relaxed">
+                        여러 직원이 LACEROOM을 함께 사용할 때 역할에 맞는 권한을 부여하는 기능을 준비 중이에요.<br/>
+                        <span className="text-[12px] text-neutral-500">예정: 사용자 등록 · 권한 부여 · PIN 인증 · 조작 이력 추적</span>
                       </div>
                     </div>
                   </div>
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260427.07.02</p>
+                <p>© 2026 LACEROOM통합관리 v20260427.07.03</p>
               </footer>
             </div>
           </div>
