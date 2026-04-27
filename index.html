@@ -1825,7 +1825,7 @@ ${list}` }]
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260427.09.03</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260427.09.04</div>
                   </div>
                 </div>
 
@@ -8254,25 +8254,28 @@ ${list}` }]
                         onClick={e=>e.stopPropagation()}>
                         
                         {/* 헤더 */}
-                        <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-slate-100 sticky top-0 bg-white z-10">
+                        <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b-2 border-black sticky top-0 bg-white z-10">
                           <div>
-                            <h3 className="text-base font-bold text-slate-900">🖨️ 라벨 인쇄 + 디자인 편집기</h3>
-                            <div className="text-[10px] text-slate-500 mt-0.5">v20260427.07.05 · 헬퍼 자동 인쇄 · 한글 100%</div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-base font-black text-black tracking-tight">🖨️ 라벨 인쇄 + 디자인 편집기</h3>
+                              <span className="bg-black text-white text-[10px] font-black px-2 py-0.5 tracking-widest" style={{borderRadius:'4px'}}>EDITOR</span>
+                            </div>
+                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260427.09.04 · 헬퍼 자동 인쇄 · 한글 100%</div>
                           </div>
-                          <button onClick={()=>setBarcodePrintPopup(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
+                          <button onClick={()=>setBarcodePrintPopup(null)} className="text-neutral-400 hover:text-black text-xl font-black">✕</button>
                         </div>
                         
                         {/* 상품 정보 */}
                         <div className="px-5 pt-3">
-                          <div className="flex items-center gap-3 bg-slate-50 rounded-xl p-3">
+                          <div className="flex items-center gap-3 bg-neutral-50 border border-neutral-200 p-3" style={{borderRadius:'8px'}}>
                             {p.image ? (
-                              <img src={p.image} className="w-12 h-12 rounded-lg object-cover border" alt=""/>
+                              <img src={p.image} className="w-12 h-12 object-cover border border-neutral-300" style={{borderRadius:'6px'}} alt=""/>
                             ) : (
-                              <div className="w-12 h-12 rounded-lg bg-white border flex items-center justify-center text-xl">{p.type==='hairpin'?'📌':'🎀'}</div>
+                              <div className="w-12 h-12 bg-white border border-neutral-300 flex items-center justify-center text-xl" style={{borderRadius:'6px'}}>{p.type==='hairpin'?'📌':'🎀'}</div>
                             )}
                             <div className="flex-1 min-w-0">
-                              <div className="font-bold text-slate-900 text-sm truncate">{p.name}</div>
-                              <div className="text-xs text-indigo-600 mt-0.5">🏷️ {p.labelName || '(라벨명 미등록)'}</div>
+                              <div className="font-black text-black text-sm truncate tracking-tight">{p.name}</div>
+                              <div className="text-xs text-neutral-600 mt-0.5 font-bold">🏷️ {p.labelName || '(라벨명 미등록)'}</div>
                             </div>
                           </div>
                         </div>
@@ -8284,19 +8287,20 @@ ${list}` }]
                           <div className="space-y-3">
                             
                             {/* 디자인 프리셋 */}
-                            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-2.5">
-                              <div className="text-[11px] font-bold text-indigo-700 mb-1.5">⚡ 디자인 프리셋</div>
+                            <div className="bg-white border border-neutral-300 p-2.5" style={{borderRadius:'8px'}}>
+                              <div className="text-[11px] font-black text-black mb-1.5 tracking-tight">⚡ 디자인 프리셋</div>
                               <div className="space-y-1">
                                 {designPresets.map(pr => {
                                   const isActive = Object.keys(pr.apply).every(k => opts[k] === pr.apply[k]);
                                   return (
                                     <button key={pr.key}
                                       onClick={() => setOpts({...opts, ...pr.apply})}
-                                      className={`w-full text-left px-2 py-1.5 rounded-md transition ${
-                                        isActive ? 'bg-indigo-500 text-white' : 'bg-white border border-indigo-200 text-slate-700 hover:bg-indigo-100'
-                                      }`}>
-                                      <div className="text-[11px] font-bold">{pr.icon} {pr.name}</div>
-                                      <div className={`text-[9px] mt-0.5 ${isActive?'text-indigo-100':'text-slate-400'}`}>{pr.desc}</div>
+                                      className={`w-full text-left px-2 py-1.5 transition ${
+                                        isActive ? 'bg-black text-white' : 'bg-white border border-neutral-200 text-black hover:bg-neutral-100'
+                                      }`}
+                                      style={{borderRadius:'6px'}}>
+                                      <div className="text-[11px] font-black tracking-tight">{pr.icon} {pr.name}</div>
+                                      <div className={`text-[9px] mt-0.5 font-bold ${isActive?'text-neutral-300':'text-neutral-500'}`}>{pr.desc}</div>
                                     </button>
                                   );
                                 })}
@@ -8304,51 +8308,57 @@ ${list}` }]
                                 {userPresets.map(pr => (
                                   <div key={pr.key} className="flex items-stretch gap-1">
                                     <button onClick={() => setOpts({...opts, ...pr.apply})}
-                                      className="flex-1 text-left px-2 py-1.5 rounded-md bg-white border border-purple-200 text-slate-700 hover:bg-purple-50 transition">
-                                      <div className="text-[11px] font-bold">{pr.icon} {pr.name}</div>
-                                      <div className="text-[9px] text-slate-400 mt-0.5">{pr.desc}</div>
+                                      className="flex-1 text-left px-2 py-1.5 bg-white border border-neutral-200 text-black hover:bg-neutral-100 transition"
+                                      style={{borderRadius:'6px'}}>
+                                      <div className="text-[11px] font-black tracking-tight">{pr.icon} {pr.name}</div>
+                                      <div className="text-[9px] text-neutral-500 mt-0.5 font-bold">{pr.desc}</div>
                                     </button>
                                     <button onClick={() => deleteUserPreset(pr.key)}
-                                      className="px-1.5 rounded-md bg-red-100 text-red-600 hover:bg-red-200 text-[10px] font-bold">✕</button>
+                                      className="px-1.5 bg-red-50 border border-red-300 text-red-600 hover:bg-red-100 text-[10px] font-black"
+                                      style={{borderRadius:'6px'}}>✕</button>
                                   </div>
                                 ))}
                                 
                                 <button onClick={saveUserPreset}
-                                  className="w-full text-center px-2 py-1.5 rounded-md border border-dashed border-slate-300 text-slate-500 hover:bg-white text-[10px] font-bold">
+                                  className="w-full text-center px-2 py-1.5 border border-dashed border-neutral-300 text-neutral-500 hover:bg-neutral-50 hover:border-black hover:text-black text-[10px] font-black transition"
+                                  style={{borderRadius:'6px'}}>
                                   💾 현재 설정 저장
                                 </button>
                               </div>
                             </div>
                             
                             {/* 라벨 크기 */}
-                            <div className="bg-amber-50 border border-amber-200 rounded-xl p-2.5">
-                              <div className="text-[11px] font-bold text-amber-700 mb-1.5">📏 라벨 크기</div>
+                            <div className="bg-white border border-neutral-300 p-2.5" style={{borderRadius:'8px'}}>
+                              <div className="text-[11px] font-black text-black mb-1.5 tracking-tight">📏 라벨 크기</div>
                               <div className="grid grid-cols-2 gap-1">
                                 {sizePresets.map(s => {
                                   const isActive = opts.widthMm===s.w && opts.heightMm===s.h;
                                   return (
                                     <button key={s.name} onClick={()=>setOpts({widthMm:s.w, heightMm:s.h, labelNameSize:s.lns, barcodeHeight:s.bcH})}
-                                      className={`px-1 py-1.5 rounded text-[10px] font-bold transition ${
-                                        isActive ? 'bg-amber-500 text-white' : 'bg-white border border-amber-200 text-slate-600 hover:bg-amber-100'
-                                      }`}>{s.name}</button>
+                                      className={`px-1 py-1.5 text-[10px] font-black transition ${
+                                        isActive ? 'bg-black text-white' : 'bg-white border border-neutral-200 text-black hover:bg-neutral-100'
+                                      }`}
+                                      style={{borderRadius:'6px'}}>{s.name}</button>
                                   );
                                 })}
                               </div>
                               <div className="flex gap-1 mt-1.5 items-center">
                                 <input type="number" value={opts.widthMm} min="20" max="100"
                                   onChange={e=>setOpts({widthMm: parseInt(e.target.value)||50})}
-                                  className="flex-1 px-1 py-1 border border-amber-200 rounded text-[10px] text-center"/>
-                                <span className="text-[10px] text-amber-400">×</span>
+                                  className="flex-1 px-1 py-1 border border-neutral-300 text-[10px] text-center font-bold"
+                                  style={{borderRadius:'4px'}}/>
+                                <span className="text-[10px] text-neutral-500 font-bold">×</span>
                                 <input type="number" value={opts.heightMm} min="10" max="100"
                                   onChange={e=>setOpts({heightMm: parseInt(e.target.value)||30})}
-                                  className="flex-1 px-1 py-1 border border-amber-200 rounded text-[10px] text-center"/>
-                                <span className="text-[10px] text-amber-600 font-bold">mm</span>
+                                  className="flex-1 px-1 py-1 border border-neutral-300 text-[10px] text-center font-bold"
+                                  style={{borderRadius:'4px'}}/>
+                                <span className="text-[10px] text-black font-black">mm</span>
                               </div>
                             </div>
                             
                             {/* 표시 항목 */}
-                            <div className="bg-purple-50 border border-purple-200 rounded-xl p-2.5">
-                              <div className="text-[11px] font-bold text-purple-700 mb-1.5">🎨 표시 항목</div>
+                            <div className="bg-white border border-neutral-300 p-2.5" style={{borderRadius:'8px'}}>
+                              <div className="text-[11px] font-black text-black mb-1.5 tracking-tight">🎨 표시 항목</div>
                               <div className="space-y-1">
                                 {[
                                   {key: 'showLogo', label: 'LACEROOM 로고'},
@@ -8363,61 +8373,66 @@ ${list}` }]
                                   <label key={item.key} className="flex items-center gap-1.5 cursor-pointer">
                                     <input type="checkbox" checked={opts[item.key] !== false}
                                       onChange={e=>setOpts({[item.key]: e.target.checked})}
-                                      className="w-3.5 h-3.5 accent-purple-500"/>
-                                    <span className="text-[11px] text-slate-700">{item.label}</span>
+                                      className="w-3.5 h-3.5 accent-black"/>
+                                    <span className="text-[11px] text-black font-bold">{item.label}</span>
                                   </label>
                                 ))}
                               </div>
                             </div>
                             
                             {/* 텍스트 */}
-                            <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5">
-                              <div className="text-[11px] font-bold text-slate-700 mb-1.5">✏️ 텍스트</div>
+                            <div className="bg-white border border-neutral-300 p-2.5" style={{borderRadius:'8px'}}>
+                              <div className="text-[11px] font-black text-black mb-1.5 tracking-tight">✏️ 텍스트</div>
                               <div className="space-y-1.5">
                                 <div>
-                                  <label className="text-[9px] text-slate-500 block mb-0.5">로고</label>
+                                  <label className="text-[9px] text-neutral-500 block mb-0.5 font-bold uppercase tracking-wider">로고</label>
                                   <input type="text" value={opts.topText||''}
                                     onChange={e=>setOpts({topText: e.target.value})}
                                     placeholder="LACEROOM" maxLength={20}
-                                    className="w-full px-2 py-1 border border-slate-200 rounded text-[10px]"/>
+                                    className="w-full px-2 py-1 border border-neutral-300 text-[10px] font-bold"
+                                    style={{borderRadius:'4px'}}/>
                                 </div>
                                 <div>
-                                  <label className="text-[9px] text-slate-500 block mb-0.5">한글 보조명</label>
+                                  <label className="text-[9px] text-neutral-500 block mb-0.5 font-bold uppercase tracking-wider">한글 보조명</label>
                                   <input type="text" value={opts.koreanName||''}
                                     onChange={e=>setOpts({koreanName: e.target.value})}
                                     placeholder="레이스룸" maxLength={10}
-                                    className="w-full px-2 py-1 border border-slate-200 rounded text-[10px]"/>
+                                    className="w-full px-2 py-1 border border-neutral-300 text-[10px] font-bold"
+                                    style={{borderRadius:'4px'}}/>
                                 </div>
                                 <div>
-                                  <label className="text-[9px] text-slate-500 block mb-0.5">하단 문구 (선택)</label>
+                                  <label className="text-[9px] text-neutral-500 block mb-0.5 font-bold uppercase tracking-wider">하단 문구 (선택)</label>
                                   <input type="text" value={opts.bottomText||''}
                                     onChange={e=>setOpts({bottomText: e.target.value})}
                                     placeholder="MADE IN KOREA" maxLength={30}
-                                    className="w-full px-2 py-1 border border-slate-200 rounded text-[10px]"/>
+                                    className="w-full px-2 py-1 border border-neutral-300 text-[10px] font-bold"
+                                    style={{borderRadius:'4px'}}/>
                                 </div>
                               </div>
                             </div>
                             
                             {/* QR 옵션 */}
                             {opts.includeQR && (
-                              <div className="bg-red-50 border border-red-200 rounded-xl p-2.5">
-                                <div className="text-[11px] font-bold text-red-700 mb-1.5">🔗 QR 설정</div>
+                              <div className="bg-red-50 border border-red-300 p-2.5" style={{borderRadius:'8px'}}>
+                                <div className="text-[11px] font-black text-red-700 mb-1.5 tracking-tight">🔗 QR 설정</div>
                                 <div className="space-y-1.5">
                                   <input type="text" value={opts.qrUrl||''}
                                     onChange={e=>setOpts({qrUrl: e.target.value})}
                                     placeholder="https://..."
-                                    className="w-full px-2 py-1 border border-red-200 rounded text-[10px] font-mono"/>
+                                    className="w-full px-2 py-1 border border-red-300 text-[10px] font-mono"
+                                    style={{borderRadius:'4px'}}/>
                                   <div className="grid grid-cols-2 gap-1.5">
                                     <input type="text" value={opts.qrLabel||''}
                                       onChange={e=>setOpts({qrLabel: e.target.value.slice(0,12)})}
                                       placeholder="QR 라벨" maxLength={12}
-                                      className="w-full px-2 py-1 border border-red-200 rounded text-[10px]"/>
+                                      className="w-full px-2 py-1 border border-red-300 text-[10px] font-bold"
+                                      style={{borderRadius:'4px'}}/>
                                     <div className="flex items-center gap-1">
-                                      <span className="text-[9px] text-slate-500">크기</span>
+                                      <span className="text-[9px] text-neutral-600 font-bold">크기</span>
                                       <input type="range" value={opts.qrSize||75} min="40" max="120"
                                         onChange={e=>setOpts({qrSize: parseInt(e.target.value)||75})}
-                                        className="flex-1 accent-red-500"/>
-                                      <span className="text-[9px] text-slate-500 w-6 text-right">{opts.qrSize}</span>
+                                        className="flex-1 accent-black"/>
+                                      <span className="text-[9px] text-black w-6 text-right font-black">{opts.qrSize}</span>
                                     </div>
                                   </div>
                                 </div>
@@ -8429,13 +8444,13 @@ ${list}` }]
                           <div className="space-y-3">
                             
                             {/* 미리보기 */}
-                            <div className="bg-slate-50 rounded-xl p-3">
+                            <div className="bg-neutral-50 border border-neutral-200 p-3" style={{borderRadius:'8px'}}>
                               <div className="flex justify-between items-center mb-2">
-                                <span className="text-[11px] font-bold text-slate-600">📐 실시간 미리보기</span>
-                                <span className="text-[9px] text-slate-400">{opts.widthMm}×{opts.heightMm}mm @ 200dpi · 8배 확대</span>
+                                <span className="text-[11px] font-black text-black tracking-tight">📐 실시간 미리보기</span>
+                                <span className="text-[9px] text-neutral-500 font-bold">{opts.widthMm}×{opts.heightMm}mm @ 200dpi · 8배 확대</span>
                               </div>
-                              <div className="flex justify-center bg-slate-200 rounded-lg p-3">
-                                <div className="bg-white border border-slate-300 relative" 
+                              <div className="flex justify-center bg-neutral-200 p-3" style={{borderRadius:'6px'}}>
+                                <div className="bg-white border border-neutral-400 relative" 
                                   style={{
                                     width: `${pvW}px`, height: `${pvH}px`,
                                     padding: `${opts.margin}px`, boxSizing: 'border-box',
@@ -8518,63 +8533,65 @@ ${list}` }]
                                   )}
                                 </div>
                               </div>
-                              <div className="text-[9px] text-slate-400 mt-1.5 text-center">색상별로 자동 변경 · 실제 출력은 한글이 더 선명합니다</div>
+                              <div className="text-[9px] text-neutral-500 mt-1.5 text-center font-bold">색상별로 자동 변경 · 실제 출력은 한글이 더 선명합니다</div>
                             </div>
                             
                             {/* 미세조정 */}
-                            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3">
-                              <div className="text-[11px] font-bold text-yellow-700 mb-2">🎯 미세조정</div>
+                            <div className="bg-white border border-neutral-300 p-3" style={{borderRadius:'8px'}}>
+                              <div className="text-[11px] font-black text-black mb-2 tracking-tight">🎯 미세조정</div>
                               <div className="grid grid-cols-2 gap-2">
                                 <div>
                                   <div className="flex justify-between text-[10px] mb-0.5">
-                                    <span className="text-slate-600">상품명 크기</span>
-                                    <span className="text-yellow-700 font-bold">{opts.labelNameSize}</span>
+                                    <span className="text-neutral-600 font-bold">상품명 크기</span>
+                                    <span className="text-black font-black">{opts.labelNameSize}</span>
                                   </div>
                                   <input type="range" value={opts.labelNameSize} min="20" max="60"
                                     onChange={e=>setOpts({labelNameSize: parseInt(e.target.value)||38})}
-                                    className="w-full accent-yellow-500"/>
+                                    className="w-full accent-black"/>
                                 </div>
                                 <div>
                                   <div className="flex justify-between text-[10px] mb-0.5">
-                                    <span className="text-slate-600">바코드 높이</span>
-                                    <span className="text-yellow-700 font-bold">{opts.barcodeHeight}</span>
+                                    <span className="text-neutral-600 font-bold">바코드 높이</span>
+                                    <span className="text-black font-black">{opts.barcodeHeight}</span>
                                   </div>
                                   <input type="range" value={opts.barcodeHeight} min="30" max="120"
                                     onChange={e=>setOpts({barcodeHeight: parseInt(e.target.value)||70})}
-                                    className="w-full accent-yellow-500"/>
+                                    className="w-full accent-black"/>
                                 </div>
                                 <div>
                                   <div className="flex justify-between text-[10px] mb-0.5">
-                                    <span className="text-slate-600">전체 여백</span>
-                                    <span className="text-yellow-700 font-bold">{opts.margin}</span>
+                                    <span className="text-neutral-600 font-bold">전체 여백</span>
+                                    <span className="text-black font-black">{opts.margin}</span>
                                   </div>
                                   <input type="range" value={opts.margin} min="2" max="20"
                                     onChange={e=>setOpts({margin: parseInt(e.target.value)||8})}
-                                    className="w-full accent-yellow-500"/>
+                                    className="w-full accent-black"/>
                                 </div>
                                 <div>
                                   <div className="flex justify-between text-[10px] mb-0.5">
-                                    <span className="text-slate-600">뱃지 크기</span>
-                                    <span className="text-yellow-700 font-bold">{opts.badgeSize}</span>
+                                    <span className="text-neutral-600 font-bold">뱃지 크기</span>
+                                    <span className="text-black font-black">{opts.badgeSize}</span>
                                   </div>
                                   <input type="range" value={opts.badgeSize} min="14" max="32"
                                     onChange={e=>setOpts({badgeSize: parseInt(e.target.value)||20})}
-                                    className="w-full accent-yellow-500"/>
+                                    className="w-full accent-black"/>
                                 </div>
                               </div>
                             </div>
                             
                             {/* 색상별 수량 */}
-                            <div className="bg-cyan-50 border border-cyan-200 rounded-xl p-3">
-                              <div className="text-[11px] font-bold text-cyan-700 mb-2 flex items-center justify-between">
+                            <div className="bg-white border border-neutral-300 p-3" style={{borderRadius:'8px'}}>
+                              <div className="text-[11px] font-black text-black mb-2 flex items-center justify-between tracking-tight">
                                 <span>📋 색상별 출력 수량</span>
                                 <div className="flex gap-1">
                                   <button onClick={()=>{
                                     const next = {};
                                     colors.forEach(c => { if (barcodes[c]) next[c] = 1; });
                                     setSelections(next);
-                                  }} className="text-[10px] bg-cyan-500 hover:bg-cyan-600 text-white px-2 py-0.5 rounded font-bold">전체 1장</button>
-                                  <button onClick={()=>setSelections({})} className="text-[10px] bg-slate-300 hover:bg-slate-400 text-white px-2 py-0.5 rounded font-bold">해제</button>
+                                  }} className="text-[10px] bg-black hover:bg-neutral-800 text-white px-2 py-0.5 font-black tracking-wider"
+                                  style={{borderRadius:'4px'}}>전체 1장</button>
+                                  <button onClick={()=>setSelections({})} className="text-[10px] bg-white border border-neutral-300 hover:bg-neutral-100 text-black px-2 py-0.5 font-black tracking-wider"
+                                  style={{borderRadius:'4px'}}>해제</button>
                                 </div>
                               </div>
                               <div className="space-y-1 max-h-56 overflow-y-auto">
@@ -8605,21 +8622,21 @@ ${list}` }]
                                   const displayColorName = (customName && customName.trim()) ? customName.trim() : color;
                                   // 반광 구분
                                   const isMatte = color.includes('(반광)');
-                                  const rowBg = !bc ? 'bg-slate-50 border-slate-200 opacity-60' : 
-                                                isMatte ? 'bg-slate-100 border-slate-400' : 
-                                                'bg-white border-cyan-200';
+                                  const rowBg = !bc ? 'bg-neutral-50 border-neutral-200 opacity-60' : 
+                                                isMatte ? 'bg-neutral-100 border-neutral-400' : 
+                                                'bg-white border-neutral-300';
                                   return (
-                                    <div key={color} className={`flex items-center gap-2 rounded-lg p-2 border ${rowBg}`}>
-                                      <span style={{background:cBg, color:cTxt, padding:'2px 8px', borderRadius:'3px', fontSize:'11px', fontWeight:700}} title={color}>{displayColorName}</span>
-                                      {posDisplay && <span className="text-[10px] font-mono text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded font-bold">{posDisplay}</span>}
+                                    <div key={color} className={`flex items-center gap-2 p-2 border ${rowBg}`} style={{borderRadius:'6px'}}>
+                                      <span style={{background:cBg, color:cTxt, padding:'2px 8px', borderRadius:'4px', fontSize:'11px', fontWeight:700}} title={color}>{displayColorName}</span>
+                                      {posDisplay && <span className="text-[10px] font-mono text-black bg-neutral-200 px-1.5 py-0.5 font-black" style={{borderRadius:'4px'}}>{posDisplay}</span>}
                                       {bc ? (
                                         <>
-                                          <span className="text-[10px] font-mono text-cyan-700 bg-cyan-100 px-1.5 py-0.5 rounded ml-auto">{bc}</span>
+                                          <span className="text-[10px] font-mono text-neutral-700 bg-neutral-100 px-1.5 py-0.5 ml-auto font-bold" style={{borderRadius:'4px'}}>{bc}</span>
                                           <input type="number" min="0" max="99" value={qty}
                                             onChange={e=>setSelections(s=>({...s, [color]: e.target.value.replace(/\D/g,'').slice(0,2)}))}
                                             placeholder="0"
-                                            className="w-12 px-1 py-1 rounded border border-cyan-200 text-xs text-center outline-none font-bold"/>
-                                          <span className="text-[10px] text-slate-400">장</span>
+                                            className="w-12 px-1 py-1 border border-neutral-300 text-xs text-center outline-none font-black" style={{borderRadius:'4px'}}/>
+                                          <span className="text-[10px] text-neutral-500 font-bold">장</span>
                                           <button
                                             onClick={()=>{
                                               const n = parseInt(qty) || 1;
@@ -8634,10 +8651,10 @@ ${list}` }]
                                               printBarcodeBatch(singleItem, opts);
                                             }}
                                             title={`${displayColorName} ${qty||1}장 즉시 출력`}
-                                            className="bg-indigo-500 hover:bg-indigo-600 text-white rounded px-2 py-1 text-[10px] font-bold whitespace-nowrap">🖨️ 출력</button>
+                                            className="bg-black hover:bg-neutral-800 text-white px-2 py-1 text-[10px] font-black tracking-wider whitespace-nowrap" style={{borderRadius:'4px'}}>🖨️ 출력</button>
                                         </>
                                       ) : (
-                                        <span className="text-[10px] text-amber-600 font-bold ml-auto">⚠️ 바코드 미등록</span>
+                                        <span className="text-[10px] text-amber-700 font-black ml-auto">⚠️ 바코드 미등록</span>
                                       )}
                                     </div>
                                   );
@@ -8650,24 +8667,25 @@ ${list}` }]
                         
                         {/* 푸터: 안내 + 버튼 */}
                         <div className="px-5 pb-5">
-                          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-2.5 mb-3 text-[11px] text-emerald-700 flex items-center gap-2">
+                          <div className="bg-neutral-50 border border-neutral-300 p-2.5 mb-3 text-[11px] text-neutral-700 flex items-center gap-2" style={{borderRadius:'6px'}}>
                             <span className="text-base">⚡</span>
                             <div>
-                              <div className="font-bold">Python 헬퍼가 자동 인쇄합니다</div>
-                              <div className="text-[10px] text-emerald-600">JSON 파일이 <strong>C:\laceroom-print\</strong> 에 다운로드되면 즉시 ZT230으로 인쇄</div>
+                              <div className="font-black text-black tracking-tight">Python 헬퍼가 자동 인쇄합니다</div>
+                              <div className="text-[10px] text-neutral-600 font-bold">JSON 파일이 <strong>C:\laceroom-print\</strong> 에 다운로드되면 즉시 ZT230으로 인쇄</div>
                             </div>
                           </div>
                           
                           <div className="flex gap-2">
                             <button onClick={()=>setBarcodePrintPopup(null)}
-                              className="flex-1 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl font-bold text-sm">취소</button>
+                              className="flex-1 py-2.5 bg-white border-2 border-black hover:bg-black hover:text-white text-black font-black text-sm uppercase tracking-widest transition-all" style={{borderRadius:'6px'}}>취소</button>
                             <button onClick={()=>{
                               if (toPrint.length === 0) { alert('출력할 색상/수량을 지정해주세요'); return; }
                               printBarcodeBatch(toPrint, opts);
                               setBarcodePrintPopup(null);
                             }}
                               disabled={toPrint.length === 0}
-                              className={`flex-[2] py-2.5 rounded-xl font-bold text-sm ${toPrint.length===0?'bg-slate-200 text-slate-400 cursor-not-allowed':'bg-indigo-500 hover:bg-indigo-600 text-white shadow'}`}>
+                              className={`flex-[2] py-2.5 font-black text-sm tracking-tight ${toPrint.length===0?'bg-neutral-200 text-neutral-400 cursor-not-allowed':'bg-black hover:bg-neutral-800 text-white'}`}
+                              style={{borderRadius:'6px'}}>
                               🖨️ 인쇄 ({toPrint.length}종 · 총 {totalLabels}장)
                             </button>
                           </div>
@@ -10019,7 +10037,7 @@ ${list}` }]
                                 
                                 // 봇용 데이터: 바코드 있는 상품만, 출력에 필요한 필드만
                                 const botData = {
-                                  version: 'v20260427.09.03',
+                                  version: 'v20260427.09.04',
                                   exported_at: new Date().toISOString(),
                                   exported_by: 'LACEROOM 9-1',
                                   product_count: 0,
@@ -10389,7 +10407,7 @@ ${list}` }]
                                             isPartialSoldout ? 'border-neutral-500 hover:border-black' :
                                             isOff ? 'border-neutral-500 hover:border-black' :
                                             'border-neutral-300 hover:border-neutral-700'
-                                          }`} style={{borderRadius:'2px'}}>
+                                          }`} style={{borderRadius:'8px'}}>
                                             {/* 이미지 영역 (정사각형 + 원본 비율 유지) */}
                                             {p.image ? (
                                               <div className="relative aspect-square bg-neutral-50 overflow-hidden flex items-center justify-center">
@@ -11863,7 +11881,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260427.09.03</p>
+                <p>© 2026 LACEROOM통합관리 v20260427.09.04</p>
               </footer>
             </div>
           </div>
