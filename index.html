@@ -1825,7 +1825,7 @@ ${list}` }]
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260427.09.02</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260427.09.03</div>
                   </div>
                 </div>
 
@@ -2077,18 +2077,30 @@ ${list}` }]
                           const daysLeft = due ? Math.ceil((due - today)/(1000*60*60*24)) : null;
                           const isUrgent = daysLeft !== null && daysLeft <= 2;
                           const isWarning = daysLeft !== null && daysLeft <= 5;
+                          // 카카오 노란색 베이스 + D-day별 강조
+                          const cardBg = isUrgent
+                            ? 'bg-red-50 border-red-400'
+                            : isWarning
+                              ? 'border-amber-400'
+                              : 'border-neutral-200';
+                          const cardStyle = {
+                            borderRadius: '8px',
+                            ...(isUrgent ? {} : {backgroundColor: '#FEE500'})
+                          };
                           return (
-                            <div className={`border-2 relative ${isUrgent?'bg-red-50 border-red-500':isWarning?'bg-amber-50 border-amber-500':'bg-white border-neutral-300'} ${compact?'p-2':'p-3'}`} style={{borderRadius:'2px'}}>
-                              {memo.isRecurring && <span className="absolute top-1.5 right-1.5 text-[9px] bg-black text-white px-1.5 py-0.5 font-black tracking-widest" style={{borderRadius:'2px'}}>🔁 반복</span>}
-                              <div className={`font-black text-black pr-12 ${compact?'text-xs':'text-sm'} mb-1 tracking-tight`}>{memo.title}</div>
-                              {!compact && memo.content && <div className="text-[11px] text-neutral-600 mb-1.5 line-clamp-2">{memo.content}</div>}
-                              {due && <div className={`text-[10px] font-black ${compact?'mb-1':'mb-2'} ${isUrgent?'text-red-700':isWarning?'text-amber-700':'text-neutral-500'} tracking-tight`}>
-                                📅 {memo.dueDate} {daysLeft===0?'(오늘!)':daysLeft>0?`D-${daysLeft}`:`(${Math.abs(daysLeft)}일 지남)`}
-                              </div>}
-                              <button onClick={() => {
-                                if (memo.recurringKey) saveMemos([...memos, {...memo, done:true, doneAt:new Date().toISOString()}]);
-                                else saveMemos(memos.map(m => m.id===memo.id?{...m,done:true,doneAt:new Date().toISOString()}:m));
-                              }} className={`w-full ${compact?'py-1':'py-1.5'} bg-black hover:bg-neutral-800 text-white text-[11px] font-black uppercase tracking-widest`} style={{borderRadius:'2px'}}>✓ 완료</button>
+                            <div className={`border relative ${cardBg} ${compact?'p-2.5':'p-3'}`} style={cardStyle}>
+                              {memo.isRecurring && <span className="absolute top-2 right-2 text-[9px] bg-black text-white px-1.5 py-0.5 font-black tracking-wider" style={{borderRadius:'4px'}}>🔁 반복</span>}
+                              <div className={`font-black text-black pr-14 ${compact?'text-xs':'text-sm'} mb-1.5 tracking-tight leading-tight`}>{memo.title}</div>
+                              {!compact && memo.content && <div className="text-[11px] text-neutral-700 mb-2 line-clamp-2">{memo.content}</div>}
+                              <div className="flex items-center justify-between gap-2">
+                                {due && <div className={`text-[10px] font-bold ${isUrgent?'text-red-700':isWarning?'text-amber-800':'text-neutral-700'} tracking-tight`}>
+                                  📅 {memo.dueDate} {daysLeft===0?'(오늘!)':daysLeft>0?`D-${daysLeft}`:`${Math.abs(daysLeft)}일 지남`}
+                                </div>}
+                                <button onClick={() => {
+                                  if (memo.recurringKey) saveMemos([...memos, {...memo, done:true, doneAt:new Date().toISOString()}]);
+                                  else saveMemos(memos.map(m => m.id===memo.id?{...m,done:true,doneAt:new Date().toISOString()}:m));
+                                }} className="ml-auto px-2.5 py-1 bg-black/80 hover:bg-black text-white text-[10px] font-bold tracking-wider transition-all shrink-0" style={{borderRadius:'4px'}}>✓ 완료</button>
+                              </div>
                             </div>
                           );
                         };
@@ -10007,7 +10019,7 @@ ${list}` }]
                                 
                                 // 봇용 데이터: 바코드 있는 상품만, 출력에 필요한 필드만
                                 const botData = {
-                                  version: 'v20260427.09.02',
+                                  version: 'v20260427.09.03',
                                   exported_at: new Date().toISOString(),
                                   exported_by: 'LACEROOM 9-1',
                                   product_count: 0,
@@ -11851,7 +11863,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260427.09.02</p>
+                <p>© 2026 LACEROOM통합관리 v20260427.09.03</p>
               </footer>
             </div>
           </div>
