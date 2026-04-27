@@ -516,7 +516,7 @@ ${list}` }]
 
           // 🖼️ 이미지 자동 압축 함수 (최대 600x600, JPEG 75%)
           // 🖨️ 라벨 인쇄 (헬퍼와 통신 · JSON 다운로드 방식 · 한글 100% 지원)
-          // v20260427.07.04 - ZPL 직접생성 폐지, Python 헬퍼가 PNG 렌더링 후 ZT230 인쇄
+          // v20260427.07.05 - ZPL 직접생성 폐지, Python 헬퍼가 PNG 렌더링 후 ZT230 인쇄
           const downloadLabelJson = (labels) => {
             if (!labels || labels.length === 0) {
               alert('인쇄할 라벨이 없습니다.');
@@ -540,7 +540,7 @@ ${list}` }]
             }));
             
             const data = {
-              version: 'v20260427.07.04',
+              version: 'v20260427.07.05',
               created_at: new Date().toISOString(),
               label_count: enriched.length,
               total_print_count: enriched.reduce((s, l) => s + l.copies, 0),
@@ -1824,7 +1824,7 @@ ${list}` }]
                 <div className="px-4 py-4 border-b border-slate-100">
                   <div>
                     <div className="text-sm font-bold text-slate-900 leading-tight">LACEROOM통합관리</div>
-                    <div className="text-xs text-slate-400">v20260427.07.04</div>
+                    <div className="text-xs text-slate-400">v20260427.07.05</div>
                   </div>
                 </div>
 
@@ -6535,7 +6535,7 @@ ${list}` }]
                       )}
                     </div>
                     
-                    {/* 영수증 사이드 패널 (체크된 작업 있을 때만) */}
+                    {/* 지급명세서 사이드 패널 (체크된 작업 있을 때만) */}
                     {receiptCheckedWorks.length > 0 && (() => {
                       const checkedItems = freelancerWorks
                         .filter(w => receiptCheckedWorks.includes(w.id))
@@ -6546,16 +6546,17 @@ ${list}` }]
                       const targetFreelancer = sameFreelancer ? freelancers.find(f=>f.id===freelancerIds[0]) : null;
                       // 안전한 숫자 변환
                       const safeNum = (v) => Number(v) || 0;
-                      const totalAmount = checkedItems.reduce((s,w)=>s + (safeNum(w.qty) * safeNum(w.unitPrice)), 0);
-                      const totalTax = Math.round(totalAmount * 0.033);
-                      const totalNet = totalAmount - totalTax;
+                      // 실제 필드명: wage(공임), total(총금액), tax(세금), payment(실지급액)
+                      const totalAmount = checkedItems.reduce((s,w)=>s + safeNum(w.total), 0);
+                      const totalTax = checkedItems.reduce((s,w)=>s + safeNum(w.tax), 0);
+                      const totalNet = checkedItems.reduce((s,w)=>s + safeNum(w.payment), 0);
                       const totalQty = checkedItems.reduce((s,w)=>s + safeNum(w.qty), 0);
                       const today = new Date().toLocaleDateString('ko-KR');
                       
                       const handleDownloadPng = async () => {
                         try {
                           const node = document.getElementById('receipt-preview');
-                          if (!node) return alert('영수증 영역을 찾을 수 없습니다');
+                          if (!node) return alert('지급명세서 영역을 찾을 수 없습니다');
                           // html2canvas 동적 로드
                           if (!window.html2canvas) {
                             const script = document.createElement('script');
@@ -6565,7 +6566,7 @@ ${list}` }]
                           }
                           const canvas = await window.html2canvas(node, {scale: 2, backgroundColor: '#ffffff'});
                           const link = document.createElement('a');
-                          link.download = `영수증_${targetFreelancer?.name||'프리랜서'}_${today.replace(/\./g,'').replace(/\s/g,'')}.png`;
+                          link.download = `지급명세서_${targetFreelancer?.name||'프리랜서'}_${today.replace(/\./g,'').replace(/\s/g,'')}.png`;
                           link.href = canvas.toDataURL('image/png');
                           link.click();
                         } catch(err) {
@@ -6576,7 +6577,7 @@ ${list}` }]
                       const handleShare = async () => {
                         try {
                           const node = document.getElementById('receipt-preview');
-                          if (!node) return alert('영수증 영역을 찾을 수 없습니다');
+                          if (!node) return alert('지급명세서 영역을 찾을 수 없습니다');
                           if (!window.html2canvas) {
                             const script = document.createElement('script');
                             script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
@@ -6586,13 +6587,13 @@ ${list}` }]
                           const canvas = await window.html2canvas(node, {scale: 2, backgroundColor: '#ffffff'});
                           canvas.toBlob(async (blob) => {
                             if (!blob) return alert('이미지 변환 실패');
-                            const file = new File([blob], `영수증_${targetFreelancer?.name||'프리랜서'}.png`, {type:'image/png'});
+                            const file = new File([blob], `지급명세서_${targetFreelancer?.name||'프리랜서'}.png`, {type:'image/png'});
                             if (navigator.canShare && navigator.canShare({files:[file]})) {
                               try {
                                 await navigator.share({
                                   files: [file],
-                                  title: '영수증',
-                                  text: `${targetFreelancer?.name||'프리랜서'} 영수증`
+                                  title: '지급명세서',
+                                  text: `${targetFreelancer?.name||'프리랜서'} 지급명세서`
                                 });
                               } catch(e) {
                                 if (e.name !== 'AbortError') alert('공유 취소됨 또는 실패');
@@ -6609,13 +6610,13 @@ ${list}` }]
                       return (
                         <div className="bg-white border-2 border-black overflow-hidden flex flex-col" style={{borderRadius:'2px', position:'sticky', top:'1rem', alignSelf:'start', maxHeight:'calc(100vh - 2rem)'}}>
                           <div className="bg-black px-5 py-3 flex items-center justify-between">
-                            <span className="font-black text-white text-sm uppercase tracking-wider">📄 영수증 미리보기</span>
+                            <span className="font-black text-white text-sm uppercase tracking-wider">📄 지급명세서 미리보기</span>
                             <button onClick={()=>setReceiptCheckedWorks([])}
                               className="text-white hover:text-neutral-300 text-xl font-light w-7 h-7 flex items-center justify-center" title="닫기">×</button>
                           </div>
                           <div className="overflow-y-auto p-4">
                             <div id="receipt-preview" className="bg-white p-5" style={{minWidth:'320px'}}>
-                              {/* 영수증 헤더 */}
+                              {/* 지급명세서 헤더 */}
                               <div className="text-center pb-4 border-b-2 border-black mb-4">
                                 <div className="text-2xl font-black text-black tracking-tight">{businessInfo.companyName||'주식회사 골드'}</div>
                                 {businessInfo.ceoName && <div className="text-sm text-black mt-1">대표: {businessInfo.ceoName}</div>}
@@ -6624,9 +6625,9 @@ ${list}` }]
                                 {businessInfo.phone && <div className="text-xs text-neutral-700 mt-0.5 font-mono">TEL: {businessInfo.phone}</div>}
                               </div>
                               
-                              {/* 영수증 제목 */}
+                              {/* 제목 */}
                               <div className="text-center mb-4">
-                                <div className="text-3xl font-black text-black tracking-widest">영 수 증</div>
+                                <div className="text-3xl font-black text-black tracking-widest">지급명세서</div>
                                 <div className="text-sm text-neutral-600 mt-1">발행일: {today}</div>
                               </div>
                               
@@ -6643,7 +6644,7 @@ ${list}` }]
                                 </div>
                               )}
                               
-                              {/* 영수증 표 */}
+                              {/* 명세 표 */}
                               <div className="border-2 border-black mb-3">
                                 <table className="w-full text-sm">
                                   <thead>
@@ -6658,14 +6659,15 @@ ${list}` }]
                                   <tbody>
                                     {checkedItems.map((w, idx)=>{
                                       const wQty = safeNum(w.qty);
-                                      const wPrice = safeNum(w.unitPrice);
+                                      const wWage = safeNum(w.wage);
+                                      const wTotal = safeNum(w.total) || (wQty * wWage);
                                       return (
                                       <tr key={w.id} className={`border-t border-neutral-300 ${idx%2===0?'bg-white':'bg-neutral-50'}`}>
                                         <td className="py-2 px-2 text-xs font-mono text-center whitespace-nowrap">{(w.workDate||'').slice(5)}</td>
                                         <td className="py-2 px-2 text-sm font-bold text-black">{w.itemName||'-'}</td>
                                         <td className="py-2 px-2 text-sm font-bold text-center font-mono">{wQty.toLocaleString()}</td>
-                                        <td className="py-2 px-2 text-sm font-mono text-right">{wPrice.toLocaleString()}</td>
-                                        <td className="py-2 px-2 text-sm font-black font-mono text-right">{(wQty*wPrice).toLocaleString()}</td>
+                                        <td className="py-2 px-2 text-sm font-mono text-right">{wWage.toLocaleString()}</td>
+                                        <td className="py-2 px-2 text-sm font-black font-mono text-right">{wTotal.toLocaleString()}</td>
                                       </tr>
                                       );
                                     })}
@@ -6695,7 +6697,7 @@ ${list}` }]
                               
                               {/* 비고 */}
                               <div className="mt-3 text-xs text-neutral-500 text-center">
-                                위 금액을 정히 영수합니다.
+                                위 금액을 정히 지급합니다.
                               </div>
                             </div>
                           </div>
@@ -6710,7 +6712,7 @@ ${list}` }]
                               className="w-full py-2.5 bg-white hover:bg-black hover:text-white border-2 border-black text-black font-black text-sm uppercase tracking-wider" style={{borderRadius:'2px'}}>
                               📲 공유 (카톡 등)
                             </button>
-                            <div className="text-[10px] text-neutral-500 text-center">위 영수증을 캡처해서 사용해도 됩니다</div>
+                            <div className="text-[10px] text-neutral-500 text-center">위 명세서를 캡처해서 사용해도 됩니다</div>
                           </div>
                         </div>
                       );
@@ -8019,7 +8021,7 @@ ${list}` }]
                   );
                 })()}
                 
-                {/* 🖨️ 라벨 인쇄 편집기 v20260427.07.04 - 헬퍼 연동, 한글 100% */}
+                {/* 🖨️ 라벨 인쇄 편집기 v20260427.07.05 - 헬퍼 연동, 한글 100% */}
                 {barcodePrintPopup && (() => {
                   const p = barcodePrintPopup.product;
                   const barcodes = p.barcodes || {};
@@ -8164,7 +8166,7 @@ ${list}` }]
                         <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-slate-100 sticky top-0 bg-white z-10">
                           <div>
                             <h3 className="text-base font-bold text-slate-900">🖨️ 라벨 인쇄 + 디자인 편집기</h3>
-                            <div className="text-[10px] text-slate-500 mt-0.5">v20260427.07.04 · 헬퍼 자동 인쇄 · 한글 100%</div>
+                            <div className="text-[10px] text-slate-500 mt-0.5">v20260427.07.05 · 헬퍼 자동 인쇄 · 한글 100%</div>
                           </div>
                           <button onClick={()=>setBarcodePrintPopup(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
                         </div>
@@ -11720,7 +11722,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260427.07.04</p>
+                <p>© 2026 LACEROOM통합관리 v20260427.07.05</p>
               </footer>
             </div>
           </div>
