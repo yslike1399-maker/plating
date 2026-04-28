@@ -325,7 +325,7 @@
                   oldProducts.forEach(op => {
                     if (!existingNames.has(op.name)) {
                       mp.push({
-                        id: op.id || Date.now() + Math.random(),
+                        id: op.id || Date.now(),  // v10.02: Math.random 제거, 정수 ID만
                         type: 'hairpin',
                         name: op.name,
                         colors: [],
@@ -538,56 +538,83 @@ ${list}` }]
           // ============================================================
           // 상품 ID 시각화 시스템 (v09.17)
           // 같은 ID = 항상 같은 색상 (황금각으로 분산해서 인접 ID도 잘 구분됨)
+          // v10.02: 소수점 ID도 정수로 정규화 → 1-4와 1-5에서 같은 색상 보장
           // ============================================================
           const idToColor = (id) => {
             if (!id) return '#94a3b8'; // 회색 (ID 없을 때)
-            // 문자열도 처리 (해시 변환)
-            const numId = typeof id === 'number' ? id : 
-              String(id).split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
+            // 숫자면 정수 부분만, 문자열이면 정수 변환 시도, 실패 시 charCode 합
+            let numId;
+            if (typeof id === 'number') {
+              numId = Math.floor(id);
+            } else {
+              const parsed = parseInt(String(id), 10);
+              numId = !isNaN(parsed) ? parsed :
+                String(id).split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
+            }
             const hue = (numId * 137.508) % 360;  // 황금각으로 분산
             return `hsl(${hue}, 70%, 50%)`;
           };
-          
+
+          // ID를 정수로 정규화 (표시용, v10.02)
+          const normalizeId = (id) => {
+            if (id === null || id === undefined || id === '') return null;
+            if (typeof id === 'number') return Math.floor(id);
+            const parsed = parseInt(String(id), 10);
+            return !isNaN(parsed) ? parsed : id;
+          };
+
           // 1-1 단가표 ID로 9-1 마스터 ID 찾기 (cross-reference)
           // 시각화 시 항상 9-1 마스터 ID를 기준으로 색상 결정 → 모든 화면에서 동일 색상
+          // v10.02: 소수점 ID도 정수 부분으로 비교 (예: 1776930860302.9583 ≈ 1776930860302)
           const getCanonicalId = (productOrStock) => {
             if (!productOrStock) return null;
-            // 1순위: 자기 자신의 productId가 9-1 마스터 ID면 그대로 사용
-            if (productOrStock.productId) {
-              const isMaster = masterProducts.find(mp => String(mp.id) === String(productOrStock.productId));
-              if (isMaster) return productOrStock.productId;
-              // productId가 1-1 ID인 경우 → 9-1 마스터에서 legacy로 찾기
-              const masterByLegacy = masterProducts.find(mp => String(mp.legacyProductId) === String(productOrStock.productId));
-              if (masterByLegacy) return masterByLegacy.id;
+            const matchById = (val) => {
+              if (val === null || val === undefined) return null;
+              const valInt = normalizeId(val);
+              // 정확 일치
+              const exact = masterProducts.find(mp => String(mp.id) === String(val));
+              if (exact) return exact.id;
+              // 정수 일치 (소수점 ID 호환)
+              const byInt = masterProducts.find(mp => normalizeId(mp.id) === valInt);
+              if (byInt) return byInt.id;
+              // legacyProductId 매칭
+              const byLegacy = masterProducts.find(mp =>
+                normalizeId(mp.legacyProductId) === valInt
+              );
+              if (byLegacy) return byLegacy.id;
+              return null;
+            };
+            // 1순위: productId
+            if (productOrStock.productId !== undefined) {
+              const matched = matchById(productOrStock.productId);
+              if (matched) return matched;
             }
-            // 2순위: id 자체가 9-1 마스터 ID인지
-            if (productOrStock.id) {
-              const isMaster = masterProducts.find(mp => String(mp.id) === String(productOrStock.id));
-              if (isMaster) return productOrStock.id;
-              // id가 1-1 ID인 경우
-              const masterByLegacy = masterProducts.find(mp => String(mp.legacyProductId) === String(productOrStock.id));
-              if (masterByLegacy) return masterByLegacy.id;
+            // 2순위: id
+            if (productOrStock.id !== undefined) {
+              const matched = matchById(productOrStock.id);
+              if (matched) return matched;
               return productOrStock.id; // 매칭 안 되면 그대로
             }
-            return null;
+            return productOrStock.productId || null;
           };
           
           // 재사용 가능한 ID 뱃지 컴포넌트
           const ProductIdBadge = ({ id, size = 'sm' }) => {
             if (!id) return null;
             const canonicalId = getCanonicalId({ id }) || getCanonicalId({ productId: id }) || id;
+            const displayId = normalizeId(canonicalId); // v10.02: 표시는 정수로 (1-4와 1-5 동일하게)
             const color = idToColor(canonicalId);
             const fontSize = size === 'xs' ? '9px' : size === 'sm' ? '10px' : '11px';
             const dotSize = size === 'xs' ? '6px' : size === 'sm' ? '8px' : '10px';
             return (
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-neutral-100 border border-neutral-300 font-mono font-bold" 
-                style={{borderRadius:'3px', fontSize}} title={`상품 ID: ${canonicalId}`}>
+                style={{borderRadius:'3px', fontSize}} title={`상품 ID: ${displayId}`}>
                 <span style={{
                   width: dotSize, height: dotSize, borderRadius: '50%',
                   background: color, display: 'inline-block', flexShrink: 0,
                   boxShadow: '0 0 0 1px rgba(0,0,0,0.1)'
                 }}></span>
-                <span className="text-neutral-700">#{canonicalId}</span>
+                <span className="text-neutral-700">#{displayId}</span>
               </span>
             );
           };
@@ -2254,7 +2281,7 @@ ${list}` }]
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260427.10.01</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260427.10.02</div>
                   </div>
                 </div>
 
@@ -2334,7 +2361,7 @@ ${list}` }]
                         labelPresets,                // ← 라벨 프리셋 (NEW)
                         nameChangeLogs,              // ← 상품명 변경이력 (v10.01)
                         exportDate: new Date().toISOString(),
-                        appVersion: 'v20260427.10.01'
+                        appVersion: 'v20260427.10.02'
                       };
                       const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
                       const url = URL.createObjectURL(blob);
@@ -9032,7 +9059,7 @@ ${list}` }]
                               <h3 className="text-base font-black text-black tracking-tight">🖨️ 라벨 인쇄 + 디자인 편집기</h3>
                               <span className="bg-black text-white text-[10px] font-black px-2 py-0.5 tracking-widest" style={{borderRadius:'4px'}}>EDITOR</span>
                             </div>
-                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260427.10.01 · 헬퍼 자동 인쇄 · 한글 100%</div>
+                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260427.10.02 · 헬퍼 자동 인쇄 · 한글 100%</div>
                           </div>
                           <button onClick={()=>setBarcodePrintPopup(null)} className="text-neutral-400 hover:text-black text-xl font-black">✕</button>
                         </div>
@@ -11002,7 +11029,7 @@ ${list}` }]
                                 
                                 // 봇용 데이터: 바코드 있는 상품만, 출력에 필요한 필드만
                                 const botData = {
-                                  version: 'v20260427.10.01',
+                                  version: 'v20260427.10.02',
                                   exported_at: new Date().toISOString(),
                                   exported_by: 'LACEROOM 9-1',
                                   product_count: 0,
@@ -12851,6 +12878,84 @@ ${list}` }]
                       </div>
                     </div>
                     
+                    {/* 데이터 정리 섹션 (v10.02) */}
+                    <div className="bg-white border border-neutral-300 overflow-hidden" style={{borderRadius:'2px'}}>
+                      <div className="bg-neutral-100 px-5 py-3 border-b border-neutral-300">
+                        <span className="font-black text-black text-sm uppercase tracking-wider">🧹 데이터 정리</span>
+                        <p className="text-[11px] text-neutral-500 mt-0.5 normal-case tracking-normal">9-1 상품 ID에 소수점이 붙어있는 경우 정수로 통일합니다 · 모든 화면에서 ID/색상칩이 동일하게 표시됩니다</p>
+                      </div>
+                      <div className="p-5 space-y-3">
+                        <div className="bg-neutral-50 border border-neutral-200 p-3 text-[11px] text-neutral-700 font-bold leading-relaxed" style={{borderRadius:'2px'}}>
+                          {(() => {
+                            const decimalCount = masterProducts.filter(p => p.id !== Math.floor(p.id)).length;
+                            return decimalCount > 0
+                              ? <span className="text-amber-700">⚠️ 소수점 ID를 가진 상품 {decimalCount}건 발견됨 · 정리 권장</span>
+                              : <span className="text-green-700">✅ 모든 상품 ID가 정수로 정리되어 있습니다</span>;
+                          })()}
+                        </div>
+                        <button onClick={() => {
+                          const decimalProducts = masterProducts.filter(p => p.id !== Math.floor(p.id));
+                          if (decimalProducts.length === 0) {
+                            alert('✅ 정리할 데이터가 없습니다.\n\n모든 9-1 상품 ID가 이미 정수입니다.');
+                            return;
+                          }
+                          if (!confirm(`9-1 상품 ${decimalProducts.length}건의 ID를 정수로 변환하고\n도금작업지시서·선연마재고·1-1 단가표 등 연관 데이터도 함께 업데이트합니다.\n\n진행하시겠습니까?`)) return;
+
+                          // ID 매핑 테이블 생성: 옛 ID(소수점) → 새 ID(정수)
+                          // 정수 부분이 충돌하는 경우 시간차로 보정
+                          const usedIds = new Set(masterProducts.filter(p => p.id === Math.floor(p.id)).map(p => p.id));
+                          const idMap = new Map();
+                          decimalProducts.forEach(p => {
+                            let newId = Math.floor(p.id);
+                            while (usedIds.has(newId)) newId += 1;
+                            usedIds.add(newId);
+                            idMap.set(p.id, newId);
+                          });
+
+                          // 1) masterProducts 업데이트
+                          const newMasters = masterProducts.map(p => {
+                            if (idMap.has(p.id)) return { ...p, id: idMap.get(p.id) };
+                            return p;
+                          });
+                          saveMasterProducts(newMasters);
+
+                          // 2) history 업데이트 (productId가 매핑 대상이면 변경)
+                          const newHistory = history.map(h => {
+                            if (!Array.isArray(h.products)) return h;
+                            let changed = false;
+                            const newProducts = h.products.map(prod => {
+                              if (idMap.has(prod.productId)) {
+                                changed = true;
+                                return { ...prod, productId: idMap.get(prod.productId) };
+                              }
+                              return prod;
+                            });
+                            return changed ? { ...h, products: newProducts } : h;
+                          });
+                          saveHistory(newHistory);
+
+                          // 3) polishStocks 업데이트
+                          const newPolish = polishStocks.map(s => {
+                            if (idMap.has(s.productId)) return { ...s, productId: idMap.get(s.productId) };
+                            return s;
+                          });
+                          savePolishStocks(newPolish);
+
+                          // 4) 1-1 products의 masterProductId 업데이트
+                          const newProducts = products.map(p => {
+                            if (idMap.has(p.masterProductId)) return { ...p, masterProductId: idMap.get(p.masterProductId) };
+                            return p;
+                          });
+                          saveProducts(newProducts);
+
+                          alert(`✅ 정리 완료!\n\n${decimalProducts.length}건의 상품 ID가 정수로 변환되었습니다.\nhistory ${newHistory.length}건, 선연마재고 ${newPolish.length}건, 1-1 단가표 ${newProducts.length}건 업데이트됨.`);
+                        }} className="w-full px-4 py-3 bg-black hover:bg-neutral-800 text-white text-sm font-black uppercase tracking-wider"
+                          style={{borderRadius:'2px'}}>
+                          🔧 9-1 상품 ID 정수로 정리
+                        </button>
+                      </div>
+                    </div>
+
                     {/* PC 이름 섹션 (v10.01) */}
                     <div className="bg-white border border-neutral-300 overflow-hidden" style={{borderRadius:'2px'}}>
                       <div className="bg-neutral-100 px-5 py-3 border-b border-neutral-300">
@@ -13074,7 +13179,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260427.10.01</p>
+                <p>© 2026 LACEROOM통합관리 v20260427.10.02</p>
               </footer>
             </div>
           </div>
