@@ -117,6 +117,24 @@
 
         const formatDate = (date) => date.toISOString().split('T')[0];
 
+        // v10.03: 도금단가 완성 여부 체크 (9-1 황금점 표시용)
+        // 조건: grindCost(연마) 입력 + 모든 색상에 colorPlatingCosts 입력
+        const isCostComplete = (master, linkedProduct) => {
+          // 연마 단가: 우선 linkedProduct에서, 없으면 master에서
+          const grind = linkedProduct?.grindCost || master?.grindCost || '';
+          if (!grind || grind === '' || Number(grind) <= 0) return false;
+          // 색상이 없으면 미완성으로 간주
+          const colors = master?.colors || [];
+          if (colors.length === 0) return false;
+          // 도금단가: master.colorPlatingCosts 우선, 없으면 linkedProduct.colorPlatingCosts
+          const cpc = master?.colorPlatingCosts || linkedProduct?.colorPlatingCosts || {};
+          // 모든 색상에 대해 도금단가 입력 여부 체크
+          return colors.every(c => {
+            const v = cpc[c];
+            return v && v !== '' && Number(v) > 0;
+          });
+        };
+
         function App() {
           const [activeMainTab, setActiveMainTab] = useState('dashboard');
           
@@ -2281,7 +2299,7 @@ ${list}` }]
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260427.10.02</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260427.10.04</div>
                   </div>
                 </div>
 
@@ -2361,7 +2379,7 @@ ${list}` }]
                         labelPresets,                // ← 라벨 프리셋 (NEW)
                         nameChangeLogs,              // ← 상품명 변경이력 (v10.01)
                         exportDate: new Date().toISOString(),
-                        appVersion: 'v20260427.10.02'
+                        appVersion: 'v20260427.10.04'
                       };
                       const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
                       const url = URL.createObjectURL(blob);
@@ -3621,36 +3639,6 @@ ${list}` }]
                                 placeholder="원"
                               />
                             </div>
-                            <div>
-                              <label className="block text-xs font-semibold text-slate-600 mb-1">사출 원가</label>
-                              <input
-                                type="number"
-                                value={productForm.injectionCost}
-                                onChange={(e) => setProductForm({...productForm, injectionCost: e.target.value})}
-                                className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-blue-500 outline-none text-sm"
-                                placeholder="원"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-xs font-semibold text-slate-600 mb-1">스프링 원가</label>
-                              <input
-                                type="number"
-                                value={productForm.springCost}
-                                onChange={(e) => setProductForm({...productForm, springCost: e.target.value})}
-                                className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-blue-500 outline-none text-sm"
-                                placeholder="원"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-xs font-semibold text-slate-600 mb-1">핀대 원가</label>
-                              <input
-                                type="number"
-                                value={productForm.pinCost}
-                                onChange={(e) => setProductForm({...productForm, pinCost: e.target.value})}
-                                className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-blue-500 outline-none text-sm"
-                                placeholder="원"
-                              />
-                            </div>
                           </div>
                         </>
                         )}
@@ -3724,12 +3712,17 @@ ${list}` }]
                       ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                           {[...products].sort((a, b) => a.name.localeCompare(b.name, 'ko-KR')).map(product => {
-                            const platingCount = Object.values(product.platingCosts||{}).filter(v=>v&&v!=='').length;
-                            const isMigrated = masterProducts.some(mp =>
+                            // v10.03: 9-1 마스터의 colorPlatingCosts와 1-1의 platingCosts 둘 다 카운트
+                            const linkedMpForCount = masterProducts.find(mp =>
                               String(mp.id) === String(product.masterProductId) ||
                               String(mp.legacyProductId) === String(product.id) ||
                               mp.name === product.name
                             );
+                            const newCpc = linkedMpForCount?.colorPlatingCosts || {};
+                            const newCount = Object.values(newCpc).filter(v=>v&&v!=='' && Number(v)>0).length;
+                            const legacyCount = Object.values(product.platingCosts||{}).filter(v=>v&&v!=='').length;
+                            const platingCount = newCount > 0 ? newCount : legacyCount;
+                            const isMigrated = !!linkedMpForCount;
                             return (
                               <div key={product.id} className="relative p-4 rounded-2xl border-2 border-slate-100 hover:border-blue-300 hover:shadow-lg transition-all group cursor-pointer"
                                 onClick={() => {
@@ -4863,6 +4856,13 @@ ${list}` }]
                           order.products.forEach(product => {
                             const prod = products.find(p => p.id === product.productId);
                             if (!prod) return;
+                            // v10.03: 9-1 마스터에서 colorPlatingCosts 가져오기 (신규 구조 우선)
+                            const linkedMaster = masterProducts.find(mp =>
+                              String(mp.id) === String(prod.masterProductId) ||
+                              String(mp.legacyProductId) === String(prod.id) ||
+                              mp.name === prod.name
+                            );
+                            const newColorCosts = linkedMaster?.colorPlatingCosts || prod.colorPlatingCosts || {};
                             
                             product.items.forEach(item => {
                               const key = `${product.productName}_${item.color}_${item.finish || 'other'}`;
@@ -4872,7 +4872,15 @@ ${list}` }]
                                 let platingCost = 0;
                                 const colorDef = COLOR_DEFS.find(c => c.name === item.color);
                                 
-                                if (prod.platingCosts && colorDef) {
+                                // v10.03: 색상카드의 colorPlatingCosts 우선 (신규 구조)
+                                // 색상명 키 후보: '골드(유광)', '골드(반광)', '14K도금' 등
+                                const colorKey = item.finish ? `${item.color}(${item.finish === '반무광' ? '반광' : item.finish})` : item.color;
+                                const newCost = parseFloat(newColorCosts[colorKey]) || parseFloat(newColorCosts[item.color]) || 0;
+                                
+                                if (newCost > 0) {
+                                  platingCost = newCost;
+                                } else if (prod.platingCosts && colorDef) {
+                                  // 레거시 fallback: 기존 platingCosts 구조
                                   if (colorDef.finishType === 'both') {
                                     // 유광/반무광 둘 다 있음
                                     platingCost = parseFloat(prod.platingCosts[`${item.color}_${item.finish}`]) || 0;
@@ -4892,7 +4900,7 @@ ${list}` }]
                                   finishType: colorDef?.finishType || 'both',
                                   totalQty: 0,
                                   platingCost: platingCost,
-                                  grindCost: parseFloat(prod.grindCost) || 0,
+                                  grindCost: parseFloat(linkedMaster?.grindCost || prod.grindCost) || 0,
                                   grindQty: 0,
                                   platingQty: 0
                                 };
@@ -9059,7 +9067,7 @@ ${list}` }]
                               <h3 className="text-base font-black text-black tracking-tight">🖨️ 라벨 인쇄 + 디자인 편집기</h3>
                               <span className="bg-black text-white text-[10px] font-black px-2 py-0.5 tracking-widest" style={{borderRadius:'4px'}}>EDITOR</span>
                             </div>
-                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260427.10.02 · 헬퍼 자동 인쇄 · 한글 100%</div>
+                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260427.10.04 · 헬퍼 자동 인쇄 · 한글 100%</div>
                           </div>
                           <button onClick={()=>setBarcodePrintPopup(null)} className="text-neutral-400 hover:text-black text-xl font-black">✕</button>
                         </div>
@@ -10037,6 +10045,48 @@ ${list}` }]
                                                 );
                                               })()}
                                               
+                                              {/* v10.03: 일괄 도금단가 입력 UI */}
+                                              {(form.colors||[]).length > 0 && (() => {
+                                                const selCount = (form._selectedColors||[]).length;
+                                                return (
+                                                  <div className="flex items-center gap-2 bg-amber-50 border border-amber-300 p-2" style={{borderRadius:'2px'}}>
+                                                    <span className="text-[10px] font-bold text-amber-900 uppercase tracking-wider shrink-0">일괄 도금단가</span>
+                                                    <input type="number" value={form._bulkPlatingCost||''}
+                                                      onChange={e=>setForm(p=>({...p, _bulkPlatingCost: e.target.value}))}
+                                                      placeholder="단가(원)"
+                                                      className="flex-1 min-w-0 px-2 py-1 border border-amber-300 focus:border-amber-500 outline-none text-xs bg-white text-right"
+                                                      style={{borderRadius:'2px'}}/>
+                                                    <button onClick={()=>{
+                                                      const v = form._bulkPlatingCost;
+                                                      if (!v || Number(v)<=0) { alert('단가를 입력하세요'); return; }
+                                                      if (selCount === 0) { alert('체크된 색상이 없습니다.\n색상카드 좌측 체크박스로 선택하세요.'); return; }
+                                                      // 잠금 상태인 색상은 제외
+                                                      const targets = (form._selectedColors||[]).filter(c => (form.unlockedColors||[]).includes(c));
+                                                      const lockedTargets = (form._selectedColors||[]).filter(c => !(form.unlockedColors||[]).includes(c));
+                                                      if (targets.length === 0) {
+                                                        alert(`선택된 ${selCount}개 색상이 모두 잠금 상태입니다.\n먼저 EDIT으로 잠금을 해제하세요.`);
+                                                        return;
+                                                      }
+                                                      if (!confirm(`체크된 ${targets.length}개 색상에 도금단가 ${Number(v).toLocaleString()}원을 일괄 적용할까요?${lockedTargets.length>0?`\n\n(잠금 상태 ${lockedTargets.length}개는 건너뜁니다)`:''}`)) return;
+                                                      setForm(p=>{
+                                                        const next = {...(p.colorPlatingCosts||{})};
+                                                        targets.forEach(c => { next[c] = String(v); });
+                                                        return {...p, colorPlatingCosts: next, _bulkPlatingCost: ''};
+                                                      });
+                                                    }} className="text-[10px] px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white font-black uppercase tracking-wider shrink-0" style={{borderRadius:'2px'}}>
+                                                      적용
+                                                    </button>
+                                                    <button onClick={()=>{
+                                                      const all = form.colors||[];
+                                                      setForm(p=>({...p, _selectedColors: (p._selectedColors||[]).length === all.length ? [] : [...all]}));
+                                                    }} className="text-[10px] px-2 py-1 bg-white border border-amber-400 text-amber-800 hover:bg-amber-100 font-bold shrink-0" style={{borderRadius:'2px'}}>
+                                                      {selCount === (form.colors||[]).length ? '해제' : '전체'}
+                                                    </button>
+                                                    <span className="text-[10px] text-amber-800 shrink-0 font-mono">{selCount}/{(form.colors||[]).length}</span>
+                                                  </div>
+                                                );
+                                              })()}
+                                              
                                               {/* 색상 카드 리스트 - 2열 그리드, 무신사 스타일 */}
                                               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                               {(() => {
@@ -10054,6 +10104,11 @@ ${list}` }]
                                                   const barcodes = form.barcodes || {};
                                                   const positions = form.positions || {};
                                                   const customColorNames = form.customColorNames || {};
+                                                  // v10.03: 색상별 도금단가 + 일괄선택용 체크
+                                                  const colorPlatingCosts = form.colorPlatingCosts || {};
+                                                  const selectedColors = form._selectedColors || [];
+                                                  const platingCost = colorPlatingCosts[color] || '';
+                                                  const isSelected = selectedColors.includes(color);
                                                   const val = barcodes[color] || '';
                                                   const pos = positions[color] || '';
                                                   const customName = customColorNames[color] || '';
@@ -10087,6 +10142,20 @@ ${list}` }]
                                                       {/* 색상명 + 잠금 + 삭제 */}
                                                       <div className="flex items-center justify-between mb-2 gap-1">
                                                         <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                          {/* v10.03: 일괄선택 체크박스 */}
+                                                          <input type="checkbox" checked={isSelected}
+                                                            onClick={(e)=>e.stopPropagation()}
+                                                            onChange={(e)=>{
+                                                              e.stopPropagation();
+                                                              setForm(p=>{
+                                                                const sel = new Set(p._selectedColors||[]);
+                                                                if (sel.has(color)) sel.delete(color);
+                                                                else sel.add(color);
+                                                                return {...p, _selectedColors: Array.from(sel)};
+                                                              });
+                                                            }}
+                                                            className="w-3.5 h-3.5 accent-amber-500 shrink-0"
+                                                            title="일괄 도금단가 입력 대상 선택"/>
                                                           <span className={`text-sm font-bold tracking-tight truncate ${isFocused?'text-white':'text-black'}`}>{color}</span>
                                                           {isMulti && <span className={`text-[9px] px-1.5 py-0.5 font-bold whitespace-nowrap shrink-0 ${isFocused?'bg-white text-black':'bg-black text-white'}`} style={{borderRadius:'2px'}}>2단계</span>}
                                                         </div>
@@ -10116,14 +10185,17 @@ ${list}` }]
                                                             alert('🔒 잠금 상태입니다.\n\n색상을 제거하려면 먼저 EDIT 버튼을 눌러 잠금을 해제하세요.');
                                                             return;
                                                           }
-                                                          if (!confirm(`"${color}" 색상을 정말 제거할까요?\n\n바코드, 위치, 라벨 정보도 함께 삭제됩니다.`)) return;
+                                                          if (!confirm(`"${color}" 색상을 정말 제거할까요?\n\n바코드, 위치, 라벨, 도금단가 정보도 함께 삭제됩니다.`)) return;
                                                           setForm(p=>{
                                                             const newColors = (p.colors||[]).filter(c=>c!==color);
                                                             const newBarcodes = {...(p.barcodes||{})}; delete newBarcodes[color];
                                                             const newPositions = {...(p.positions||{})}; delete newPositions[color];
                                                             const newCustom = {...(p.customColorNames||{})}; delete newCustom[color];
                                                             const newUnlocked = (p.unlockedColors||[]).filter(c=>c!==color);
-                                                            return {...p, colors: newColors, barcodes: newBarcodes, positions: newPositions, customColorNames: newCustom, unlockedColors: newUnlocked};
+                                                            // v10.03: 도금단가 + 일괄선택도 정리
+                                                            const newCpc = {...(p.colorPlatingCosts||{})}; delete newCpc[color];
+                                                            const newSel = (p._selectedColors||[]).filter(c=>c!==color);
+                                                            return {...p, colors: newColors, barcodes: newBarcodes, positions: newPositions, customColorNames: newCustom, unlockedColors: newUnlocked, colorPlatingCosts: newCpc, _selectedColors: newSel};
                                                           });
                                                         }} disabled={isLocked}
                                                           className={`text-sm font-bold w-5 h-5 flex items-center justify-center shrink-0 ${
@@ -10201,6 +10273,24 @@ ${list}` }]
                                                           maxLength={20}
                                                           className={`flex-1 min-w-0 px-2 py-1 border text-xs outline-none ${inputBgClass}`}
                                                           style={{borderRadius:'2px'}}/>
+                                                      </div>
+                                                      {/* v10.03: 도금단가 (색상별) - 월말 도금공장 청구 매칭용 */}
+                                                      <div className="flex items-center gap-1 mt-1.5 min-w-0">
+                                                        <span className={`text-[10px] w-9 shrink-0 font-medium ${isFocused?'text-amber-300':'text-amber-700'}`}>도금</span>
+                                                        <input type="number" value={platingCost}
+                                                          disabled={isLocked}
+                                                          onClick={(e)=>e.stopPropagation()}
+                                                          onChange={e=>{
+                                                            setForm(p=>({...p, colorPlatingCosts: {...(p.colorPlatingCosts||{}), [color]: e.target.value}, _focusedColor: color}));
+                                                          }}
+                                                          placeholder={isLocked?'🔒':'단가(원)'}
+                                                          className={`flex-1 min-w-0 px-2 py-1 border text-xs text-right outline-none ${
+                                                            isLocked ? inputBgClass :
+                                                            platingCost && Number(platingCost)>0 ? (isFocused?'border-amber-400 bg-neutral-900 text-amber-300':'border-amber-400 bg-amber-50 text-amber-900') :
+                                                            inputBgClass
+                                                          }`}
+                                                          style={{borderRadius:'2px'}}/>
+                                                        <span className={`text-[9px] shrink-0 font-medium ${labelTextColor}`}>원</span>
                                                       </div>
                                                     </div>
                                                   );
@@ -10377,65 +10467,47 @@ ${list}` }]
                                               </label>
                                             </div>
 
-                                            <div className="grid grid-cols-2 gap-2">
-                                              <div>
-                                                <label className="block text-[10px] font-bold text-neutral-600 mb-1 uppercase tracking-wider">연마 원가</label>
-                                                <input type="number" value={form.grindCost||''}
-                                                  onChange={e=>setForm(p=>({...p, grindCost: e.target.value}))}
-                                                  className="w-full px-2 py-1.5 border border-neutral-300 focus:border-black outline-none text-sm bg-white" style={{borderRadius:'2px'}}/>
-                                              </div>
-                                              <div>
-                                                <label className="block text-[10px] font-bold text-neutral-600 mb-1 uppercase tracking-wider">사출 원가</label>
-                                                <input type="number" value={form.injectionCost||''}
-                                                  onChange={e=>setForm(p=>({...p, injectionCost: e.target.value}))}
-                                                  className="w-full px-2 py-1.5 border border-neutral-300 focus:border-black outline-none text-sm bg-white" style={{borderRadius:'2px'}}/>
-                                              </div>
-                                              <div>
-                                                <label className="block text-[10px] font-bold text-neutral-600 mb-1 uppercase tracking-wider">스프링 원가</label>
-                                                <input type="number" value={form.springCost||''}
-                                                  onChange={e=>setForm(p=>({...p, springCost: e.target.value}))}
-                                                  className="w-full px-2 py-1.5 border border-neutral-300 focus:border-black outline-none text-sm bg-white" style={{borderRadius:'2px'}}/>
-                                              </div>
-                                              <div>
-                                                <label className="block text-[10px] font-bold text-neutral-600 mb-1 uppercase tracking-wider">핀대 원가</label>
-                                                <input type="number" value={form.pinCost||''}
-                                                  onChange={e=>setForm(p=>({...p, pinCost: e.target.value}))}
-                                                  className="w-full px-2 py-1.5 border border-neutral-300 focus:border-black outline-none text-sm bg-white" style={{borderRadius:'2px'}}/>
-                                              </div>
+                                            <div>
+                                              <label className="block text-[10px] font-bold text-neutral-600 mb-1 uppercase tracking-wider">연마 원가</label>
+                                              <input type="number" value={form.grindCost||''}
+                                                onChange={e=>setForm(p=>({...p, grindCost: e.target.value}))}
+                                                placeholder="원 (도금공장 청구 매칭용)"
+                                                className="w-full px-2 py-1.5 border border-neutral-300 focus:border-black outline-none text-sm bg-white" style={{borderRadius:'2px'}}/>
                                             </div>
 
-                                            {/* 1-1 색상별 도금 단가 표시 (읽기전용) */}
+                                            {/* v10.03: 색상카드의 도금 단가 요약 (읽기전용) */}
                                             {(() => {
-                                              const linkedProduct = products.find(p =>
-                                                String(p.masterProductId) === String(form.id) ||
-                                                String(p.id) === String(form.legacyProductId) ||
-                                                p.name === form.name
-                                              );
-                                              const platingCosts = linkedProduct?.platingCosts || form.platingCosts || {};
-                                              const enteredColors = Object.entries(platingCosts).filter(([k,v]) => v && v !== '');
+                                              const cpc = form.colorPlatingCosts || {};
+                                              const allColors = form.colors || [];
+                                              const enteredColors = allColors.filter(c => cpc[c] && cpc[c] !== '' && Number(cpc[c]) > 0);
+                                              const missingColors = allColors.filter(c => !cpc[c] || cpc[c] === '' || Number(cpc[c]) <= 0);
 
                                               return (
                                                 <div className="bg-white border border-neutral-300 p-3 mt-2" style={{borderRadius:'2px'}}>
                                                   <div className="flex items-center justify-between mb-2">
-                                                    <span className="text-[11px] font-bold text-black uppercase tracking-wider">색상별 도금 단가 ({enteredColors.length}개)</span>
-                                                    <button onClick={()=>{
-                                                      setMasterPopup(null);
-                                                      setActiveMainTab('plating');
-                                                      setActiveTab('products');
-                                                    }} className="text-[10px] bg-black hover:bg-neutral-800 text-white px-2 py-1 font-bold uppercase tracking-wider" style={{borderRadius:'2px'}}>
-                                                      1-1에서 수정 →
-                                                    </button>
+                                                    <span className="text-[11px] font-bold text-black uppercase tracking-wider">색상별 도금 단가 ({enteredColors.length}/{allColors.length}색)</span>
+                                                    <span className="text-[10px] text-neutral-500">↑ 색상카드에서 입력</span>
                                                   </div>
-                                                  {enteredColors.length === 0 ? (
+                                                  {allColors.length === 0 ? (
                                                     <div className="text-[11px] text-neutral-500 py-2 text-center">
-                                                      색상별 도금 단가가 입력되지 않았습니다. 1-1에서 입력해주세요.
+                                                      먼저 색상을 등록하세요.
+                                                    </div>
+                                                  ) : enteredColors.length === 0 ? (
+                                                    <div className="text-[11px] text-neutral-500 py-2 text-center">
+                                                      색상카드에서 도금 단가를 입력해주세요.
                                                     </div>
                                                   ) : (
                                                     <div className="grid grid-cols-2 gap-1">
-                                                      {enteredColors.map(([key, value]) => (
-                                                        <div key={key} className="flex justify-between items-center bg-neutral-100 px-2 py-1 text-[11px] border border-neutral-200" style={{borderRadius:'2px'}}>
-                                                          <span className="text-neutral-700 truncate">{key.replace('_', ' ')}</span>
-                                                          <span className="font-bold text-black ml-1">{Number(value).toLocaleString()}원</span>
+                                                      {enteredColors.map(c => (
+                                                        <div key={c} className="flex justify-between items-center bg-amber-50 border border-amber-200 px-2 py-1 text-[11px]" style={{borderRadius:'2px'}}>
+                                                          <span className="text-neutral-700 truncate">{c}</span>
+                                                          <span className="font-bold text-amber-900 ml-1">{Number(cpc[c]).toLocaleString()}원</span>
+                                                        </div>
+                                                      ))}
+                                                      {missingColors.map(c => (
+                                                        <div key={c} className="flex justify-between items-center bg-neutral-100 border border-neutral-200 px-2 py-1 text-[11px]" style={{borderRadius:'2px'}}>
+                                                          <span className="text-neutral-400 truncate">{c}</span>
+                                                          <span className="text-neutral-400 ml-1">미입력</span>
                                                         </div>
                                                       ))}
                                                     </div>
@@ -10673,10 +10745,13 @@ ${list}` }]
                                         grindRequired: form.grindRequired||false,
                                         image: form.image||null,
                                         grindCost: form.grindCost||'',
+                                        // v10.03: 사출/스프링/핀대는 UI에서 제거되었으나 기존 데이터 보존 (레거시)
                                         injectionCost: form.injectionCost||'',
                                         springCost: form.springCost||'',
                                         pinCost: form.pinCost||'',
                                         platingCosts: form.platingCosts||{},
+                                        // v10.03: 색상별 도금단가 (신규 - 도금공장 청구 매칭용)
+                                        colorPlatingCosts: form.colorPlatingCosts||{},
                                         hasFabricInfo: form.type === 'gocchang' ? (form.hasFabricInfo !== false) : undefined,
                                         fabricMemo: form.fabricMemo||'',
                                         fabricSupplierId: form.fabricSupplierId||'',
@@ -11029,7 +11104,7 @@ ${list}` }]
                                 
                                 // 봇용 데이터: 바코드 있는 상품만, 출력에 필요한 필드만
                                 const botData = {
-                                  version: 'v20260427.10.02',
+                                  version: 'v20260427.10.04',
                                   exported_at: new Date().toISOString(),
                                   exported_by: 'LACEROOM 9-1',
                                   product_count: 0,
@@ -11220,7 +11295,7 @@ ${list}` }]
                                         const isOff = offCount > 0;
                                         const type = p.type;
                                         return (
-                                          <div key={`featured-${p.id}`} className="bg-white border-2 border-black hover:border-black transition-all overflow-hidden" style={{borderRadius:'2px'}}>
+                                          <div key={`featured-${p.id}`} className="bg-white border-2 border-black hover:border-black transition-all overflow-hidden" style={{borderRadius:'8px'}}>
                                             {p.image ? (
                                               <div className="relative aspect-square bg-neutral-50 overflow-hidden flex items-center justify-center">
                                                 <img src={p.image} alt={p.name} className={`max-w-full max-h-full object-contain ${isFullSoldout?'opacity-50 grayscale':isPartialSoldout?'opacity-80':''}`}/>
@@ -11259,6 +11334,13 @@ ${list}` }]
                                                 const glossColors = colorOrderBase.map(b=>`${b}(유광)`).filter(c=>p.colors.includes(c));
                                                 const matteColors = colorOrderBase.map(b=>`${b}(반광)`).filter(c=>p.colors.includes(c));
                                                 const singleColors = ['14K도금','은','흑무광'].filter(c=>p.colors.includes(c));
+                                                // v10.03: 도금단가 + 연마 모두 입력되었으면 황금점 표시 (대장님 전용 시그널)
+                                                const linkedProductFeat = products.find(lp =>
+                                                  String(lp.masterProductId) === String(p.id) ||
+                                                  String(lp.id) === String(p.legacyProductId) ||
+                                                  lp.name === p.name
+                                                );
+                                                const costComplete = isCostComplete(p, linkedProductFeat);
                                                 const renderColorTag = (c, finishStyle='') => {
                                                   const isColorSoldout = soldoutColors.includes(c);
                                                   const isColorOff = todayOffItems.some(i => i.name===p.name && i.color===c);
@@ -11283,7 +11365,11 @@ ${list}` }]
                                                   );
                                                 };
                                                 return (
-                                                  <div className="space-y-1.5">
+                                                  <div className="space-y-1.5 relative">
+                                                    {/* v10.03: 도금단가+연마 모두 입력 시 황금점 (대장님 전용 시그널) */}
+                                                    {costComplete && (
+                                                      <div className="absolute -top-1 -right-1 w-2 h-2 z-10" style={{borderRadius:'50%', backgroundColor:'#d4a017', boxShadow:'0 0 0 1px white'}} title="도금/연마 단가 입력 완료"></div>
+                                                    )}
                                                     {(glossColors.length > 0 || matteColors.length > 0) && (
                                                       <div className="grid grid-cols-2 gap-1.5">
                                                         {/* 유광 박스 - 실선 테두리 */}
@@ -11374,7 +11460,8 @@ ${list}` }]
                                 if (filter === 'hairpin' && type !== 'hairpin') return null;
                                 if (filter === 'gocchang' && type !== 'gocchang') return null;
                                 const search = (form_masterSearch||'').toLowerCase().trim();
-                                let items = masterProducts.filter(p => p.type===type && (!search || p.name.toLowerCase().includes(search)));
+                                // v10.04: 집중관리(featured) 상품은 일반 리스트에서 제외 (위 집중관리 섹션에 이미 표시됨)
+                                let items = masterProducts.filter(p => p.type===type && !p.isFeatured && (!search || p.name.toLowerCase().includes(search)));
                                 if (!items.length) return null;
                                 return (
                                   <div key={type} className="bg-white border border-neutral-300 overflow-hidden" style={{borderRadius:'2px'}}>
@@ -11474,6 +11561,13 @@ ${list}` }]
                                                 const glossColors = colorOrderBase.map(b=>`${b}(유광)`).filter(c=>p.colors.includes(c));
                                                 const matteColors = colorOrderBase.map(b=>`${b}(반광)`).filter(c=>p.colors.includes(c));
                                                 const singleColors = ['14K도금','은','흑무광'].filter(c=>p.colors.includes(c));
+                                                // v10.03: 도금단가 + 연마 모두 입력되었으면 황금점 표시 (대장님 전용 시그널)
+                                                const linkedProductMain = products.find(lp =>
+                                                  String(lp.masterProductId) === String(p.id) ||
+                                                  String(lp.id) === String(p.legacyProductId) ||
+                                                  lp.name === p.name
+                                                );
+                                                const costComplete = isCostComplete(p, linkedProductMain);
                                                 const renderColorTag = (c, finishStyle='') => {
                                                   const isColorSoldout = soldoutColors.includes(c);
                                                   const isColorOff = todayOffItems.some(i => i.name===p.name && i.color===c);
@@ -11499,7 +11593,11 @@ ${list}` }]
                                                   );
                                                 };
                                                 return (
-                                                  <div className="space-y-1.5">
+                                                  <div className="space-y-1.5 relative">
+                                                    {/* v10.03: 도금단가+연마 모두 입력 시 황금점 (대장님 전용 시그널) */}
+                                                    {costComplete && (
+                                                      <div className="absolute -top-1 -right-1 w-2 h-2 z-10" style={{borderRadius:'50%', backgroundColor:'#d4a017', boxShadow:'0 0 0 1px white'}} title="도금/연마 단가 입력 완료"></div>
+                                                    )}
                                                     {(glossColors.length > 0 || matteColors.length > 0) && (
                                                       <div className="grid grid-cols-2 gap-1.5">
                                                         {/* 유광 박스 - 실선 테두리 */}
@@ -13179,7 +13277,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260427.10.02</p>
+                <p>© 2026 LACEROOM통합관리 v20260427.10.04</p>
               </footer>
             </div>
           </div>
