@@ -509,6 +509,17 @@ ${list}` }]
           const [polishOutPopup, setPolishOutPopup] = useState(null); // 출고 팝업
           const [polishEditPopup, setPolishEditPopup] = useState(null); // 수정 팝업 (v09.11)
           const savePolishStocks = (d) => { setPolishStocks(d); localStorage.setItem('polish_stocks', JSON.stringify(d)); };
+          
+          // 선연마재고-상품 매칭 헬퍼 (v09.14): 상품ID 우선, 없으면 정확 이름 일치만
+          // 부분 매칭(includes) 제거 → "롱메탈"이 "[롱]진주 롱메탈" 등에 잘못 매칭되는 문제 해결
+          const matchPolishStock = (stock, product) => {
+            // 1순위: productId 매칭 (가장 정확)
+            if (stock.productId && product.productId) {
+              return String(stock.productId) === String(product.productId);
+            }
+            // 2순위: 정확한 이름 일치 (productId 없는 기존 데이터 호환용)
+            return stock.name === product.productName;
+          };
           const [salaryPopup, setSalaryPopup] = useState(null);
           const [extraPayPopup, setExtraPayPopup] = useState(null); // {employee, record}
           const [empRegPopup, setEmpRegPopup] = useState(false);
@@ -1195,11 +1206,7 @@ ${list}` }]
                   if (totalQty <= 0) continue;
                   
                   const matchingStocks = updatedStocks
-                    .filter(s => s.remaining > 0 && (
-                      s.name === product.productName ||
-                      product.productName.includes(s.name) ||
-                      s.name.includes(product.productName)
-                    ))
+                    .filter(s => s.remaining > 0 && matchPolishStock(s, product))
                     .sort((a, b) => a.date.localeCompare(b.date));
                   
                   if (matchingStocks.length === 0) continue;
@@ -1303,12 +1310,9 @@ ${list}` }]
                 if (totalQty <= 0) continue;
                 
                 // 같은 상품의 선연마재고 찾기 (오래된 순으로 차감 = FIFO)
+                // v09.14: 매칭 헬퍼 사용 (상품ID 우선, 부분 매칭 X)
                 const matchingStocks = polishStocks
-                  .filter(s => s.remaining > 0 && (
-                    s.name === product.productName ||
-                    product.productName.includes(s.name) ||
-                    s.name.includes(product.productName)
-                  ))
+                  .filter(s => s.remaining > 0 && matchPolishStock(s, product))
                   .sort((a, b) => a.date.localeCompare(b.date)); // 오래된 것부터
                 
                 if (matchingStocks.length === 0) continue;
@@ -1642,13 +1646,9 @@ ${list}` }]
               
               worksheet.mergeCells(`B${currentRow}:F${currentRow}`);
               
-              // 비고란: 선연마 재고 확인 후 안내 문구 자동 입력
+              // 비고란: 선연마 재고 확인 후 안내 문구 자동 입력 (v09.14: 정확 매칭)
               const productTotalQty = product.items.reduce((s,i) => s+(i.qty||0), 0);
-              const matchedStocks = polishStocks.filter(s =>
-                s.name === product.productName ||
-                product.productName.includes(s.name) ||
-                s.name.includes(product.productName)
-              );
+              const matchedStocks = polishStocks.filter(s => matchPolishStock(s, product));
               const stockQty = matchedStocks.reduce((s,x) => s+x.remaining, 0);
               
               const noteCell = worksheet.getCell(`H${startRow}`);
@@ -2140,7 +2140,7 @@ ${list}` }]
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260427.09.13</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260427.09.15</div>
                   </div>
                 </div>
 
@@ -2218,7 +2218,7 @@ ${list}` }]
                         businessInfo,                // ← 회사 정보 (NEW)
                         labelPresets,                // ← 라벨 프리셋 (NEW)
                         exportDate: new Date().toISOString(),
-                        appVersion: 'v20260427.09.13'
+                        appVersion: 'v20260427.09.15'
                       };
                       const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
                       const url = URL.createObjectURL(blob);
@@ -3753,15 +3753,29 @@ ${list}` }]
                           <div className="flex space-x-3">
                             <select id="productSelect" className="flex-1 px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none bg-white"
                               onChange={(e) => {
-                                // B안: 상품 선택 시 해당 재고 배지 표시
+                                // 상품 선택 시 해당 재고 배지 표시 (v09.14: 정확한 ID 매칭)
                                 const sel = e.target;
-                                const selText = sel.options[sel.selectedIndex]?.text || '';
+                                const selectedProductId = sel.value;
                                 const badge = document.getElementById('polish-stock-badge');
                                 if (!badge) return;
-                                if (!selText) { badge.style.display='none'; return; }
-                                const matched = polishStocks.filter(s => s.remaining > 0 && (
-                                  selText.includes(s.name) || s.name.includes(selText.split('(')[0].trim())
-                                ));
+                                if (!selectedProductId) { badge.style.display='none'; return; }
+                                
+                                // 선택한 상품(products)의 productName, masterProductId 확인
+                                const selectedProd = products.find(p => String(p.id) === String(selectedProductId));
+                                if (!selectedProd) { badge.style.display='none'; return; }
+                                
+                                // 매칭: 1순위 productId, 2순위 정확한 이름 일치
+                                const matched = polishStocks.filter(s => {
+                                  if (s.remaining <= 0) return false;
+                                  // productId 매칭 (s.productId가 선택 상품의 id 또는 masterProductId와 일치)
+                                  if (s.productId) {
+                                    if (String(s.productId) === String(selectedProd.id)) return true;
+                                    if (selectedProd.masterProductId && String(s.productId) === String(selectedProd.masterProductId)) return true;
+                                    return false;
+                                  }
+                                  // productId 없는 기존 데이터: 정확한 이름 일치만
+                                  return s.name === (selectedProd.productName || selectedProd.name);
+                                });
                                 const total = matched.reduce((s,x)=>s+x.remaining,0);
                                 if (total > 0) {
                                   badge.style.display='flex';
@@ -4307,7 +4321,6 @@ ${list}` }]
                     )}
                   </div>
                 )}
-                )}
                 {activeTab === 'polishStock' && (
                   <div className="space-y-5 p-6">
 
@@ -4321,14 +4334,28 @@ ${list}` }]
                           </div>
                           <div className="space-y-3">
                             <div>
-                              <label className="block text-xs font-semibold text-slate-600 mb-1">상품명 *</label>
-                              <input type="text" id="psName" placeholder="예: 꼬임슬림 집게핀"
-                                list="ps-product-list"
+                              <label className="block text-xs font-semibold text-slate-600 mb-1">상품 선택 * (9-1 상품 마스터)</label>
+                              <select id="psProductId"
+                                onChange={(e) => {
+                                  const mp = masterProducts.find(m => String(m.id) === e.target.value);
+                                  if (mp) {
+                                    document.getElementById('psName').value = mp.platingOrderName?.trim() || mp.name;
+                                  }
+                                }}
+                                className="w-full px-3 py-2 rounded-xl border-2 border-blue-300 focus:border-blue-500 outline-none text-sm bg-blue-50 font-bold">
+                                <option value="">-- 9-1 상품 선택 (정확한 매칭용) --</option>
+                                {masterProducts.filter(mp => mp.type === 'hairpin' || !mp.type).sort((a,b) => (a.name||'').localeCompare(b.name||'')).map(mp => (
+                                  <option key={mp.id} value={mp.id}>
+                                    {mp.platingOrderName?.trim() || mp.name}
+                                  </option>
+                                ))}
+                              </select>
+                              <div className="text-[10px] text-blue-600 mt-1 font-bold">💡 9-1 상품을 선택하면 발주서 작성 시 정확하게 매칭됩니다</div>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-600 mb-1">상품명 (자동 입력)</label>
+                              <input type="text" id="psName" placeholder="9-1에서 자동 가져옴 (수정 가능)"
                                 className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-400 outline-none text-sm"/>
-                              <datalist id="ps-product-list">
-                                {[...new Set(polishStocks.map(s=>s.name))].map(n=><option key={n} value={n}/>)}
-                                {products.map(p=><option key={p.id} value={p.productName||p.name}/>)}
-                              </datalist>
                             </div>
                             <div>
                               <label className="block text-xs font-semibold text-slate-600 mb-1">수량 *</label>
@@ -4360,13 +4387,23 @@ ${list}` }]
                           <div className="flex gap-3 mt-6">
                             <button onClick={() => setPolishPopup(false)} className="flex-1 py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold text-sm">취소</button>
                             <button onClick={() => {
+                              const productIdRaw = document.getElementById('psProductId').value;
+                              const productId = productIdRaw ? parseInt(productIdRaw) || productIdRaw : null;
                               const name = document.getElementById('psName').value.trim();
                               const qty = parseInt(document.getElementById('psQty').value)||0;
                               const date = document.getElementById('psDate').value;
                               const status = document.querySelector('input[name="psStatus"]:checked')?.value || '연마완료';
                               const memo = document.getElementById('psMemo').value.trim();
                               if (!name || !qty || !date) return alert('필수 항목을 입력하세요');
-                              savePolishStocks([...polishStocks, { id:Date.now(), name, qty, remaining:qty, date, status, memo, outHistory:[], createdAt:new Date().toISOString() }]);
+                              if (!productId) {
+                                if (!confirm('⚠️ 9-1 상품을 선택하지 않았습니다.\n\n상품 ID 없이 등록하면 발주서 작성 시 자동 매칭이 안 될 수 있습니다.\n\n그래도 등록하시겠어요?')) return;
+                              }
+                              savePolishStocks([...polishStocks, { 
+                                id:Date.now(), 
+                                productId,  // ⭐ 9-1 상품 ID 저장 (v09.14)
+                                name, qty, remaining:qty, date, status, memo, 
+                                outHistory:[], createdAt:new Date().toISOString() 
+                              }]);
                               setPolishPopup(false);
                               alert('등록 완료!');
                             }} className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm">등록</button>
@@ -4440,7 +4477,28 @@ ${list}` }]
                           </div>
                           <div className="space-y-3">
                             <div>
-                              <label className="block text-xs font-bold text-slate-600 mb-1">상품명</label>
+                              <label className="block text-xs font-bold text-slate-600 mb-1">9-1 상품 매칭 (정확한 자동 매칭용)</label>
+                              <select id="peProductId" defaultValue={polishEditPopup.productId || ''}
+                                onChange={(e) => {
+                                  const mp = masterProducts.find(m => String(m.id) === e.target.value);
+                                  if (mp) {
+                                    document.getElementById('peName').value = mp.platingOrderName?.trim() || mp.name;
+                                  }
+                                }}
+                                className="w-full px-3 py-2 rounded-xl border-2 border-blue-300 focus:border-blue-500 outline-none text-sm bg-blue-50 font-bold">
+                                <option value="">-- 매칭 안 함 (이름으로만 매칭) --</option>
+                                {masterProducts.filter(mp => mp.type === 'hairpin' || !mp.type).sort((a,b) => (a.name||'').localeCompare(b.name||'')).map(mp => (
+                                  <option key={mp.id} value={mp.id}>
+                                    {mp.platingOrderName?.trim() || mp.name}
+                                  </option>
+                                ))}
+                              </select>
+                              {!polishEditPopup.productId && (
+                                <div className="text-[10px] text-amber-600 mt-1 font-bold">⚠️ 현재 매칭 ID 없음. 9-1 상품 선택을 권장합니다</div>
+                              )}
+                            </div>
+                            <div>
+                              <label className="block text-xs font-bold text-slate-600 mb-1">상품명 (표시용)</label>
                               <input type="text" id="peName" defaultValue={polishEditPopup.name}
                                 className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 outline-none text-sm font-bold"/>
                             </div>
@@ -4481,6 +4539,8 @@ ${list}` }]
                             <button onClick={() => setPolishEditPopup(null)} 
                               className="flex-1 py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold text-sm">취소</button>
                             <button onClick={() => {
+                              const productIdRaw = document.getElementById('peProductId').value;
+                              const productId = productIdRaw ? (parseInt(productIdRaw) || productIdRaw) : null;
                               const name = document.getElementById('peName').value.trim();
                               const remaining = parseInt(document.getElementById('peRemaining').value) || 0;
                               const qty = parseInt(document.getElementById('peQty').value) || 0;
@@ -4493,7 +4553,7 @@ ${list}` }]
                                 if (!confirm(`잔여수량(${remaining})이 등록수량(${qty})보다 많습니다.\n등록수량을 ${remaining}로 자동 조정하시겠어요?`)) return;
                               }
                               const updated = polishStocks.map(s => s.id === polishEditPopup.id
-                                ? { ...s, name, remaining, qty: Math.max(qty, remaining), date, status, memo }
+                                ? { ...s, productId, name, remaining, qty: Math.max(qty, remaining), date, status, memo }
                                 : s
                               );
                               savePolishStocks(updated);
@@ -4546,8 +4606,13 @@ ${list}` }]
                             <div className="px-5 py-4 flex items-center justify-between gap-3 flex-wrap">
                               <div className="flex items-center gap-3">
                                 <div>
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-2 flex-wrap">
                                     <span className="font-bold text-slate-900">{stock.name}</span>
+                                    {stock.productId ? (
+                                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-bold" title={`9-1 상품 ID: ${stock.productId}`}>🔗 매칭</span>
+                                    ) : (
+                                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-bold" title="9-1 상품과 매칭되지 않음. [수정]에서 9-1 상품 선택 권장">⚠️ 미매칭</span>
+                                    )}
                                     <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${stock.status==='연마진행중'?'bg-amber-100 text-amber-600':'bg-green-100 text-green-600'}`}>{stock.status}</span>
                                     {stock.remaining === 0 && <span className="text-xs bg-slate-100 text-slate-400 px-2 py-0.5 rounded-full">소진</span>}
                                   </div>
@@ -8833,7 +8898,7 @@ ${list}` }]
                               <h3 className="text-base font-black text-black tracking-tight">🖨️ 라벨 인쇄 + 디자인 편집기</h3>
                               <span className="bg-black text-white text-[10px] font-black px-2 py-0.5 tracking-widest" style={{borderRadius:'4px'}}>EDITOR</span>
                             </div>
-                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260427.09.13 · 헬퍼 자동 인쇄 · 한글 100%</div>
+                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260427.09.15 · 헬퍼 자동 인쇄 · 한글 100%</div>
                           </div>
                           <button onClick={()=>setBarcodePrintPopup(null)} className="text-neutral-400 hover:text-black text-xl font-black">✕</button>
                         </div>
@@ -10610,7 +10675,7 @@ ${list}` }]
                                 
                                 // 봇용 데이터: 바코드 있는 상품만, 출력에 필요한 필드만
                                 const botData = {
-                                  version: 'v20260427.09.13',
+                                  version: 'v20260427.09.15',
                                   exported_at: new Date().toISOString(),
                                   exported_by: 'LACEROOM 9-1',
                                   product_count: 0,
@@ -12519,7 +12584,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260427.09.13</p>
+                <p>© 2026 LACEROOM통합관리 v20260427.09.15</p>
               </footer>
             </div>
           </div>
