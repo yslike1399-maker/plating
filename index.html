@@ -1825,7 +1825,7 @@ ${list}` }]
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260427.09.04</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260427.09.05</div>
                   </div>
                 </div>
 
@@ -2132,11 +2132,11 @@ ${list}` }]
                                   {activeMemos.length === 0 ? (
                                     <div className="bg-neutral-50 border border-neutral-200 p-3 text-center text-[11px] text-neutral-400 font-bold" style={{borderRadius:'2px'}}>없음</div>
                                   ) : (
-                                    <div className="space-y-1.5">
-                                      {activeMemos.slice(0,3).map(memo => <MemoCard key={memo.id} memo={memo} compact={activeMemos.length>2}/>)}
-                                      {activeMemos.length > 3 && (
-                                        <div className="text-[11px] text-center text-neutral-500 py-1 font-bold">
-                                          외 {activeMemos.length-3}건
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-1.5">
+                                      {activeMemos.slice(0,6).map(memo => <MemoCard key={memo.id} memo={memo} compact={true}/>)}
+                                      {activeMemos.length > 6 && (
+                                        <div className="text-[11px] text-center text-neutral-500 py-1 font-bold lg:col-span-2">
+                                          외 {activeMemos.length-6}건
                                           <button onClick={() => setActiveMainTab('memo')} className="ml-1 text-black underline font-black">전체보기</button>
                                         </div>
                                       )}
@@ -2155,11 +2155,11 @@ ${list}` }]
                                       {recurringMemos.length > 0 ? '5일 이내 도래 없음' : '설정된 반복 없음'}
                                     </div>
                                   ) : (
-                                    <div className="space-y-1.5">
-                                      {activeAuto.slice(0,3).map(memo => <MemoCard key={memo.id} memo={memo} compact={activeAuto.length>2}/>)}
-                                      {activeAuto.length > 3 && (
-                                        <div className="text-[11px] text-center text-neutral-500 py-1 font-bold">
-                                          외 {activeAuto.length-3}건
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-1.5">
+                                      {activeAuto.slice(0,6).map(memo => <MemoCard key={memo.id} memo={memo} compact={true}/>)}
+                                      {activeAuto.length > 6 && (
+                                        <div className="text-[11px] text-center text-neutral-500 py-1 font-bold lg:col-span-2">
+                                          외 {activeAuto.length-6}건
                                           <button onClick={() => setActiveMainTab('memo')} className="ml-1 text-black underline font-black">전체보기</button>
                                         </div>
                                       )}
@@ -8260,7 +8260,7 @@ ${list}` }]
                               <h3 className="text-base font-black text-black tracking-tight">🖨️ 라벨 인쇄 + 디자인 편집기</h3>
                               <span className="bg-black text-white text-[10px] font-black px-2 py-0.5 tracking-widest" style={{borderRadius:'4px'}}>EDITOR</span>
                             </div>
-                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260427.09.04 · 헬퍼 자동 인쇄 · 한글 100%</div>
+                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260427.09.05 · 헬퍼 자동 인쇄 · 한글 100%</div>
                           </div>
                           <button onClick={()=>setBarcodePrintPopup(null)} className="text-neutral-400 hover:text-black text-xl font-black">✕</button>
                         </div>
@@ -10037,7 +10037,7 @@ ${list}` }]
                                 
                                 // 봇용 데이터: 바코드 있는 상품만, 출력에 필요한 필드만
                                 const botData = {
-                                  version: 'v20260427.09.04',
+                                  version: 'v20260427.09.05',
                                   exported_at: new Date().toISOString(),
                                   exported_by: 'LACEROOM 9-1',
                                   product_count: 0,
@@ -11881,7 +11881,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260427.09.04</p>
+                <p>© 2026 LACEROOM통합관리 v20260427.09.05</p>
               </footer>
             </div>
           </div>
