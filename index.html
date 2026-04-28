@@ -507,6 +507,7 @@ ${list}` }]
           const [polishStocks, setPolishStocks] = useState(() => { try { return JSON.parse(localStorage.getItem('polish_stocks')||'[]'); } catch { return []; } });
           const [polishPopup, setPolishPopup] = useState(false);
           const [polishOutPopup, setPolishOutPopup] = useState(null); // 출고 팝업
+          const [polishEditPopup, setPolishEditPopup] = useState(null); // 수정 팝업 (v09.11)
           const savePolishStocks = (d) => { setPolishStocks(d); localStorage.setItem('polish_stocks', JSON.stringify(d)); };
           const [salaryPopup, setSalaryPopup] = useState(null);
           const [extraPayPopup, setExtraPayPopup] = useState(null); // {employee, record}
@@ -580,6 +581,8 @@ ${list}` }]
           const [orderForm, setOrderForm] = useState({
             date: formatDate(new Date()), products: []
           });
+          // 수정 모드 (v09.10): 수정 중인 작업 ID 저장. null이면 신규 작성 모드
+          const [editingOrderId, setEditingOrderId] = useState(null);
 
           useEffect(() => {
             try {
@@ -1123,6 +1126,142 @@ ${list}` }]
             }
 
             try {
+              let newHistory;
+              let resultMsg;
+              
+              // ============================================================
+              // 수정 모드: 기존 작업 덮어쓰기 (v09.10)
+              // ============================================================
+              if (editingOrderId !== null) {
+                const existing = history.find(h => h.id === editingOrderId);
+                if (!existing) {
+                  alert('수정 대상 작업을 찾을 수 없습니다.');
+                  return;
+                }
+                
+                const updatedOrder = {
+                  ...existing,
+                  date: orderForm.date,
+                  products: orderForm.products.map(product => ({
+                    productId: product.productId,
+                    productName: product.productName,
+                    grind: product.grind,
+                    image: product.image,
+                    items: product.items.map(item => {
+                      // 기존에 입고된 상태 유지 (가능하면)
+                      const existingProduct = existing.products.find(p => p.productId === product.productId && p.grind === product.grind);
+                      const existingItem = existingProduct?.items.find(it => it.color === item.color && (it.finish || '') === (item.finish || ''));
+                      return {
+                        color: item.color,
+                        finish: item.finish || '',
+                        qty: parseInt(item.qty) || 0,
+                        received: existingItem?.received || false,
+                        receivedDate: existingItem?.receivedDate || ''
+                      };
+                    }),
+                    total: product.items.reduce((sum, item) => sum + (parseInt(item.qty) || 0), 0)
+                  })),
+                  totalQty: orderForm.products.reduce((sum, product) => 
+                    sum + product.items.reduce((s, item) => s + (parseInt(item.qty) || 0), 0), 0
+                  ),
+                  modifiedAt: new Date().toISOString()  // 수정 시각 기록
+                };
+                
+                newHistory = history.map(h => h.id === editingOrderId ? updatedOrder : h);
+                
+                // ============================================================
+                // 수정 모드: 선연마재고 재계산 (v09.11)
+                // 1) 기존 작업의 출고이력 복구 (수량 더하기)
+                // 2) 새 작업 수량으로 다시 차감
+                // ============================================================
+                let updatedStocks = [...polishStocks];
+                const editStockChanges = [];
+                
+                // 1단계: 기존 출고 복구
+                updatedStocks = updatedStocks.map(stock => {
+                  const relatedOuts = (stock.outHistory||[]).filter(h => h.orderId === editingOrderId);
+                  if (relatedOuts.length === 0) return stock;
+                  const restoredQty = relatedOuts.reduce((sum, h) => sum + h.outQty, 0);
+                  return {
+                    ...stock,
+                    remaining: stock.remaining + restoredQty,
+                    outHistory: stock.outHistory.filter(h => h.orderId !== editingOrderId)
+                  };
+                });
+                
+                // 2단계: 새 수량으로 차감
+                for (const product of orderForm.products) {
+                  const totalQty = product.items.reduce((s, item) => s + (parseInt(item.qty)||0), 0);
+                  if (totalQty <= 0) continue;
+                  
+                  const matchingStocks = updatedStocks
+                    .filter(s => s.remaining > 0 && (
+                      s.name === product.productName ||
+                      product.productName.includes(s.name) ||
+                      s.name.includes(product.productName)
+                    ))
+                    .sort((a, b) => a.date.localeCompare(b.date));
+                  
+                  if (matchingStocks.length === 0) continue;
+                  
+                  let remainingToDeduct = totalQty;
+                  let deductedTotal = 0;
+                  
+                  for (const stock of matchingStocks) {
+                    if (remainingToDeduct <= 0) break;
+                    const used = Math.min(stock.remaining, remainingToDeduct);
+                    remainingToDeduct -= used;
+                    deductedTotal += used;
+                    
+                    updatedStocks = updatedStocks.map(s => 
+                      s.id === stock.id
+                        ? { 
+                            ...s, 
+                            remaining: s.remaining - used, 
+                            outHistory: [...(s.outHistory||[]), { 
+                              outQty: used, 
+                              outDate: orderForm.date,
+                              outMemo: `📋 발주서 출고 (수정)`,
+                              orderId: editingOrderId,
+                              orderNum: existing.orderNum,
+                              outAt: new Date().toISOString() 
+                            }] 
+                          }
+                        : s
+                    );
+                  }
+                  
+                  if (deductedTotal > 0) {
+                    const stockTotal = matchingStocks.reduce((s,x)=>s+x.remaining,0);
+                    editStockChanges.push({
+                      name: product.productName,
+                      deducted: deductedTotal,
+                      remaining: stockTotal - deductedTotal
+                    });
+                  }
+                }
+                
+                savePolishStocks(updatedStocks);
+                
+                let editMsg = `✅ ${existing.orderNum}차 작업 지시서 수정 완료!\n\n1-4 작업 내역에서 새 엑셀을 다운로드하세요.`;
+                if (editStockChanges.length > 0) {
+                  editMsg += '\n\n📦 선연마재고 재계산:';
+                  editStockChanges.forEach(c => {
+                    editMsg += `\n  • ${c.name}: -${c.deducted}개 (잔여 ${c.remaining}개)`;
+                  });
+                }
+                
+                saveHistory(newHistory);
+                setEditingOrderId(null);  // 수정 모드 해제
+                setOrderForm({ date: formatDate(new Date()), products: [] });
+                alert(editMsg);
+                setActiveTab('history');
+                return;
+              }
+              
+              // ============================================================
+              // 신규 작성 모드 (기존 로직)
+              // ============================================================
               const existingOrdersOnDate = history.filter(h => h.date === orderForm.date);
               const orderNum = Math.max(0, ...existingOrdersOnDate.map(h => h.orderNum || 0)) + 1;
 
@@ -1152,48 +1291,89 @@ ${list}` }]
 
               const newHistory = [newOrder, ...history];
 
-              // 선연마 재고 경고 체크
-              const stockWarnings = [];
+              // ============================================================
+              // 선연마재고 자동 차감 (v09.11): alert 없이 조용히 차감
+              // 발주서의 모든 색상 합산 수량만큼 해당 상품의 선연마재고에서 차감
+              // ============================================================
+              const stockChanges = []; // 차감 결과 (마지막에 한 번에 안내)
+              let updatedStocks = [...polishStocks];
+              
               for (const product of orderForm.products) {
                 const totalQty = product.items.reduce((s, item) => s + (parseInt(item.qty)||0), 0);
-                const matchStock = polishStocks.filter(s =>
-                  s.remaining > 0 && (
+                if (totalQty <= 0) continue;
+                
+                // 같은 상품의 선연마재고 찾기 (오래된 순으로 차감 = FIFO)
+                const matchingStocks = polishStocks
+                  .filter(s => s.remaining > 0 && (
                     s.name === product.productName ||
                     product.productName.includes(s.name) ||
                     s.name.includes(product.productName)
-                  )
-                );
-                const stockTotal = matchStock.reduce((s,x)=>s+x.remaining,0);
-                if (stockTotal > 0) {
-                  stockWarnings.push(`📦 [${product.productName}]\n공장 보관 수량: ${stockTotal}개 있습니다 참고하세요!\n(발주 수량: ${totalQty}개)`);
+                  ))
+                  .sort((a, b) => a.date.localeCompare(b.date)); // 오래된 것부터
+                
+                if (matchingStocks.length === 0) continue;
+                
+                let remainingToDeduct = totalQty;
+                let deductedTotal = 0;
+                
+                for (const stock of matchingStocks) {
+                  if (remainingToDeduct <= 0) break;
+                  const used = Math.min(stock.remaining, remainingToDeduct);
+                  remainingToDeduct -= used;
+                  deductedTotal += used;
+                  
+                  // updatedStocks에서 해당 stock 업데이트
+                  updatedStocks = updatedStocks.map(s => 
+                    s.id === stock.id
+                      ? { 
+                          ...s, 
+                          remaining: s.remaining - used, 
+                          outHistory: [...(s.outHistory||[]), { 
+                            outQty: used, 
+                            outDate: orderForm.date,  // ⭐ 발주서 날짜 사용 (오늘 날짜 X)
+                            outMemo: `📋 발주서 출고`,
+                            orderId: newOrder.id,
+                            orderNum: orderNum,
+                            outAt: new Date().toISOString() 
+                          }] 
+                        }
+                      : s
+                  );
                 }
-              }
-
-              if (stockWarnings.length > 0) {
-                alert('⚠️ 선연마 재고 알림!\n\n' + stockWarnings.join('\n\n') + '\n\n발주서를 생성합니다.');
-                // 해당 상품의 선연마 재고 차감
-                let updatedStocks = [...polishStocks];
-                for (const product of orderForm.products) {
-                  const totalQty = product.items.reduce((s, item) => s + (parseInt(item.qty)||0), 0);
-                  let remaining = totalQty;
-                  updatedStocks = updatedStocks.map(s => {
-                    if (remaining <= 0) return s;
-                    if (s.remaining > 0 && (s.name === product.productName || product.productName.includes(s.name) || s.name.includes(product.productName))) {
-                      const used = Math.min(s.remaining, remaining);
-                      remaining -= used;
-                      return { ...s, remaining: s.remaining - used, outHistory: [...(s.outHistory||[]), { outQty: used, outDate: orderForm.date, outMemo: `발주서 출고 (${totalQty}개 주문)`, orderId: newOrder.id, outAt: new Date().toISOString() }] };
-                    }
-                    return s;
+                
+                if (deductedTotal > 0) {
+                  const stockTotal = matchingStocks.reduce((s,x)=>s+x.remaining,0);
+                  stockChanges.push({
+                    name: product.productName,
+                    deducted: deductedTotal,
+                    remaining: stockTotal - deductedTotal,
+                    shortage: remainingToDeduct  // 부족분
                   });
                 }
+              }
+              
+              if (stockChanges.length > 0) {
                 savePolishStocks(updatedStocks);
               }
+              
+              // ============================================================
 
               saveHistory(newHistory);
               
               setOrderForm({ date: formatDate(new Date()), products: [] });
               
-              alert(`${orderNum}차 작업 지시서 생성 완료!`);
+              // 완료 메시지 (선연마재고 차감 결과 포함)
+              let completionMsg = `✅ ${orderNum}차 작업 지시서 생성 완료!`;
+              if (stockChanges.length > 0) {
+                completionMsg += '\n\n📦 선연마재고 자동 차감:';
+                stockChanges.forEach(c => {
+                  completionMsg += `\n  • ${c.name}: -${c.deducted}개 (잔여 ${c.remaining}개)`;
+                  if (c.shortage > 0) {
+                    completionMsg += ` ⚠️ ${c.shortage}개 부족`;
+                  }
+                });
+              }
+              alert(completionMsg);
               setActiveTab('history');
             } catch (error) {
               console.error('오류:', error);
@@ -1285,7 +1465,7 @@ ${list}` }]
             worksheet.columns = [
               { key: 'date', width: 14 },
               { key: 'name', width: 20 },
-              { key: 'image', width: 12 },
+              { key: 'image', width: 14 },
               { key: 'grind', width: 12 },
               { key: 'color', width: 25 },
               { key: 'finish', width: 12 },
@@ -1374,7 +1554,7 @@ ${list}` }]
                   row.getCell(7).font = { color: { argb: 'FFFF0000' }, bold: true, size: 14 };
                 }
                 
-                row.height = 32;
+                row.height = 36;
                 row.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
                 
                 currentRow++;
@@ -1389,11 +1569,24 @@ ${list}` }]
                 worksheet.mergeCells(`D${startRow}:D${endRow}`);
               }
 
-              // 이미지 추가 (base64 검증 강화)
-              if (product.image) {
+              // 이미지 추가 (v09.10: 9-1 마스터에서 폴백, base64 검증 강화)
+              // 1-2 작성 시점의 이미지가 없거나 깨졌을 경우 9-1 마스터에서 최신 이미지 사용
+              let imageSource = product.image;
+              if (!imageSource) {
+                const matchedMp = masterProducts.find(mp =>
+                  String(mp.id) === String(product.productId) ||
+                  String(mp.legacyProductId) === String(product.productId) ||
+                  mp.name === product.productName
+                );
+                if (matchedMp && matchedMp.image) {
+                  imageSource = matchedMp.image;
+                }
+              }
+              
+              if (imageSource) {
                 try {
                   // base64 형식 검증
-                  let imgData = product.image;
+                  let imgData = imageSource;
                   
                   // data:image/...;base64, 접두사 처리
                   let extension = 'png';
@@ -1411,10 +1604,13 @@ ${list}` }]
                       base64: imgData,
                       extension: extension,
                     });
-                    const imageHeight = (endRow - startRow + 1) * 32;
+                    // 이미지를 셀 병합 영역의 정중앙에 배치
+                    const rowCount = endRow - startRow + 1;
+                    const totalHeight = rowCount * 36; // 각 행 36pt
+                    const imgSize = Math.min(totalHeight - 4, 110); // 여백 4px, 최대 110px
                     worksheet.addImage(imageId, {
-                      tl: { col: 2, row: startRow - 1 },
-                      ext: { width: 80, height: Math.min(imageHeight * 0.9, 80) },
+                      tl: { col: 2.1, row: startRow - 1 + 0.1 },
+                      ext: { width: imgSize, height: imgSize },
                       editAs: 'oneCell'
                     });
                   } else {
@@ -1424,6 +1620,8 @@ ${list}` }]
                   console.error(`이미지 추가 실패 (${product.productName}):`, e);
                   // 이미지 실패해도 엑셀 생성은 계속 진행
                 }
+              } else {
+                console.warn('이미지 없음 (1-2 + 9-1 모두 없음):', product.productName);
               }
 
               // 총수량 행
@@ -1942,7 +2140,7 @@ ${list}` }]
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260427.09.09</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260427.09.11</div>
                   </div>
                 </div>
 
@@ -2020,7 +2218,7 @@ ${list}` }]
                         businessInfo,                // ← 회사 정보 (NEW)
                         labelPresets,                // ← 라벨 프리셋 (NEW)
                         exportDate: new Date().toISOString(),
-                        appVersion: 'v20260427.09.09'
+                        appVersion: 'v20260427.09.11'
                       };
                       const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
                       const url = URL.createObjectURL(blob);
@@ -3508,8 +3706,35 @@ ${list}` }]
                     )}
 
                     <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8">
+                      {/* 수정 모드 표시 (v09.10) */}
+                      {editingOrderId !== null && (() => {
+                        const editing = history.find(h => h.id === editingOrderId);
+                        return editing ? (
+                          <div className="mb-5 bg-amber-50 border-2 border-amber-400 rounded-xl p-4 flex items-center justify-between">
+                            <div>
+                              <div className="font-black text-amber-900 text-sm tracking-tight">✏️ 수정 모드</div>
+                              <div className="text-xs text-amber-700 mt-0.5 font-bold">
+                                {editing.date} {editing.orderNum}차 작업 수정 중 · 저장 시 기존 작업이 덮어쓰기 됩니다
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => {
+                                if (confirm('수정을 취소하시겠어요? 변경사항이 저장되지 않습니다.')) {
+                                  setEditingOrderId(null);
+                                  setOrderForm({ date: formatDate(new Date()), products: [] });
+                                  alert('수정 취소되었습니다');
+                                }
+                              }}
+                              className="px-3 py-1.5 bg-white border-2 border-amber-600 hover:bg-amber-100 text-amber-800 rounded-lg font-black text-xs tracking-wider"
+                            >
+                              ✕ 수정 취소
+                            </button>
+                          </div>
+                        ) : null;
+                      })()}
+                      
                       <h2 className="text-xl font-bold text-slate-900 mb-6 flex items-center">
-                        <FileText /> <span className="ml-2">작업 지시서 생성</span>
+                        <FileText /> <span className="ml-2">{editingOrderId !== null ? '작업 지시서 수정' : '작업 지시서 생성'}</span>
                       </h2>
 
                       <div className="space-y-5">
@@ -3722,9 +3947,13 @@ ${list}` }]
 
                         <button
                           onClick={handleCreateOrder}
-                          className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-5 rounded-2xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all"
+                          className={`w-full text-white py-5 rounded-2xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all ${
+                            editingOrderId !== null 
+                              ? 'bg-gradient-to-r from-amber-500 to-orange-600' 
+                              : 'bg-gradient-to-r from-blue-600 to-purple-600'
+                          }`}
                         >
-                          작업 지시서 생성
+                          {editingOrderId !== null ? '✏️ 수정 사항 저장 (덮어쓰기)' : '작업 지시서 생성'}
                         </button>
                       </div>
                     )}
@@ -3937,6 +4166,29 @@ ${list}` }]
                                 <div className="flex space-x-2">
                                   {order.type !== 'rework' && (
                                     <>
+                                      <button onClick={() => {
+                                        // 수정 모드 진입: 기존 작업 데이터를 orderForm에 로드
+                                        const loaded = {
+                                          date: order.date,
+                                          products: order.products.map(p => ({
+                                            productId: p.productId,
+                                            productName: p.productName,
+                                            grind: p.grind,
+                                            image: p.image,
+                                            items: p.items.map(item => ({
+                                              color: item.color,
+                                              finish: item.finish || '',
+                                              qty: item.qty
+                                            }))
+                                          }))
+                                        };
+                                        setOrderForm(loaded);
+                                        setEditingOrderId(order.id);
+                                        setActiveTab('order');  // 1-2 작업지시서 탭으로 이동
+                                        setTimeout(() => alert(`✏️ ${order.orderNum}차 작업 수정 모드\n\n색상/수량을 수정 후 [작업 지시서 생성]을 누르면 덮어쓰기 됩니다.\n도금소는 기존 그대로 유지됩니다.`), 200);
+                                      }} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-semibold text-sm shadow-lg flex items-center" title="이 작업을 수정합니다">
+                                        ✏️ <span className="ml-2">수정</span>
+                                      </button>
                                       <button onClick={() => handleDownloadImages(order)} className="px-4 py-2 bg-white/20 hover:bg-white/30 backdrop-blur text-white rounded-xl font-semibold text-sm flex items-center">
                                         <Image /> <span className="ml-2">이미지</span>
                                       </button>
@@ -4174,6 +4426,85 @@ ${list}` }]
                       </div>
                     )}
 
+                    {/* 수정 팝업 (v09.11) - 수동으로 수량/메모/상품명 수정 */}
+                    {polishEditPopup && (
+                      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+                          <div className="flex items-center justify-between mb-4 pb-3 border-b">
+                            <h3 className="text-lg font-bold text-amber-700">✏️ 선연마재고 수정</h3>
+                            <button onClick={() => setPolishEditPopup(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
+                          </div>
+                          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4">
+                            <div className="text-xs text-amber-700 font-bold">⚠️ 직접 수정은 신중하게!</div>
+                            <div className="text-[10px] text-amber-600 mt-1">정상적인 출고는 발주서 작성 또는 [📤 출고] 버튼을 사용하세요. 직접 수정은 잘못 입력된 데이터 보정 등 예외 상황용입니다.</div>
+                          </div>
+                          <div className="space-y-3">
+                            <div>
+                              <label className="block text-xs font-bold text-slate-600 mb-1">상품명</label>
+                              <input type="text" id="peName" defaultValue={polishEditPopup.name}
+                                className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 outline-none text-sm font-bold"/>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-xs font-bold text-slate-600 mb-1">현재 보관수량 (잔여)</label>
+                                <input type="number" id="peRemaining" defaultValue={polishEditPopup.remaining} min="0"
+                                  className="w-full px-3 py-2 rounded-xl border-2 border-amber-300 outline-none text-sm text-center font-black text-amber-700"/>
+                                <div className="text-[10px] text-slate-500 mt-1">실제 남은 수량</div>
+                              </div>
+                              <div>
+                                <label className="block text-xs font-bold text-slate-600 mb-1">최초 등록수량</label>
+                                <input type="number" id="peQty" defaultValue={polishEditPopup.qty} min="0"
+                                  className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 outline-none text-sm text-center font-bold"/>
+                                <div className="text-[10px] text-slate-500 mt-1">처음 입고된 수량</div>
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-bold text-slate-600 mb-1">등록 날짜</label>
+                              <input type="date" id="peDate" defaultValue={polishEditPopup.date}
+                                className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 outline-none text-sm"/>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-bold text-slate-600 mb-1">상태</label>
+                              <select id="peStatus" defaultValue={polishEditPopup.status}
+                                className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 outline-none text-sm">
+                                <option value="연마진행중">연마진행중</option>
+                                <option value="연마완료">연마완료</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-bold text-slate-600 mb-1">메모</label>
+                              <input type="text" id="peMemo" defaultValue={polishEditPopup.memo||''}
+                                className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 outline-none text-sm"/>
+                            </div>
+                          </div>
+                          <div className="flex gap-3 mt-6">
+                            <button onClick={() => setPolishEditPopup(null)} 
+                              className="flex-1 py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold text-sm">취소</button>
+                            <button onClick={() => {
+                              const name = document.getElementById('peName').value.trim();
+                              const remaining = parseInt(document.getElementById('peRemaining').value) || 0;
+                              const qty = parseInt(document.getElementById('peQty').value) || 0;
+                              const date = document.getElementById('peDate').value;
+                              const status = document.getElementById('peStatus').value;
+                              const memo = document.getElementById('peMemo').value.trim();
+                              if (!name) return alert('상품명을 입력하세요');
+                              if (remaining < 0 || qty < 0) return alert('수량은 0 이상이어야 합니다');
+                              if (remaining > qty) {
+                                if (!confirm(`잔여수량(${remaining})이 등록수량(${qty})보다 많습니다.\n등록수량을 ${remaining}로 자동 조정하시겠어요?`)) return;
+                              }
+                              const updated = polishStocks.map(s => s.id === polishEditPopup.id
+                                ? { ...s, name, remaining, qty: Math.max(qty, remaining), date, status, memo }
+                                : s
+                              );
+                              savePolishStocks(updated);
+                              setPolishEditPopup(null);
+                              alert(`✅ 수정 완료!\n${name} - 잔여 ${remaining}개`);
+                            }} className="flex-1 py-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm">저장</button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* 헤더 */}
                     <div className="flex items-center justify-between">
                       <div>
@@ -4234,6 +4565,8 @@ ${list}` }]
                                     <button onClick={() => setPolishOutPopup(stock)}
                                       className="px-3 py-2 bg-green-500 hover:bg-green-600 text-white rounded-xl text-xs font-bold">📤 출고</button>
                                   )}
+                                  <button onClick={() => setPolishEditPopup(stock)}
+                                    className="px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold" title="수량/메모 직접 수정">✏️ 수정</button>
                                   <button onClick={() => { if(confirm('삭제?')) savePolishStocks(polishStocks.filter(s=>s.id!==stock.id)); }}
                                     className="p-2 text-red-400 hover:bg-red-50 rounded-xl"><Trash /></button>
                                 </div>
@@ -4242,12 +4575,38 @@ ${list}` }]
                             {/* 출고 이력 */}
                             {stock.outHistory?.length > 0 && (
                               <div className="border-t border-slate-100 px-5 py-3 bg-slate-50">
-                                <div className="text-xs font-semibold text-slate-500 mb-2">📋 출고 이력</div>
+                                <div className="text-xs font-semibold text-slate-500 mb-2 flex items-center justify-between">
+                                  <span>📋 출고 이력 ({stock.outHistory.length}건)</span>
+                                  <span className="text-[10px] text-slate-400 font-normal">발주서 출고는 자동 기록됩니다</span>
+                                </div>
                                 <div className="space-y-1">
                                   {stock.outHistory.map((h,i) => (
-                                    <div key={i} className="flex items-center justify-between text-xs text-slate-500">
-                                      <span>{h.outDate} — {h.outMemo||'출고'}</span>
-                                      <span className="font-bold text-green-600">-{h.outQty}개</span>
+                                    <div key={i} className="flex items-center justify-between text-xs text-slate-500 bg-white rounded px-2 py-1.5 border border-slate-100">
+                                      <div className="flex items-center gap-2 flex-1">
+                                        <span className="font-bold text-slate-700">{h.outDate}</span>
+                                        <span className="text-slate-400">·</span>
+                                        <span>{h.outMemo||'출고'}</span>
+                                        {h.orderNum && <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-bold">{h.orderNum}차</span>}
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-bold text-green-600">-{h.outQty}개</span>
+                                        <button
+                                          onClick={() => {
+                                            if (!confirm(`이 출고 이력을 삭제하시겠어요?\n\n${h.outDate} -${h.outQty}개\n${h.outMemo||''}\n\n삭제하면 보관수량이 ${h.outQty}개 복구됩니다.`)) return;
+                                            const newOutHistory = stock.outHistory.filter((_, idx) => idx !== i);
+                                            const updated = polishStocks.map(s => 
+                                              s.id === stock.id 
+                                                ? { ...s, remaining: s.remaining + h.outQty, outHistory: newOutHistory }
+                                                : s
+                                            );
+                                            savePolishStocks(updated);
+                                          }}
+                                          className="text-red-400 hover:bg-red-50 rounded p-1"
+                                          title="이 출고 이력 삭제 (수량 복구)"
+                                        >
+                                          <Trash />
+                                        </button>
+                                      </div>
                                     </div>
                                   ))}
                                 </div>
@@ -8474,7 +8833,7 @@ ${list}` }]
                               <h3 className="text-base font-black text-black tracking-tight">🖨️ 라벨 인쇄 + 디자인 편집기</h3>
                               <span className="bg-black text-white text-[10px] font-black px-2 py-0.5 tracking-widest" style={{borderRadius:'4px'}}>EDITOR</span>
                             </div>
-                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260427.09.09 · 헬퍼 자동 인쇄 · 한글 100%</div>
+                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260427.09.11 · 헬퍼 자동 인쇄 · 한글 100%</div>
                           </div>
                           <button onClick={()=>setBarcodePrintPopup(null)} className="text-neutral-400 hover:text-black text-xl font-black">✕</button>
                         </div>
@@ -10251,7 +10610,7 @@ ${list}` }]
                                 
                                 // 봇용 데이터: 바코드 있는 상품만, 출력에 필요한 필드만
                                 const botData = {
-                                  version: 'v20260427.09.09',
+                                  version: 'v20260427.09.11',
                                   exported_at: new Date().toISOString(),
                                   exported_by: 'LACEROOM 9-1',
                                   product_count: 0,
@@ -12160,7 +12519,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260427.09.09</p>
+                <p>© 2026 LACEROOM통합관리 v20260427.09.11</p>
               </footer>
             </div>
           </div>
