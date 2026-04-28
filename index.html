@@ -510,15 +510,98 @@ ${list}` }]
           const [polishEditPopup, setPolishEditPopup] = useState(null); // 수정 팝업 (v09.11)
           const savePolishStocks = (d) => { setPolishStocks(d); localStorage.setItem('polish_stocks', JSON.stringify(d)); };
           
-          // 선연마재고-상품 매칭 헬퍼 (v09.14): 상품ID 우선, 없으면 정확 이름 일치만
-          // 부분 매칭(includes) 제거 → "롱메탈"이 "[롱]진주 롱메탈" 등에 잘못 매칭되는 문제 해결
-          const matchPolishStock = (stock, product) => {
-            // 1순위: productId 매칭 (가장 정확)
-            if (stock.productId && product.productId) {
-              return String(stock.productId) === String(product.productId);
+          // ============================================================
+          // 상품 ID 시각화 시스템 (v09.17)
+          // 같은 ID = 항상 같은 색상 (황금각으로 분산해서 인접 ID도 잘 구분됨)
+          // ============================================================
+          const idToColor = (id) => {
+            if (!id) return '#94a3b8'; // 회색 (ID 없을 때)
+            // 문자열도 처리 (해시 변환)
+            const numId = typeof id === 'number' ? id : 
+              String(id).split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
+            const hue = (numId * 137.508) % 360;  // 황금각으로 분산
+            return `hsl(${hue}, 70%, 50%)`;
+          };
+          
+          // 1-1 단가표 ID로 9-1 마스터 ID 찾기 (cross-reference)
+          // 시각화 시 항상 9-1 마스터 ID를 기준으로 색상 결정 → 모든 화면에서 동일 색상
+          const getCanonicalId = (productOrStock) => {
+            if (!productOrStock) return null;
+            // 1순위: 자기 자신의 productId가 9-1 마스터 ID면 그대로 사용
+            if (productOrStock.productId) {
+              const isMaster = masterProducts.find(mp => String(mp.id) === String(productOrStock.productId));
+              if (isMaster) return productOrStock.productId;
+              // productId가 1-1 ID인 경우 → 9-1 마스터에서 legacy로 찾기
+              const masterByLegacy = masterProducts.find(mp => String(mp.legacyProductId) === String(productOrStock.productId));
+              if (masterByLegacy) return masterByLegacy.id;
             }
+            // 2순위: id 자체가 9-1 마스터 ID인지
+            if (productOrStock.id) {
+              const isMaster = masterProducts.find(mp => String(mp.id) === String(productOrStock.id));
+              if (isMaster) return productOrStock.id;
+              // id가 1-1 ID인 경우
+              const masterByLegacy = masterProducts.find(mp => String(mp.legacyProductId) === String(productOrStock.id));
+              if (masterByLegacy) return masterByLegacy.id;
+              return productOrStock.id; // 매칭 안 되면 그대로
+            }
+            return null;
+          };
+          
+          // 재사용 가능한 ID 뱃지 컴포넌트
+          const ProductIdBadge = ({ id, size = 'sm' }) => {
+            if (!id) return null;
+            const canonicalId = getCanonicalId({ id }) || getCanonicalId({ productId: id }) || id;
+            const color = idToColor(canonicalId);
+            const fontSize = size === 'xs' ? '9px' : size === 'sm' ? '10px' : '11px';
+            const dotSize = size === 'xs' ? '6px' : size === 'sm' ? '8px' : '10px';
+            return (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-neutral-100 border border-neutral-300 font-mono font-bold" 
+                style={{borderRadius:'3px', fontSize}} title={`상품 ID: ${canonicalId}`}>
+                <span style={{
+                  width: dotSize, height: dotSize, borderRadius: '50%',
+                  background: color, display: 'inline-block', flexShrink: 0,
+                  boxShadow: '0 0 0 1px rgba(0,0,0,0.1)'
+                }}></span>
+                <span className="text-neutral-700">#{canonicalId}</span>
+              </span>
+            );
+          };
+
+          // 선연마재고-상품 매칭 헬퍼 (v09.16): 다중 매칭 전략
+          // 1-1 단가표 productId와 9-1 마스터 productId가 다를 수 있음
+          // → 9-1 마스터의 legacyProductId를 통해 cross-matching
+          const matchPolishStock = (stock, product) => {
+            if (!stock || !product) return false;
+            
+            // 1순위: productId 직접 일치
+            if (stock.productId && product.productId) {
+              if (String(stock.productId) === String(product.productId)) return true;
+              
+              // 1-2: 9-1 마스터를 통한 cross-matching
+              // stock.productId = 9-1 마스터 ID, product.productId = 1-1 단가표 ID 인 경우
+              const masterById = masterProducts.find(mp => String(mp.id) === String(stock.productId));
+              if (masterById && String(masterById.legacyProductId) === String(product.productId)) return true;
+              
+              // 1-3: 반대 방향 매칭 (1-1 ID로 9-1 마스터 찾고, 그 마스터의 ID와 stock.productId 비교)
+              const masterByLegacy = masterProducts.find(mp => String(mp.legacyProductId) === String(product.productId));
+              if (masterByLegacy && String(masterByLegacy.id) === String(stock.productId)) return true;
+            }
+            
             // 2순위: 정확한 이름 일치 (productId 없는 기존 데이터 호환용)
-            return stock.name === product.productName;
+            if (stock.name === product.productName) return true;
+            
+            // 3순위: 9-1 마스터 이름 매칭 (1-1 이름 != 9-1 이름인 경우)
+            // stock.productId가 9-1 마스터 ID이면, 그 마스터의 이름과 product.productName 비교
+            if (stock.productId) {
+              const stockMaster = masterProducts.find(mp => String(mp.id) === String(stock.productId));
+              if (stockMaster) {
+                if (stockMaster.name === product.productName) return true;
+                // 1-1 단가표 이름이 9-1 도금발주명과 일치하는 경우도 체크
+                if (stockMaster.platingOrderName && stockMaster.platingOrderName.trim() === product.productName) return true;
+              }
+            }
+            
+            return false;
           };
           const [salaryPopup, setSalaryPopup] = useState(null);
           const [extraPayPopup, setExtraPayPopup] = useState(null); // {employee, record}
@@ -1310,12 +1393,18 @@ ${list}` }]
                 if (totalQty <= 0) continue;
                 
                 // 같은 상품의 선연마재고 찾기 (오래된 순으로 차감 = FIFO)
-                // v09.14: 매칭 헬퍼 사용 (상품ID 우선, 부분 매칭 X)
+                // v09.16: 매칭 헬퍼 강화 (productId + 9-1 마스터 cross-matching)
                 const matchingStocks = polishStocks
                   .filter(s => s.remaining > 0 && matchPolishStock(s, product))
                   .sort((a, b) => a.date.localeCompare(b.date)); // 오래된 것부터
                 
-                if (matchingStocks.length === 0) continue;
+                // 디버그 로그 (개발자 콘솔에서 확인)
+                console.log(`[선연마재고 매칭] ${product.productName} (productId: ${product.productId}, 발주: ${totalQty}개)`);
+                console.log(`  → 매칭된 재고: ${matchingStocks.length}건`, matchingStocks.map(s => ({name: s.name, productId: s.productId, remaining: s.remaining})));
+                if (matchingStocks.length === 0) {
+                  console.log(`  ⚠️ 매칭 안됨! polishStocks 전체:`, polishStocks.filter(s => s.remaining > 0).map(s => ({name: s.name, productId: s.productId})));
+                  continue;
+                }
                 
                 let remainingToDeduct = totalQty;
                 let deductedTotal = 0;
@@ -2140,7 +2229,7 @@ ${list}` }]
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260427.09.15</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260427.09.17</div>
                   </div>
                 </div>
 
@@ -2218,7 +2307,7 @@ ${list}` }]
                         businessInfo,                // ← 회사 정보 (NEW)
                         labelPresets,                // ← 라벨 프리셋 (NEW)
                         exportDate: new Date().toISOString(),
-                        appVersion: 'v20260427.09.15'
+                        appVersion: 'v20260427.09.17'
                       };
                       const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
                       const url = URL.createObjectURL(blob);
@@ -3835,6 +3924,18 @@ ${list}` }]
                                   </div>
                                 )}
                                 <div>
+                                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                                    <ProductIdBadge id={product.productId} size="md" />
+                                    {(() => {
+                                      // 발주 상품과 매칭되는 선연마재고 검색 (사전 알림)
+                                      const matched = polishStocks.filter(s => s.remaining > 0 && matchPolishStock(s, product));
+                                      const totalStock = matched.reduce((sum, s) => sum + s.remaining, 0);
+                                      if (totalStock > 0) {
+                                        return <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 font-bold" title={`매칭된 선연마재고 ${matched.length}건, ${totalStock}개 사용 가능`}>📦 보관재고 {totalStock}개</span>;
+                                      }
+                                      return null;
+                                    })()}
+                                  </div>
                                   <h3 className="font-bold text-lg text-slate-900">{product.productName}</h3>
                                   <div className="flex items-center space-x-2 mt-1">
                                     <span className="text-sm text-slate-500">연마:</span>
@@ -4238,6 +4339,9 @@ ${list}` }]
                                       </div>
                                     )}
                                     <div className="flex-1">
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <ProductIdBadge id={product.productId} />
+                                      </div>
                                       <h4 className="font-bold text-lg text-slate-900">{product.productName}</h4>
                                       {order.type === 'rework' ? (
                                         <p className="text-sm text-slate-500">
@@ -4346,7 +4450,7 @@ ${list}` }]
                                 <option value="">-- 9-1 상품 선택 (정확한 매칭용) --</option>
                                 {masterProducts.filter(mp => mp.type === 'hairpin' || !mp.type).sort((a,b) => (a.name||'').localeCompare(b.name||'')).map(mp => (
                                   <option key={mp.id} value={mp.id}>
-                                    {mp.platingOrderName?.trim() || mp.name}
+                                    #{mp.id} · {mp.platingOrderName?.trim() || mp.name}
                                   </option>
                                 ))}
                               </select>
@@ -4489,7 +4593,7 @@ ${list}` }]
                                 <option value="">-- 매칭 안 함 (이름으로만 매칭) --</option>
                                 {masterProducts.filter(mp => mp.type === 'hairpin' || !mp.type).sort((a,b) => (a.name||'').localeCompare(b.name||'')).map(mp => (
                                   <option key={mp.id} value={mp.id}>
-                                    {mp.platingOrderName?.trim() || mp.name}
+                                    #{mp.id} · {mp.platingOrderName?.trim() || mp.name}
                                   </option>
                                 ))}
                               </select>
@@ -4607,6 +4711,7 @@ ${list}` }]
                               <div className="flex items-center gap-3">
                                 <div>
                                   <div className="flex items-center gap-2 flex-wrap">
+                                    {stock.productId && <ProductIdBadge id={stock.productId} />}
                                     <span className="font-bold text-slate-900">{stock.name}</span>
                                     {stock.productId ? (
                                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-bold" title={`9-1 상품 ID: ${stock.productId}`}>🔗 매칭</span>
@@ -8898,7 +9003,7 @@ ${list}` }]
                               <h3 className="text-base font-black text-black tracking-tight">🖨️ 라벨 인쇄 + 디자인 편집기</h3>
                               <span className="bg-black text-white text-[10px] font-black px-2 py-0.5 tracking-widest" style={{borderRadius:'4px'}}>EDITOR</span>
                             </div>
-                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260427.09.15 · 헬퍼 자동 인쇄 · 한글 100%</div>
+                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260427.09.17 · 헬퍼 자동 인쇄 · 한글 100%</div>
                           </div>
                           <button onClick={()=>setBarcodePrintPopup(null)} className="text-neutral-400 hover:text-black text-xl font-black">✕</button>
                         </div>
@@ -10675,7 +10780,7 @@ ${list}` }]
                                 
                                 // 봇용 데이터: 바코드 있는 상품만, 출력에 필요한 필드만
                                 const botData = {
-                                  version: 'v20260427.09.15',
+                                  version: 'v20260427.09.17',
                                   exported_at: new Date().toISOString(),
                                   exported_by: 'LACEROOM 9-1',
                                   product_count: 0,
@@ -11109,6 +11214,9 @@ ${list}` }]
 
                                             {/* 정보 영역 */}
                                             <div className="p-2.5 space-y-1.5">
+                                              <div className="flex items-center gap-1.5">
+                                                <ProductIdBadge id={p.id} size="xs" />
+                                              </div>
                                               <div className="font-black text-black text-xs truncate tracking-tight" title={p.name}>{p.name}</div>
 
                                               {/* 색상 리스트 (유광/반광 좌우 + 단일 별도 / 무신사 스타일) */}
@@ -12584,7 +12692,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260427.09.15</p>
+                <p>© 2026 LACEROOM통합관리 v20260427.09.17</p>
               </footer>
             </div>
           </div>
