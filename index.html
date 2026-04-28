@@ -1942,7 +1942,7 @@ ${list}` }]
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260427.09.07</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260427.09.09</div>
                   </div>
                 </div>
 
@@ -2003,7 +2003,25 @@ ${list}` }]
                 <div className="px-2 py-3 border-t-2 border-black space-y-1">
                   <button
                     onClick={() => {
-                      const allData = { products, history, receivables, fabricSuppliers: fabricSuppliersState, fabricOrders, freelancers, freelancerWorks, employees, salaryRecords, salaryPayments, vendors, vendorBills, vendorPayments, vendorItems, dashboardLinks, memos, recurringMemos, soldoutItems, todayOffItems, fixedExpenses, expenseCategories, bizExpenses, bizCategories, polishStocks, masterProducts, yocheokInput, exportDate: new Date().toISOString() };
+                      // 모든 데이터 수집 (v09.09: 부자재 바코드, 회사 정보, 라벨 프리셋 추가)
+                      let labelPresets = [];
+                      try { labelPresets = JSON.parse(localStorage.getItem('laceroom_label_presets') || '[]'); } catch {}
+                      const allData = {
+                        products, history, receivables,
+                        fabricSuppliers: fabricSuppliersState, fabricOrders,
+                        freelancers, freelancerWorks,
+                        employees, salaryRecords, salaryPayments,
+                        vendors, vendorBills, vendorPayments, vendorItems,
+                        dashboardLinks, memos, recurringMemos,
+                        soldoutItems, todayOffItems,
+                        fixedExpenses, expenseCategories, bizExpenses, bizCategories,
+                        polishStocks, masterProducts, yocheokInput,
+                        accessoryBarcodes,           // ← 부자재 바코드 (NEW)
+                        businessInfo,                // ← 회사 정보 (NEW)
+                        labelPresets,                // ← 라벨 프리셋 (NEW)
+                        exportDate: new Date().toISOString(),
+                        appVersion: 'v20260427.09.09'
+                      };
                       const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
                       const url = URL.createObjectURL(blob);
                       const filename = `LACEROOM_백업_${new Date().toISOString().split('T')[0]}_${new Date().toTimeString().slice(0,5).replace(':','')}.json`;
@@ -2083,6 +2101,10 @@ ${list}` }]
                             if (data.polishStocks) savePolishStocks(data.polishStocks);
                             if (data.masterProducts) saveMasterProducts(data.masterProducts);
                             if (data.yocheokInput) saveYocheokInput(data.yocheokInput);
+                            // v09.09: 추가 데이터 복원
+                            if (data.accessoryBarcodes) saveAccessoryBarcodes(data.accessoryBarcodes);
+                            if (data.businessInfo) saveBusinessInfo(data.businessInfo);
+                            if (data.labelPresets) localStorage.setItem('laceroom_label_presets', JSON.stringify(data.labelPresets));
                             // 가져온 파일 = 백업 완료로 처리 (현재 PC 데이터 = 가져온 파일 데이터)
                             const exportTime = data.exportDate || new Date().toISOString();
                             localStorage.setItem('laceroom_last_backup_at', exportTime);
@@ -3619,36 +3641,49 @@ ${list}` }]
                                   const showFinish = colorDef && (colorDef.finishType === 'both' || colorDef.finishType === 'glossOnly');
                                   const finishOptions = colorDef?.finishType === 'glossOnly' ? ['유광'] : FINISH_OPTIONS;
                                   return (
-                                  <div key={index} className="flex items-center space-x-3 p-4 rounded-xl bg-slate-50 border border-slate-200">
-                                    <select
-                                      value={item.color}
-                                      onChange={(e) => updateColorItem(product.productId, product.grind, index, 'color', e.target.value)}
-                                      className="flex-1 px-3 py-2 rounded-lg border border-slate-300 focus:border-blue-500 outline-none text-sm"
-                                    >
-                                      {COLOR_DEFS.map(c => <option key={c.name} value={c.name}>{c.displayName}</option>)}
-                                    </select>
-
-                                    {showFinish && (
+                                  <div key={index} className="flex items-center gap-2 p-3 rounded-xl bg-slate-50 border border-slate-200">
+                                    {/* 색상 + 유광/반광 + 수량을 한 그룹으로 묶기 */}
+                                    <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-lg p-1">
                                       <select
-                                        value={item.finish || '유광'}
-                                        onChange={(e) => updateColorItem(product.productId, product.grind, index, 'finish', e.target.value)}
-                                        className="px-3 py-2 rounded-lg border border-slate-300 focus:border-blue-500 outline-none text-sm"
+                                        value={item.color}
+                                        onChange={(e) => updateColorItem(product.productId, product.grind, index, 'color', e.target.value)}
+                                        className="w-44 px-2 py-1.5 border-0 outline-none text-sm font-medium bg-transparent cursor-pointer"
                                       >
-                                        {finishOptions.map(f => <option key={f} value={f}>{f}</option>)}
+                                        {COLOR_DEFS.map(c => <option key={c.name} value={c.name}>{c.displayName}</option>)}
                                       </select>
-                                    )}
 
-                                    <input
-                                      type="number"
-                                      value={item.qty}
-                                      onChange={(e) => updateColorItem(product.productId, product.grind, index, 'qty', parseInt(e.target.value) || 1)}
-                                      min="1"
-                                      className="w-24 px-3 py-2 rounded-lg border border-slate-300 focus:border-blue-500 outline-none text-sm text-center"
-                                    />
+                                      {showFinish && (
+                                        <>
+                                          <span className="text-slate-300 text-sm">|</span>
+                                          <select
+                                            value={item.finish || '유광'}
+                                            onChange={(e) => updateColorItem(product.productId, product.grind, index, 'finish', e.target.value)}
+                                            className="w-20 px-2 py-1.5 border-0 outline-none text-sm font-bold text-blue-600 bg-transparent cursor-pointer"
+                                          >
+                                            {finishOptions.map(f => <option key={f} value={f}>{f}</option>)}
+                                          </select>
+                                        </>
+                                      )}
 
+                                      <span className="text-slate-300 text-sm">|</span>
+                                      <input
+                                        type="number"
+                                        value={item.qty}
+                                        onChange={(e) => updateColorItem(product.productId, product.grind, index, 'qty', parseInt(e.target.value) || 1)}
+                                        min="1"
+                                        className="w-16 px-2 py-1.5 border-0 outline-none text-sm text-center font-bold"
+                                      />
+                                      <span className="text-slate-500 text-xs pr-2">개</span>
+                                    </div>
+
+                                    {/* 빈 공간 (유연하게 늘어남) */}
+                                    <div className="flex-1"></div>
+
+                                    {/* 삭제 버튼 (오른쪽 끝) */}
                                     <button
                                       onClick={() => handleRemoveColorItem(product.productId, product.grind, index)}
-                                      className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                      className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all shrink-0"
+                                      title="이 색상 삭제"
                                     >
                                       <X />
                                     </button>
@@ -8439,7 +8474,7 @@ ${list}` }]
                               <h3 className="text-base font-black text-black tracking-tight">🖨️ 라벨 인쇄 + 디자인 편집기</h3>
                               <span className="bg-black text-white text-[10px] font-black px-2 py-0.5 tracking-widest" style={{borderRadius:'4px'}}>EDITOR</span>
                             </div>
-                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260427.09.07 · 헬퍼 자동 인쇄 · 한글 100%</div>
+                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260427.09.09 · 헬퍼 자동 인쇄 · 한글 100%</div>
                           </div>
                           <button onClick={()=>setBarcodePrintPopup(null)} className="text-neutral-400 hover:text-black text-xl font-black">✕</button>
                         </div>
@@ -10216,7 +10251,7 @@ ${list}` }]
                                 
                                 // 봇용 데이터: 바코드 있는 상품만, 출력에 필요한 필드만
                                 const botData = {
-                                  version: 'v20260427.09.07',
+                                  version: 'v20260427.09.09',
                                   exported_at: new Date().toISOString(),
                                   exported_by: 'LACEROOM 9-1',
                                   product_count: 0,
@@ -12125,7 +12160,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260427.09.07</p>
+                <p>© 2026 LACEROOM통합관리 v20260427.09.09</p>
               </footer>
             </div>
           </div>
