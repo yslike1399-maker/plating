@@ -281,7 +281,32 @@
             } catch { return { companyName: '주식회사 골드', ceoName: '', businessNumber: '', address: '', phone: '' }; }
           });
           const saveBusinessInfo = (next) => { setBusinessInfo(next); localStorage.setItem('business_info', JSON.stringify(next)); };
-          
+
+          // PC 이름 (v10.01: 변경이력에 PC 구분 표시용, PC별 고유라 백업 import 시 제외)
+          const [pcName, setPcName] = useState(() => {
+            try { return localStorage.getItem('pc_name') || ''; } catch { return ''; }
+          });
+          const savePcName = (next) => { setPcName(next); localStorage.setItem('pc_name', next); };
+
+          // 상품명 변경이력 (v10.01: 30일 자동 삭제)
+          const [nameChangeLogs, setNameChangeLogs] = useState(() => {
+            try {
+              const raw = localStorage.getItem('name_change_logs');
+              const logs = raw ? JSON.parse(raw) : [];
+              // 30일 지난 로그 자동 삭제
+              const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+              const filtered = logs.filter(l => new Date(l.changedAt).getTime() >= cutoff);
+              if (filtered.length !== logs.length) {
+                localStorage.setItem('name_change_logs', JSON.stringify(filtered));
+              }
+              return filtered;
+            } catch { return []; }
+          });
+          const saveNameChangeLogs = (next) => { setNameChangeLogs(next); localStorage.setItem('name_change_logs', JSON.stringify(next)); };
+
+          // 상품명 변경 미리보기 모달 (v10.01)
+          const [nameChangeConfirm, setNameChangeConfirm] = useState(null);
+
           // 프리랜서 영수증 발급 (체크된 작업 ID 목록)
           const [receiptCheckedWorks, setReceiptCheckedWorks] = useState([]);
 
@@ -2229,7 +2254,7 @@ ${list}` }]
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260427.09.17</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260427.10.01</div>
                   </div>
                 </div>
 
@@ -2260,6 +2285,7 @@ ${list}` }]
                     ['fixedExpense', '고정지출', '10'],
                     ['subsidy', '정부/지자체 지원사업', '11'],
                     ['userMgmt', '설정', '12'],
+                    ['changeLog', '변경이력', '13'],
                   ].map(([tab, label, num]) => {
                     const hasUnreportedBonus = tab === 'salary' && salaryRecords.some(r => {
                       const paid = salaryPayments.filter(p => p.salaryRecordId === r.id).reduce((s, p) => s + p.amount, 0);
@@ -2306,8 +2332,9 @@ ${list}` }]
                         accessoryBarcodes,           // ← 부자재 바코드 (NEW)
                         businessInfo,                // ← 회사 정보 (NEW)
                         labelPresets,                // ← 라벨 프리셋 (NEW)
+                        nameChangeLogs,              // ← 상품명 변경이력 (v10.01)
                         exportDate: new Date().toISOString(),
-                        appVersion: 'v20260427.09.17'
+                        appVersion: 'v20260427.10.01'
                       };
                       const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
                       const url = URL.createObjectURL(blob);
@@ -2392,6 +2419,8 @@ ${list}` }]
                             if (data.accessoryBarcodes) saveAccessoryBarcodes(data.accessoryBarcodes);
                             if (data.businessInfo) saveBusinessInfo(data.businessInfo);
                             if (data.labelPresets) localStorage.setItem('laceroom_label_presets', JSON.stringify(data.labelPresets));
+                            // v10.01: 변경이력 복원 (pcName은 PC별 고유라 import 시 제외)
+                            if (data.nameChangeLogs) saveNameChangeLogs(data.nameChangeLogs);
                             // 가져온 파일 = 백업 완료로 처리 (현재 PC 데이터 = 가져온 파일 데이터)
                             const exportTime = data.exportDate || new Date().toISOString();
                             localStorage.setItem('laceroom_last_backup_at', exportTime);
@@ -9003,7 +9032,7 @@ ${list}` }]
                               <h3 className="text-base font-black text-black tracking-tight">🖨️ 라벨 인쇄 + 디자인 편집기</h3>
                               <span className="bg-black text-white text-[10px] font-black px-2 py-0.5 tracking-widest" style={{borderRadius:'4px'}}>EDITOR</span>
                             </div>
-                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260427.09.17 · 헬퍼 자동 인쇄 · 한글 100%</div>
+                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260427.10.01 · 헬퍼 자동 인쇄 · 한글 100%</div>
                           </div>
                           <button onClick={()=>setBarcodePrintPopup(null)} className="text-neutral-400 hover:text-black text-xl font-black">✕</button>
                         </div>
@@ -10640,6 +10669,48 @@ ${list}` }]
                                         legacyProductId: form.legacyProductId||null,
                                         createdAt: form.createdAt||new Date().toISOString()
                                       };
+
+                                      // v10.01: 상품명 변경 감지 → 미리보기 모달
+                                      if (isEdit) {
+                                        const original = masterProducts.find(p => p.id === item.id);
+                                        const oldName = original?.name || '';
+                                        const newName = item.name;
+                                        if (original && oldName !== newName) {
+                                          // 영향받는 데이터 개수 계산
+                                          let historyCount = 0;
+                                          history.forEach(h => {
+                                            if (Array.isArray(h.products)) {
+                                              h.products.forEach(p => {
+                                                if (p.productId === original.legacyProductId || p.productId === original.id || p.productName === oldName) {
+                                                  historyCount++;
+                                                }
+                                              });
+                                            }
+                                          });
+                                          const polishCount = polishStocks.filter(s => {
+                                            if (s.productId && (s.productId === original.legacyProductId || s.productId === original.id)) return true;
+                                            return s.name === oldName;
+                                          }).length;
+                                          // 1-1 products: legacyProductId 또는 masterProductId 매칭, 또는 이름 일치
+                                          const productsCount = products.filter(p => {
+                                            if (p.masterProductId === original.id) return true;
+                                            if (original.legacyProductId && p.id === original.legacyProductId) return true;
+                                            if (p.id === original.id) return true;
+                                            return p.name === oldName;
+                                          }).length;
+                                          const soldoutCount = soldoutItems.filter(s => s.name === oldName).length;
+                                          const todayOffCount = todayOffItems.filter(t => t.name === oldName).length;
+                                          const totalCount = historyCount + polishCount + productsCount + soldoutCount + todayOffCount;
+                                          // 미리보기 모달 띄우기
+                                          setNameChangeConfirm({
+                                            item, original, oldName, newName,
+                                            counts: { history: historyCount, polish: polishCount, products: productsCount, soldout: soldoutCount, todayOff: todayOffCount, total: totalCount }
+                                          });
+                                          return;
+                                        }
+                                      }
+
+                                      // 일반 저장 (이름 변경 없거나 신규)
                                       saveMasterProducts(isEdit ? masterProducts.map(p=>p.id===item.id?item:p) : [...masterProducts, item]);
 
                                       // 헤어핀은 1-2 작업지시서 사용을 위해 products에도 동기화
@@ -10670,6 +10741,157 @@ ${list}` }]
                                       setMasterPopup(null);
                                       alert(isEdit?'수정 완료!':'등록 완료!');
                                     }} className="flex-[2] py-3 bg-black hover:bg-neutral-800 text-white font-black text-sm uppercase tracking-wider" style={{borderRadius:'2px'}}>{isEdit?'저장':'등록'}</button>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })()}
+                          
+                          {/* 상품명 변경 미리보기 모달 (v10.01) */}
+                          {nameChangeConfirm && (() => {
+                            const { item, original, oldName, newName, counts } = nameChangeConfirm;
+                            return (
+                              <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.6)'}}>
+                                <div className="bg-white border border-neutral-300 w-full max-w-lg max-h-[90vh] overflow-y-auto" style={{borderRadius:'2px'}}>
+                                  <div className="bg-amber-50 border-b border-amber-300 px-5 py-3 flex items-center gap-2">
+                                    <span className="text-xl">⚠️</span>
+                                    <h3 className="text-base font-black text-amber-900 tracking-tight">상품명 변경 영향 확인</h3>
+                                  </div>
+                                  <div className="p-5 space-y-4">
+                                    <div className="space-y-2">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-[10px] font-black text-neutral-500 uppercase w-12">변경 전</span>
+                                        <span className="px-2 py-1 bg-neutral-100 border border-neutral-300 text-sm font-black text-black flex-1" style={{borderRadius:'2px'}}>{oldName}</span>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-[10px] font-black text-neutral-500 uppercase w-12">변경 후</span>
+                                        <span className="px-2 py-1 bg-black text-white text-sm font-black flex-1" style={{borderRadius:'2px'}}>{newName}</span>
+                                      </div>
+                                    </div>
+
+                                    <div className="bg-neutral-50 border border-neutral-200 p-3" style={{borderRadius:'2px'}}>
+                                      <div className="text-[11px] font-black text-neutral-700 mb-2 uppercase tracking-wider">📊 영향받는 데이터</div>
+                                      <div className="space-y-1.5 text-xs">
+                                        <div className="flex justify-between"><span className="text-neutral-600">📋 도금작업지시서</span><span className="font-black text-black">{counts.history}건</span></div>
+                                        <div className="flex justify-between"><span className="text-neutral-600">🔧 선연마재고</span><span className="font-black text-black">{counts.polish}건</span></div>
+                                        <div className="flex justify-between"><span className="text-neutral-600">💰 1-1 단가표</span><span className="font-black text-black">{counts.products}건</span></div>
+                                        <div className="flex justify-between"><span className="text-neutral-600">🚫 9-2 일시품절</span><span className="font-black text-black">{counts.soldout}건</span></div>
+                                        <div className="flex justify-between"><span className="text-neutral-600">🚚 9-3 오늘출발OFF</span><span className="font-black text-black">{counts.todayOff}건</span></div>
+                                        <div className="border-t border-neutral-300 pt-1.5 mt-1.5 flex justify-between">
+                                          <span className="font-black text-black">합계</span>
+                                          <span className="font-black text-black">{counts.total}건</span>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {counts.total === 0 ? (
+                                      <div className="bg-blue-50 border border-blue-300 p-3 text-[11px] text-blue-800 font-bold" style={{borderRadius:'2px'}}>
+                                        💡 영향받는 데이터가 없습니다. 안전하게 변경할 수 있습니다.
+                                      </div>
+                                    ) : (
+                                      <div className="bg-amber-50 border border-amber-300 p-3 text-[11px] text-amber-800 font-bold" style={{borderRadius:'2px'}}>
+                                        ⚠️ 위 {counts.total}건의 데이터에서 상품명이 일괄 변경됩니다. 변경이력은 13번 탭에서 확인할 수 있습니다.
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="flex gap-2 px-5 pb-5 pt-2 border-t border-neutral-200">
+                                    <button onClick={() => setNameChangeConfirm(null)}
+                                      className="flex-1 py-3 border border-neutral-300 text-black font-bold text-sm hover:bg-neutral-100 uppercase tracking-wider"
+                                      style={{borderRadius:'2px'}}>취소</button>
+                                    <button onClick={() => {
+                                      // 1. masterProducts 업데이트
+                                      const updatedMasters = masterProducts.map(p => p.id === item.id ? item : p);
+                                      saveMasterProducts(updatedMasters);
+
+                                      // 2. history 업데이트
+                                      const updatedHistory = history.map(h => {
+                                        if (!Array.isArray(h.products)) return h;
+                                        let changed = false;
+                                        const newProducts = h.products.map(p => {
+                                          const match = (p.productId === original.legacyProductId || p.productId === original.id || p.productName === oldName);
+                                          if (match) { changed = true; return { ...p, productName: newName }; }
+                                          return p;
+                                        });
+                                        return changed ? { ...h, products: newProducts } : h;
+                                      });
+                                      saveHistory(updatedHistory);
+
+                                      // 3. polishStocks 업데이트
+                                      const updatedPolish = polishStocks.map(s => {
+                                        const matchById = s.productId && (s.productId === original.legacyProductId || s.productId === original.id);
+                                        const matchByName = s.name === oldName;
+                                        if (matchById || matchByName) return { ...s, name: newName };
+                                        return s;
+                                      });
+                                      savePolishStocks(updatedPolish);
+
+                                      // 4. 1-1 products 업데이트 (헤어핀만 동기화 대상)
+                                      const updatedProducts = products.map(p => {
+                                        const matchByMaster = p.masterProductId === original.id;
+                                        const matchByLegacy = original.legacyProductId && p.id === original.legacyProductId;
+                                        const matchById = p.id === original.id;
+                                        const matchByName = p.name === oldName;
+                                        if (matchByMaster || matchByLegacy || matchById || matchByName) {
+                                          // platingOrderName이 있으면 platingOrderName 우선 (헤어핀)
+                                          const newProductName = (item.type === 'hairpin' && item.platingOrderName && item.platingOrderName.trim())
+                                            ? item.platingOrderName.trim()
+                                            : newName;
+                                          return { ...p, name: newProductName };
+                                        }
+                                        return p;
+                                      });
+                                      // 헤어핀이고 매칭되는 products가 없으면 새로 추가
+                                      if (item.type === 'hairpin') {
+                                        const hasMatch = updatedProducts.some(p =>
+                                          p.masterProductId === item.id ||
+                                          (item.legacyProductId && p.id === item.legacyProductId) ||
+                                          p.id === item.id
+                                        );
+                                        if (!hasMatch) {
+                                          updatedProducts.push({
+                                            id: item.legacyProductId || item.id,
+                                            name: (item.platingOrderName && item.platingOrderName.trim()) ? item.platingOrderName.trim() : item.name,
+                                            grindRequired: item.grindRequired,
+                                            image: item.image,
+                                            platingCosts: item.platingCosts || {},
+                                            grindCost: item.grindCost || '',
+                                            injectionCost: item.injectionCost || '',
+                                            springCost: item.springCost || '',
+                                            pinCost: item.pinCost || '',
+                                            masterProductId: item.id,
+                                            createdAt: item.createdAt
+                                          });
+                                        }
+                                      }
+                                      saveProducts(updatedProducts);
+
+                                      // 5. soldoutItems 업데이트
+                                      const updatedSoldout = soldoutItems.map(s => s.name === oldName ? { ...s, name: newName } : s);
+                                      saveSoldoutItems(updatedSoldout);
+
+                                      // 6. todayOffItems 업데이트
+                                      const updatedTodayOff = todayOffItems.map(t => t.name === oldName ? { ...t, name: newName } : t);
+                                      saveTodayOffItems(updatedTodayOff);
+
+                                      // 7. 변경이력 추가
+                                      const logEntry = {
+                                        id: Date.now(),
+                                        oldName,
+                                        newName,
+                                        changedAt: new Date().toISOString(),
+                                        affectedCount: counts.total,
+                                        counts: { ...counts },
+                                        pcName: pcName || '(미설정)',
+                                        productType: item.type
+                                      };
+                                      saveNameChangeLogs([logEntry, ...nameChangeLogs]);
+
+                                      setNameChangeConfirm(null);
+                                      setMasterPopup(null);
+                                      alert(`✅ 상품명 변경 완료!\n\n${oldName} → ${newName}\n총 ${counts.total}건 일괄 적용되었습니다.`);
+                                    }}
+                                      className="flex-[2] py-3 bg-black hover:bg-neutral-800 text-white font-black text-sm uppercase tracking-wider"
+                                      style={{borderRadius:'2px'}}>변경 적용</button>
                                   </div>
                                 </div>
                               </div>
@@ -10780,7 +11002,7 @@ ${list}` }]
                                 
                                 // 봇용 데이터: 바코드 있는 상품만, 출력에 필요한 필드만
                                 const botData = {
-                                  version: 'v20260427.09.17',
+                                  version: 'v20260427.10.01',
                                   exported_at: new Date().toISOString(),
                                   exported_by: 'LACEROOM 9-1',
                                   product_count: 0,
@@ -12629,6 +12851,39 @@ ${list}` }]
                       </div>
                     </div>
                     
+                    {/* PC 이름 섹션 (v10.01) */}
+                    <div className="bg-white border border-neutral-300 overflow-hidden" style={{borderRadius:'2px'}}>
+                      <div className="bg-neutral-100 px-5 py-3 border-b border-neutral-300">
+                        <span className="font-black text-black text-sm uppercase tracking-wider">💻 PC 이름</span>
+                        <p className="text-[11px] text-neutral-500 mt-0.5 normal-case tracking-normal">변경이력에서 어느 PC에서 작업했는지 구분하기 위해 사용됩니다 · 백업 시 제외됩니다</p>
+                      </div>
+                      <div className="p-5 space-y-3">
+                        <div className="flex flex-wrap gap-2">
+                          <button onClick={()=>savePcName('사무실')}
+                            className={`px-4 py-2 text-sm font-black uppercase tracking-wider border transition-all ${pcName==='사무실' ? 'bg-black text-white border-black' : 'bg-white text-black border-neutral-300 hover:border-black'}`}
+                            style={{borderRadius:'2px'}}>🏢 사무실</button>
+                          <button onClick={()=>savePcName('집')}
+                            className={`px-4 py-2 text-sm font-black uppercase tracking-wider border transition-all ${pcName==='집' ? 'bg-black text-white border-black' : 'bg-white text-black border-neutral-300 hover:border-black'}`}
+                            style={{borderRadius:'2px'}}>🏠 집</button>
+                          <button onClick={()=>savePcName('사무실2')}
+                            className={`px-4 py-2 text-sm font-black uppercase tracking-wider border transition-all ${pcName==='사무실2' ? 'bg-black text-white border-black' : 'bg-white text-black border-neutral-300 hover:border-black'}`}
+                            style={{borderRadius:'2px'}}>🏢 사무실2</button>
+                          {pcName && !['사무실','집','사무실2'].includes(pcName) && (
+                            <button className="px-4 py-2 text-sm font-black uppercase tracking-wider border bg-black text-white border-black" style={{borderRadius:'2px'}}>{pcName}</button>
+                          )}
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-black mb-2 uppercase tracking-wider">직접 입력</label>
+                          <input type="text" value={pcName} onChange={e=>savePcName(e.target.value)}
+                            placeholder="예: 노트북, 작업실, 이수PC..."
+                            className="w-full px-3 py-2.5 border border-neutral-300 focus:border-black outline-none text-sm" style={{borderRadius:'2px'}}/>
+                        </div>
+                        <div className="text-[10px] text-neutral-500">
+                          현재: <span className="font-black text-black">{pcName || '(미설정)'}</span>
+                        </div>
+                      </div>
+                    </div>
+
                     {/* 회사 정보 섹션 */}
                     <div className="bg-white border border-neutral-300 overflow-hidden" style={{borderRadius:'2px'}}>
                       <div className="bg-neutral-100 px-5 py-3 border-b border-neutral-300">
@@ -12691,8 +12946,135 @@ ${list}` }]
                   </div>
                 )}
 
+                {/* 13번 변경이력 (v10.01) */}
+                {activeMainTab === 'changeLog' && (
+                  <main className="flex-1 px-6 py-6">
+                    <div className="space-y-4">
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h1 className="text-2xl font-black text-black tracking-tight">변경이력</h1>
+                          <span className="bg-black text-white text-xs px-2 py-0.5 font-black tracking-widest" style={{borderRadius:'2px'}}>13</span>
+                          <span className="text-[11px] text-neutral-500 font-bold">최근 30일간 상품명 변경 기록</span>
+                        </div>
+                      </div>
+
+                      {/* 통계 요약 */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div className="bg-white border border-neutral-300 p-4" style={{borderRadius:'2px'}}>
+                          <div className="text-[10px] font-black text-neutral-500 uppercase tracking-wider mb-1">전체</div>
+                          <div className="text-2xl font-black text-black">{nameChangeLogs.length}건</div>
+                        </div>
+                        <div className="bg-white border border-neutral-300 p-4" style={{borderRadius:'2px'}}>
+                          <div className="text-[10px] font-black text-neutral-500 uppercase tracking-wider mb-1">오늘</div>
+                          <div className="text-2xl font-black text-black">
+                            {nameChangeLogs.filter(l => {
+                              const d = new Date(l.changedAt);
+                              const today = new Date();
+                              return d.getFullYear()===today.getFullYear() && d.getMonth()===today.getMonth() && d.getDate()===today.getDate();
+                            }).length}건
+                          </div>
+                        </div>
+                        <div className="bg-white border border-neutral-300 p-4" style={{borderRadius:'2px'}}>
+                          <div className="text-[10px] font-black text-neutral-500 uppercase tracking-wider mb-1">이번 주</div>
+                          <div className="text-2xl font-black text-black">
+                            {nameChangeLogs.filter(l => {
+                              const diff = Date.now() - new Date(l.changedAt).getTime();
+                              return diff <= 7*24*60*60*1000;
+                            }).length}건
+                          </div>
+                        </div>
+                        <div className="bg-white border border-neutral-300 p-4" style={{borderRadius:'2px'}}>
+                          <div className="text-[10px] font-black text-neutral-500 uppercase tracking-wider mb-1">총 영향 데이터</div>
+                          <div className="text-2xl font-black text-black">{nameChangeLogs.reduce((s,l)=>s+(l.affectedCount||0),0)}건</div>
+                        </div>
+                      </div>
+
+                      {/* 안내 */}
+                      <div className="bg-amber-50 border border-amber-300 p-3" style={{borderRadius:'2px'}}>
+                        <div className="text-[11px] font-black text-amber-800 mb-1">💡 보관 정책</div>
+                        <div className="text-[10px] text-amber-700 font-bold">변경이력은 30일 동안만 보관되며, 그 이후 자동으로 삭제됩니다.</div>
+                      </div>
+
+                      {/* 변경이력 테이블 */}
+                      <div className="bg-white border border-neutral-300 overflow-hidden" style={{borderRadius:'2px'}}>
+                        <div className="bg-neutral-100 px-5 py-3 border-b border-neutral-300 flex items-center justify-between">
+                          <span className="font-black text-black text-sm uppercase tracking-wider">📋 상품명 변경 기록</span>
+                          {nameChangeLogs.length > 0 && (
+                            <button onClick={() => {
+                              if (confirm('변경이력을 모두 삭제하시겠습니까?\n(이 작업은 되돌릴 수 없습니다)')) {
+                                saveNameChangeLogs([]);
+                              }
+                            }} className="text-[11px] text-neutral-500 hover:text-red-600 font-bold uppercase tracking-wider">
+                              전체삭제
+                            </button>
+                          )}
+                        </div>
+                        {nameChangeLogs.length === 0 ? (
+                          <div className="p-12 text-center">
+                            <div className="text-5xl mb-3 opacity-30">📋</div>
+                            <div className="text-sm text-neutral-500 font-bold">아직 변경이력이 없습니다</div>
+                            <div className="text-[11px] text-neutral-400 mt-1">9-1 상품관리에서 상품명을 변경하면 여기에 기록됩니다</div>
+                          </div>
+                        ) : (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead className="bg-neutral-50 border-b border-neutral-200">
+                                <tr className="text-left text-[10px] font-black text-neutral-600 uppercase tracking-wider">
+                                  <th className="px-4 py-2.5">변경 일시</th>
+                                  <th className="px-4 py-2.5">변경 전</th>
+                                  <th className="px-4 py-2.5">변경 후</th>
+                                  <th className="px-4 py-2.5 text-right">영향 데이터</th>
+                                  <th className="px-4 py-2.5">PC</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {nameChangeLogs.map((log) => {
+                                  const d = new Date(log.changedAt);
+                                  const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                                  const timeStr = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+                                  return (
+                                    <tr key={log.id} className="border-b border-neutral-100 hover:bg-neutral-50">
+                                      <td className="px-4 py-3">
+                                        <div className="text-xs font-black text-black">{dateStr}</div>
+                                        <div className="text-[10px] text-neutral-500 font-bold">{timeStr}</div>
+                                      </td>
+                                      <td className="px-4 py-3">
+                                        <div className="inline-block px-2 py-0.5 bg-neutral-100 border border-neutral-300 text-xs font-bold text-neutral-700" style={{borderRadius:'2px'}}>
+                                          {log.oldName}
+                                        </div>
+                                      </td>
+                                      <td className="px-4 py-3">
+                                        <div className="inline-block px-2 py-0.5 bg-black text-white text-xs font-black" style={{borderRadius:'2px'}}>
+                                          {log.newName}
+                                        </div>
+                                      </td>
+                                      <td className="px-4 py-3 text-right">
+                                        <div className="text-sm font-black text-black">{log.affectedCount}건</div>
+                                        {log.counts && (
+                                          <div className="text-[9px] text-neutral-500 font-bold mt-0.5">
+                                            지시서{log.counts.history||0}·연마{log.counts.polish||0}·단가{log.counts.products||0}·품절{log.counts.soldout||0}·OFF{log.counts.todayOff||0}
+                                          </div>
+                                        )}
+                                      </td>
+                                      <td className="px-4 py-3">
+                                        <span className="px-2 py-0.5 bg-blue-50 border border-blue-300 text-blue-800 text-[10px] font-black" style={{borderRadius:'2px'}}>
+                                          {log.pcName || '(미설정)'}
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </main>
+                )}
+
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260427.09.17</p>
+                <p>© 2026 LACEROOM통합관리 v20260427.10.01</p>
               </footer>
             </div>
           </div>
