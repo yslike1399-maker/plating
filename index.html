@@ -119,6 +119,123 @@
 
         function App() {
           const [activeMainTab, setActiveMainTab] = useState('dashboard');
+          
+          // ============================================================
+          // 백업 추적 시스템 (v09.06)
+          // ============================================================
+          // 마지막 백업 시각 (내보내기 버튼 클릭 시점)
+          const [lastBackupAt, setLastBackupAt] = useState(() => {
+            return localStorage.getItem('laceroom_last_backup_at') || null;
+          });
+          // 마지막 데이터 변경 시각 (저장 함수 호출될 때마다 갱신)
+          const [lastChangedAt, setLastChangedAt] = useState(() => {
+            return localStorage.getItem('laceroom_last_changed_at') || null;
+          });
+          // 미백업 변경 카운트 (백업 후 0으로 리셋)
+          const [unbackedChanges, setUnbackedChanges] = useState(() => {
+            return parseInt(localStorage.getItem('laceroom_unbacked_count') || '0');
+          });
+          
+          // 데이터 변경 감지 (모든 save 함수에서 호출)
+          const trackDataChange = () => {
+            const now = new Date().toISOString();
+            setLastChangedAt(now);
+            localStorage.setItem('laceroom_last_changed_at', now);
+            const newCount = unbackedChanges + 1;
+            setUnbackedChanges(newCount);
+            localStorage.setItem('laceroom_unbacked_count', String(newCount));
+          };
+          
+          // 백업 완료 처리 (내보내기 버튼 클릭 시)
+          const markBackupDone = () => {
+            const now = new Date().toISOString();
+            setLastBackupAt(now);
+            setUnbackedChanges(0);
+            localStorage.setItem('laceroom_last_backup_at', now);
+            localStorage.setItem('laceroom_unbacked_count', '0');
+          };
+          
+          // 백업 상태 계산 (실시간)
+          const getBackupStatus = () => {
+            if (unbackedChanges === 0) return { level: 'green', text: '백업 완료', icon: '🟢' };
+            if (!lastChangedAt) return { level: 'green', text: '백업 완료', icon: '🟢' };
+            const minutesAgo = Math.floor((Date.now() - new Date(lastChangedAt).getTime()) / 60000);
+            if (minutesAgo < 30) return { level: 'yellow', text: `${unbackedChanges}개 변경`, icon: '🟡', minutesAgo };
+            if (minutesAgo < 60) return { level: 'yellow', text: `${unbackedChanges}개 변경 ${minutesAgo}분`, icon: '🟡', minutesAgo };
+            return { level: 'red', text: `미백업 ${minutesAgo >= 60 ? Math.floor(minutesAgo/60)+'시간' : minutesAgo+'분'}`, icon: '🔴', minutesAgo };
+          };
+          
+          // 24시간 이상 미백업 체크 (시작 시 알림용)
+          const isLongTimeNoBackup = () => {
+            if (!lastBackupAt) return true;
+            const hoursAgo = (Date.now() - new Date(lastBackupAt).getTime()) / 3600000;
+            return hoursAgo >= 24;
+          };
+          
+          // 시작 시 알림 표시 여부
+          const [startupAlertShown, setStartupAlertShown] = useState(false);
+          
+          // 강제 리렌더링용 (1분마다 상태 뱃지 갱신)
+          const [, forceUpdate] = useState(0);
+          useEffect(() => {
+            const timer = setInterval(() => forceUpdate(n => n + 1), 60000);
+            return () => clearInterval(timer);
+          }, []);
+          
+          // localStorage.setItem 자동 추적 (모든 데이터 저장 감지)
+          useEffect(() => {
+            const originalSetItem = localStorage.setItem.bind(localStorage);
+            // 추적에서 제외할 키들 (백업 추적 자체와 UI 상태)
+            const excludeKeys = [
+              'laceroom_last_backup_at',
+              'laceroom_last_changed_at',
+              'laceroom_unbacked_count',
+              'laceroom_nas_path',
+              'dashboard_links'  // UI 설정은 추적 안 함
+            ];
+            localStorage.setItem = function(key, value) {
+              originalSetItem(key, value);
+              // LACEROOM 관련 데이터만 추적 (제외 목록 외)
+              if (!excludeKeys.includes(key)) {
+                const now = new Date().toISOString();
+                originalSetItem('laceroom_last_changed_at', now);
+                const cur = parseInt(localStorage.getItem('laceroom_unbacked_count') || '0');
+                const newCount = cur + 1;
+                originalSetItem('laceroom_unbacked_count', String(newCount));
+                // state도 업데이트 (UI 즉시 반영)
+                setLastChangedAt(now);
+                setUnbackedChanges(newCount);
+              }
+            };
+            return () => { localStorage.setItem = originalSetItem; };
+          }, []);
+          
+          // 종료 시 경고 (beforeunload)
+          useEffect(() => {
+            const handleBeforeUnload = (e) => {
+              if (unbackedChanges > 0) {
+                e.preventDefault();
+                e.returnValue = '백업하지 않은 변경사항이 있습니다. 정말 닫으시겠어요?';
+                return e.returnValue;
+              }
+            };
+            window.addEventListener('beforeunload', handleBeforeUnload);
+            return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+          }, [unbackedChanges]);
+          
+          // 시작 시 24시간+ 미백업 알림
+          useEffect(() => {
+            if (!startupAlertShown && isLongTimeNoBackup() && lastBackupAt !== null) {
+              setStartupAlertShown(true);
+              setTimeout(() => {
+                const lastDate = new Date(lastBackupAt);
+                const hoursAgo = Math.floor((Date.now() - lastDate.getTime()) / 3600000);
+                const timeText = hoursAgo >= 48 ? `${Math.floor(hoursAgo/24)}일` : `${hoursAgo}시간`;
+                alert(`📅 마지막 백업: ${timeText} 전\n\n다른 PC에서 작업한 새 데이터가 있을 수 있어요.\nNAS 폴더에서 최신 백업 파일을 가져오는 것을 추천합니다.\n\n좌측 사이드바 [가져오기] 클릭 → NAS 경로에서 최신 파일 선택`);
+              }, 1500);
+            }
+          }, []);
+          
           const [dashboardLinks, setDashboardLinks] = useState(() => {
             try {
               const saved = JSON.parse(localStorage.getItem('dashboard_links') || '[]');
@@ -1825,7 +1942,7 @@ ${list}` }]
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260427.09.05</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260427.09.06</div>
                   </div>
                 </div>
 
@@ -1889,12 +2006,20 @@ ${list}` }]
                       const allData = { products, history, receivables, fabricSuppliers: fabricSuppliersState, fabricOrders, freelancers, freelancerWorks, employees, salaryRecords, salaryPayments, vendors, vendorBills, vendorPayments, vendorItems, dashboardLinks, memos, recurringMemos, soldoutItems, todayOffItems, fixedExpenses, expenseCategories, bizExpenses, bizCategories, polishStocks, masterProducts, yocheokInput, exportDate: new Date().toISOString() };
                       const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
                       const url = URL.createObjectURL(blob);
+                      const filename = `LACEROOM_백업_${new Date().toISOString().split('T')[0]}_${new Date().toTimeString().slice(0,5).replace(':','')}.json`;
                       const link = document.createElement('a');
                       link.href = url;
-                      link.download = `LACEROOM_백업_${new Date().toISOString().split('T')[0]}.json`;
+                      link.download = filename;
                       link.click();
                       URL.revokeObjectURL(url);
-                      alert('백업 완료!');
+                      // 백업 완료 처리 (백업 추적)
+                      markBackupDone();
+                      // NAS 경로 안내
+                      const nasPath = localStorage.getItem('laceroom_nas_path') || '';
+                      const msg = nasPath
+                        ? `✅ 백업 파일 생성 완료!\n\n파일명: ${filename}\n\n📁 NAS 폴더로 옮겨주세요:\n${nasPath}\n\n다른 PC에서 [가져오기] 시 이 파일을 선택하세요.`
+                        : `✅ 백업 파일 생성 완료!\n\n파일명: ${filename}\n위치: 다운로드 폴더\n\n💡 12번 설정 → 백업 설정에서 NAS 경로를 등록하면 매번 안내됩니다.\n\n📁 NAS 폴더로 옮겨주세요.`;
+                      alert(msg);
                     }}
                     className="w-full flex items-center gap-2 px-3 py-2 text-[11px] font-black uppercase tracking-widest bg-white border-2 border-black text-black hover:bg-black hover:text-white transition-all"
                     style={{borderRadius:'2px'}}
@@ -1912,6 +2037,25 @@ ${list}` }]
                         reader.onload = (evt) => {
                           try {
                             const data = JSON.parse(evt.target.result);
+                            
+                            // ⚠️ 버전 충돌 체크 (안전장치)
+                            const fileExportDate = data.exportDate ? new Date(data.exportDate) : null;
+                            const myLastChange = lastChangedAt ? new Date(lastChangedAt) : null;
+                            const myLastBackup = lastBackupAt ? new Date(lastBackupAt) : null;
+                            // 가장 최근 활동 시각 (변경 또는 백업 중 더 최신)
+                            const myLatest = myLastChange && myLastBackup 
+                              ? (myLastChange > myLastBackup ? myLastChange : myLastBackup)
+                              : (myLastChange || myLastBackup);
+                            
+                            if (fileExportDate && myLatest && fileExportDate < myLatest) {
+                              const fileTime = fileExportDate.toLocaleString('ko-KR');
+                              const myTime = myLatest.toLocaleString('ko-KR');
+                              const ok = confirm(`⚠️ 위험: 가져오는 파일이 더 오래됐어요!\n\n📁 파일 시각: ${fileTime}\n💻 현재 PC: ${myTime}\n\n가져오면 현재 PC의 작업이 사라질 수 있어요!\n\n그래도 가져오시겠어요?\n(취소를 권장합니다)`);
+                              if (!ok) return;
+                            } else if (fileExportDate && myLatest && unbackedChanges > 0) {
+                              const ok = confirm(`⚠️ 미백업 변경사항이 있어요!\n\n현재 PC에 백업 안 한 변경 ${unbackedChanges}개가 있습니다.\n가져오면 이 변경사항이 사라질 수 있어요.\n\n계속하시겠어요?`);
+                              if (!ok) return;
+                            }
 
                             if (data.products) saveProducts(data.products);
                             if (data.history) saveHistory(data.history);
@@ -1939,6 +2083,11 @@ ${list}` }]
                             if (data.polishStocks) savePolishStocks(data.polishStocks);
                             if (data.masterProducts) saveMasterProducts(data.masterProducts);
                             if (data.yocheokInput) saveYocheokInput(data.yocheokInput);
+                            // 가져온 파일 = 백업 완료로 처리 (현재 PC 데이터 = 가져온 파일 데이터)
+                            const exportTime = data.exportDate || new Date().toISOString();
+                            localStorage.setItem('laceroom_last_backup_at', exportTime);
+                            localStorage.setItem('laceroom_unbacked_count', '0');
+                            localStorage.setItem('laceroom_last_changed_at', exportTime);
                             alert('✅ 불러오기 완료!');
                             window.location.reload();
                           } catch (err) {
@@ -1965,9 +2114,32 @@ ${list}` }]
                     <div className="space-y-4">
                       <div>
                         <div className="flex items-center justify-between flex-wrap gap-2">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <h1 className="text-2xl font-black text-black tracking-tight">대시보드</h1>
                             <span className="bg-black text-white text-xs px-2 py-0.5 font-black tracking-widest" style={{borderRadius:'2px'}}>HOME</span>
+                            {/* 백업 상태 뱃지 */}
+                            {(() => {
+                              const status = getBackupStatus();
+                              const bgColor = status.level === 'green' ? 'bg-green-100 border-green-500 text-green-800'
+                                : status.level === 'yellow' ? 'bg-amber-100 border-amber-500 text-amber-800'
+                                : 'bg-red-100 border-red-500 text-red-800 animate-pulse';
+                              const lastBackupText = lastBackupAt 
+                                ? (() => {
+                                    const min = Math.floor((Date.now() - new Date(lastBackupAt).getTime()) / 60000);
+                                    if (min < 1) return '방금';
+                                    if (min < 60) return `${min}분 전`;
+                                    if (min < 1440) return `${Math.floor(min/60)}시간 전`;
+                                    return `${Math.floor(min/1440)}일 전`;
+                                  })()
+                                : '없음';
+                              return (
+                                <div className={`flex items-center gap-1.5 px-2 py-1 border-2 ${bgColor} text-[10px] font-black tracking-tight`} style={{borderRadius:'4px'}}>
+                                  <span>{status.icon}</span>
+                                  <span>{status.text}</span>
+                                  <span className="text-[9px] opacity-70">· 백업 {lastBackupText}</span>
+                                </div>
+                              );
+                            })()}
                           </div>
                           <div className="flex gap-2">
                             <button onClick={() => window.location.reload()}
@@ -8260,7 +8432,7 @@ ${list}` }]
                               <h3 className="text-base font-black text-black tracking-tight">🖨️ 라벨 인쇄 + 디자인 편집기</h3>
                               <span className="bg-black text-white text-[10px] font-black px-2 py-0.5 tracking-widest" style={{borderRadius:'4px'}}>EDITOR</span>
                             </div>
-                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260427.09.05 · 헬퍼 자동 인쇄 · 한글 100%</div>
+                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260427.09.06 · 헬퍼 자동 인쇄 · 한글 100%</div>
                           </div>
                           <button onClick={()=>setBarcodePrintPopup(null)} className="text-neutral-400 hover:text-black text-xl font-black">✕</button>
                         </div>
@@ -10037,7 +10209,7 @@ ${list}` }]
                                 
                                 // 봇용 데이터: 바코드 있는 상품만, 출력에 필요한 필드만
                                 const botData = {
-                                  version: 'v20260427.09.05',
+                                  version: 'v20260427.09.06',
                                   exported_at: new Date().toISOString(),
                                   exported_by: 'LACEROOM 9-1',
                                   product_count: 0,
@@ -11818,6 +11990,71 @@ ${list}` }]
                   <div className="space-y-4">
                     <h1 className="text-3xl font-black text-black tracking-tight">설정</h1>
                     
+                    {/* 백업 설정 섹션 */}
+                    <div className="bg-white border border-neutral-300 overflow-hidden" style={{borderRadius:'2px'}}>
+                      <div className="bg-neutral-100 px-5 py-3 border-b border-neutral-300 flex items-center justify-between">
+                        <div>
+                          <span className="font-black text-black text-sm uppercase tracking-wider">💾 백업 설정</span>
+                          <p className="text-[11px] text-neutral-500 mt-0.5 normal-case tracking-normal">NAS 경로 등록 시 내보내기/가져오기 안내가 더 친절해집니다</p>
+                        </div>
+                        {(() => {
+                          const status = getBackupStatus();
+                          const bgColor = status.level === 'green' ? 'bg-green-100 border-green-500 text-green-800'
+                            : status.level === 'yellow' ? 'bg-amber-100 border-amber-500 text-amber-800'
+                            : 'bg-red-100 border-red-500 text-red-800';
+                          return (
+                            <div className={`flex items-center gap-1 px-2 py-1 border-2 ${bgColor} text-[10px] font-black tracking-tight`} style={{borderRadius:'4px'}}>
+                              <span>{status.icon}</span>
+                              <span>{status.text}</span>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                      <div className="p-5 space-y-4">
+                        <div>
+                          <label className="block text-[11px] font-bold text-black mb-2 uppercase tracking-wider">📁 NAS 백업 폴더 경로</label>
+                          <input type="text" value={localStorage.getItem('laceroom_nas_path') || ''}
+                            onChange={e=>{
+                              localStorage.setItem('laceroom_nas_path', e.target.value);
+                              forceUpdate(n => n+1);
+                            }}
+                            placeholder="예: Y:\LACEROOM_백업\  또는  \\reflower\백업\LACEROOM\"
+                            className="w-full px-3 py-2.5 border border-neutral-300 focus:border-black outline-none text-sm font-mono" style={{borderRadius:'2px'}}/>
+                          <p className="text-[10px] text-neutral-500 mt-1.5 font-bold">💡 윈도우 탐색기에서 NAS 폴더 우클릭 → 속성 → 위치 복사 (또는 주소창에서 복사)</p>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-center">
+                          <div className="bg-neutral-50 border border-neutral-200 p-3" style={{borderRadius:'4px'}}>
+                            <div className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider mb-1">마지막 백업</div>
+                            <div className="text-sm font-black text-black">
+                              {lastBackupAt ? new Date(lastBackupAt).toLocaleString('ko-KR', {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'}) : '없음'}
+                            </div>
+                          </div>
+                          <div className="bg-neutral-50 border border-neutral-200 p-3" style={{borderRadius:'4px'}}>
+                            <div className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider mb-1">미백업 변경</div>
+                            <div className={`text-sm font-black ${unbackedChanges > 0 ? 'text-red-600' : 'text-black'}`}>{unbackedChanges}개</div>
+                          </div>
+                          <div className="bg-neutral-50 border border-neutral-200 p-3" style={{borderRadius:'4px'}}>
+                            <div className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider mb-1">마지막 변경</div>
+                            <div className="text-sm font-black text-black">
+                              {lastChangedAt ? new Date(lastChangedAt).toLocaleString('ko-KR', {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'}) : '없음'}
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="bg-amber-50 border border-amber-300 p-3" style={{borderRadius:'4px'}}>
+                          <div className="text-[11px] font-black text-amber-800 mb-1">💡 운영 팁</div>
+                          <div className="text-[10px] text-amber-700 space-y-0.5 font-bold">
+                            <div>• 사무실 PC 종료 전 좌측 사이드바 [내보내기] 클릭</div>
+                            <div>• 다운로드된 파일을 NAS 폴더로 옮기기</div>
+                            <div>• 다른 PC에서 [가져오기] → NAS 폴더에서 최신 파일 선택</div>
+                            <div>• 종료 시 미백업이면 자동 경고 표시됩니다</div>
+                            <div>• 24시간 이상 미백업 시 시작할 때 안내됩니다</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
                     {/* 회사 정보 섹션 */}
                     <div className="bg-white border border-neutral-300 overflow-hidden" style={{borderRadius:'2px'}}>
                       <div className="bg-neutral-100 px-5 py-3 border-b border-neutral-300">
@@ -11881,7 +12118,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260427.09.05</p>
+                <p>© 2026 LACEROOM통합관리 v20260427.09.06</p>
               </footer>
             </div>
           </div>
