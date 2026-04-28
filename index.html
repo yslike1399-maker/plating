@@ -1289,7 +1289,7 @@ ${list}` }]
                 createdAt: new Date().toISOString()
               };
 
-              const newHistory = [newOrder, ...history];
+              newHistory = [newOrder, ...history];
 
               // ============================================================
               // 선연마재고 자동 차감 (v09.11): alert 없이 조용히 차감
@@ -2140,7 +2140,7 @@ ${list}` }]
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260427.09.12</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260427.09.13</div>
                   </div>
                 </div>
 
@@ -2218,7 +2218,7 @@ ${list}` }]
                         businessInfo,                // ← 회사 정보 (NEW)
                         labelPresets,                // ← 라벨 프리셋 (NEW)
                         exportDate: new Date().toISOString(),
-                        appVersion: 'v20260427.09.12'
+                        appVersion: 'v20260427.09.13'
                       };
                       const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
                       const url = URL.createObjectURL(blob);
@@ -8833,7 +8833,7 @@ ${list}` }]
                               <h3 className="text-base font-black text-black tracking-tight">🖨️ 라벨 인쇄 + 디자인 편집기</h3>
                               <span className="bg-black text-white text-[10px] font-black px-2 py-0.5 tracking-widest" style={{borderRadius:'4px'}}>EDITOR</span>
                             </div>
-                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260427.09.12 · 헬퍼 자동 인쇄 · 한글 100%</div>
+                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260427.09.13 · 헬퍼 자동 인쇄 · 한글 100%</div>
                           </div>
                           <button onClick={()=>setBarcodePrintPopup(null)} className="text-neutral-400 hover:text-black text-xl font-black">✕</button>
                         </div>
@@ -10610,7 +10610,7 @@ ${list}` }]
                                 
                                 // 봇용 데이터: 바코드 있는 상품만, 출력에 필요한 필드만
                                 const botData = {
-                                  version: 'v20260427.09.12',
+                                  version: 'v20260427.09.13',
                                   exported_at: new Date().toISOString(),
                                   exported_by: 'LACEROOM 9-1',
                                   product_count: 0,
@@ -12519,7 +12519,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260427.09.12</p>
+                <p>© 2026 LACEROOM통합관리 v20260427.09.13</p>
               </footer>
             </div>
           </div>
