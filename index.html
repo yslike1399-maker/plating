@@ -200,6 +200,114 @@
             return () => clearInterval(timer);
           }, []);
           
+          // ============================================================
+          // v10.06: 헬퍼/봇 상태 모니터링 (5초마다 체크)
+          // ============================================================
+          // 상태 객체: { helper: { alive, version, ...}, bot: { alive, ...}, last_print: ..., loading, error, lastCheck }
+          const [systemStatus, setSystemStatus] = useState({
+            helper: { alive: false },
+            bot: { alive: false },
+            last_print: null,
+            loading: true,
+            error: null,
+            lastCheck: null
+          });
+          // 토스트 표시 (헬퍼/봇 꺼졌을 때 자동)
+          const [systemToast, setSystemToast] = useState(null); // { type, message, dismissed }
+          // 상태 상세 팝업
+          const [systemDetailOpen, setSystemDetailOpen] = useState(false);
+          // 직전 상태 (변화 감지용)
+          const prevAliveRef = useRef({ helper: null, bot: null });
+          
+          useEffect(() => {
+            let cancelled = false;
+            const STATUS_URL = 'http://127.0.0.1:8765/status';
+            const CHECK_INTERVAL = 5000; // 5초
+            
+            const checkStatus = async () => {
+              try {
+                // 타임아웃 2초 (헬퍼 꺼져있으면 빨리 fail)
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), 2000);
+                const res = await fetch(STATUS_URL, { signal: controller.signal, cache: 'no-store' });
+                clearTimeout(timer);
+                
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                
+                if (cancelled) return;
+                
+                const newStatus = {
+                  helper: data.helper || { alive: false },
+                  bot: data.bot || { alive: false },
+                  last_print: data.last_print || null,
+                  loading: false,
+                  error: null,
+                  lastCheck: new Date().toISOString()
+                };
+                setSystemStatus(newStatus);
+                
+                // 변화 감지 → 자동 토스트
+                const prev = prevAliveRef.current;
+                const curHelper = !!newStatus.helper.alive;
+                const curBot = !!newStatus.bot.alive;
+                
+                // 헬퍼 꺼짐 감지
+                if (prev.helper === true && curHelper === false) {
+                  setSystemToast({
+                    type: 'helper_down',
+                    title: '⚠️ 헬퍼가 꺼졌습니다',
+                    message: '바코드 출력이 안 됩니다. 헬퍼를 다시 실행해주세요.',
+                    at: Date.now()
+                  });
+                }
+                // 봇 꺼짐 감지 (헬퍼는 살아있는데 봇만 꺼진 경우만)
+                if (curHelper && prev.bot === true && curBot === false) {
+                  setSystemToast({
+                    type: 'bot_down',
+                    title: '⚠️ 봇이 꺼졌습니다',
+                    message: '텔레그램으로 명령을 받을 수 없습니다.\nbot_silent.vbs를 실행해주세요.',
+                    at: Date.now()
+                  });
+                }
+                // 둘 다 살아남 → 토스트 자동 닫기
+                if (curHelper && curBot && prev.helper === false) {
+                  setSystemToast(null);
+                }
+                
+                prevAliveRef.current = { helper: curHelper, bot: curBot };
+              } catch (err) {
+                if (cancelled) return;
+                // 헬퍼 꺼져있을 가능성 (가장 흔한 케이스)
+                const prev = prevAliveRef.current;
+                if (prev.helper === true) {
+                  // 직전엔 살아있었는데 지금 죽음 → 토스트
+                  setSystemToast({
+                    type: 'helper_down',
+                    title: '⚠️ 헬퍼가 꺼졌습니다',
+                    message: '바코드 출력이 안 됩니다.\n헬퍼를 다시 실행해주세요.',
+                    at: Date.now()
+                  });
+                }
+                setSystemStatus({
+                  helper: { alive: false },
+                  bot: { alive: false },
+                  last_print: null,
+                  loading: false,
+                  error: 'connect_failed',
+                  lastCheck: new Date().toISOString()
+                });
+                prevAliveRef.current = { helper: false, bot: false };
+              }
+            };
+            
+            // 즉시 1회 + 주기 실행
+            checkStatus();
+            const interval = setInterval(checkStatus, CHECK_INTERVAL);
+            
+            return () => { cancelled = true; clearInterval(interval); };
+          }, []);
+          
           // localStorage.setItem 자동 추적 (모든 데이터 저장 감지)
           useEffect(() => {
             const originalSetItem = localStorage.setItem.bind(localStorage);
@@ -2299,8 +2407,26 @@ ${list}` }]
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260429.10.05</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260429.10.06</div>
                   </div>
+                  
+                  {/* v10.06: 헬퍼/봇 상태등 */}
+                  <button 
+                    onClick={() => setSystemDetailOpen(true)}
+                    className="mt-2 w-full flex items-center gap-1.5 px-2 py-1.5 bg-neutral-50 hover:bg-neutral-100 border border-neutral-200 transition-all"
+                    style={{borderRadius:'2px'}}
+                    title="시스템 상태 (클릭: 상세보기)"
+                  >
+                    <span className="text-[9px] font-bold text-neutral-500">SYS</span>
+                    <span className={`text-[10px] ${systemStatus.helper.alive ? 'text-green-600' : 'text-red-500'}`} title={`헬퍼: ${systemStatus.helper.alive ? '정상' : '꺼짐'}`}>
+                      {systemStatus.helper.alive ? '🟢' : (systemStatus.loading ? '⚪' : '🔴')}
+                    </span>
+                    <span className="text-[9px] font-bold text-neutral-600">H</span>
+                    <span className={`text-[10px] ${systemStatus.bot.alive ? 'text-green-600' : 'text-red-500'}`} title={`봇: ${systemStatus.bot.alive ? '정상' : '꺼짐'}`}>
+                      {systemStatus.bot.alive ? '🟢' : (systemStatus.loading ? '⚪' : '🔴')}
+                    </span>
+                    <span className="text-[9px] font-bold text-neutral-600">B</span>
+                  </button>
                 </div>
 
                 {/* 메인 탭 1~12 */}
@@ -2379,7 +2505,7 @@ ${list}` }]
                         labelPresets,                // ← 라벨 프리셋 (NEW)
                         nameChangeLogs,              // ← 상품명 변경이력 (v10.01)
                         exportDate: new Date().toISOString(),
-                        appVersion: 'v20260429.10.05'
+                        appVersion: 'v20260429.10.06'
                       };
                       const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
                       const url = URL.createObjectURL(blob);
@@ -9067,7 +9193,7 @@ ${list}` }]
                               <h3 className="text-base font-black text-black tracking-tight">🖨️ 라벨 인쇄 + 디자인 편집기</h3>
                               <span className="bg-black text-white text-[10px] font-black px-2 py-0.5 tracking-widest" style={{borderRadius:'4px'}}>EDITOR</span>
                             </div>
-                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260429.10.05 · 헬퍼 자동 인쇄 · 한글 100%</div>
+                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260429.10.06 · 헬퍼 자동 인쇄 · 한글 100%</div>
                           </div>
                           <button onClick={()=>setBarcodePrintPopup(null)} className="text-neutral-400 hover:text-black text-xl font-black">✕</button>
                         </div>
@@ -11094,7 +11220,7 @@ ${list}` }]
                             </div>
                             <div className="flex gap-2">
                               <button onClick={async () => {
-                                // 📤 봇 동기화 v20260429.10.05: 텔레그램 봇용 상품 데이터 export
+                                // 📤 봇 동기화 v20260429.10.06: 텔레그램 봇용 상품 데이터 export
                                 // - 썸네일 이미지 포함 (100x100 압축)
                                 // - 부자재 바코드 통합
                                 const bcCount = masterProducts.filter(p => p.barcodes && Object.values(p.barcodes).some(v => v && v.length === 11)).length;
@@ -11157,7 +11283,7 @@ ${list}` }]
                                 
                                 // 봇용 데이터: 바코드 있는 상품 + 부자재 바코드
                                 const botData = {
-                                  version: 'v20260429.10.05',
+                                  version: 'v20260429.10.06',
                                   exported_at: new Date().toISOString(),
                                   exported_by: 'LACEROOM 9-1',
                                   product_count: 0,
@@ -13329,8 +13455,172 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260429.10.05</p>
+                <p>© 2026 LACEROOM통합관리 v20260429.10.06</p>
               </footer>
+              
+              {/* v10.06: 시스템 상태 토스트 (자동 알림) */}
+              {systemToast && (
+                <div className="fixed top-4 right-4 z-[9999] max-w-sm" style={{animation: 'slideInRight 0.3s ease-out'}}>
+                  <div className={`${systemToast.type === 'helper_down' ? 'bg-red-50 border-red-500' : 'bg-amber-50 border-amber-500'} border-2 shadow-2xl p-4`} style={{borderRadius:'4px'}}>
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className={`text-sm font-black ${systemToast.type === 'helper_down' ? 'text-red-700' : 'text-amber-700'}`}>
+                        {systemToast.title}
+                      </div>
+                      <button
+                        onClick={() => setSystemToast(null)}
+                        className="text-neutral-400 hover:text-black text-lg leading-none"
+                      >×</button>
+                    </div>
+                    <div className="text-xs text-neutral-700 whitespace-pre-line mb-3">
+                      {systemToast.message}
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => { setSystemToast(null); setSystemDetailOpen(true); }}
+                        className="flex-1 px-3 py-1.5 bg-black hover:bg-neutral-800 text-white text-xs font-black"
+                        style={{borderRadius:'2px'}}
+                      >📋 자세히</button>
+                      <button
+                        onClick={() => setSystemToast(null)}
+                        className="px-3 py-1.5 bg-white hover:bg-neutral-100 text-black text-xs font-black border border-neutral-300"
+                        style={{borderRadius:'2px'}}
+                      >확인</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* v10.06: 시스템 상태 상세 팝업 */}
+              {systemDetailOpen && (
+                <div className="fixed inset-0 bg-black/50 z-[9998] flex items-center justify-center p-4" onClick={() => setSystemDetailOpen(false)}>
+                  <div className="bg-white max-w-md w-full shadow-2xl" style={{borderRadius:'4px'}} onClick={e => e.stopPropagation()}>
+                    {/* 헤더 */}
+                    <div className="px-5 py-4 border-b-2 border-black flex items-center justify-between">
+                      <div>
+                        <div className="text-sm font-black tracking-tight">시스템 상태</div>
+                        <div className="text-[10px] text-neutral-500 mt-0.5">5초마다 자동 갱신 · 클릭으로 닫기</div>
+                      </div>
+                      <button onClick={() => setSystemDetailOpen(false)} className="text-2xl leading-none text-neutral-400 hover:text-black">×</button>
+                    </div>
+                    
+                    {/* 본문 */}
+                    <div className="p-5 space-y-4">
+                      {/* 헬퍼 */}
+                      <div className={`p-3 border-2 ${systemStatus.helper.alive ? 'border-green-500 bg-green-50' : 'border-red-500 bg-red-50'}`} style={{borderRadius:'3px'}}>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="text-sm font-black flex items-center gap-2">
+                            <span>{systemStatus.helper.alive ? '🟢' : '🔴'}</span>
+                            <span>헬퍼 (라벨 인쇄)</span>
+                          </div>
+                          <div className={`text-[10px] font-black px-2 py-0.5 ${systemStatus.helper.alive ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`} style={{borderRadius:'2px'}}>
+                            {systemStatus.helper.alive ? '정상' : '꺼짐'}
+                          </div>
+                        </div>
+                        {systemStatus.helper.alive ? (
+                          <div className="text-[11px] text-neutral-700 space-y-0.5">
+                            <div>• 버전: <strong>{systemStatus.helper.version || '?'}</strong></div>
+                            <div>• 가동: <strong>{(() => {
+                              const s = systemStatus.helper.uptime_seconds || 0;
+                              if (s < 60) return s + '초';
+                              if (s < 3600) return Math.floor(s/60) + '분';
+                              const h = Math.floor(s/3600);
+                              const m = Math.floor((s%3600)/60);
+                              return h + '시간 ' + m + '분';
+                            })()}</strong></div>
+                          </div>
+                        ) : (
+                          <div className="text-[11px] text-red-700">
+                            <div className="font-bold mb-1">⚠️ 바코드 출력 안 됨</div>
+                            <div className="text-neutral-700">💡 켜는 방법:</div>
+                            <div className="text-neutral-700 ml-3">바탕화면 또는 시작 메뉴에서</div>
+                            <div className="text-neutral-700 ml-3">LACEROOM 헬퍼 실행</div>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* 봇 */}
+                      <div className={`p-3 border-2 ${systemStatus.bot.alive ? 'border-green-500 bg-green-50' : (systemStatus.helper.alive ? 'border-red-500 bg-red-50' : 'border-neutral-300 bg-neutral-50')}`} style={{borderRadius:'3px'}}>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="text-sm font-black flex items-center gap-2">
+                            <span>{systemStatus.bot.alive ? '🟢' : (systemStatus.helper.alive ? '🔴' : '⚪')}</span>
+                            <span>봇 (텔레그램)</span>
+                          </div>
+                          <div className={`text-[10px] font-black px-2 py-0.5 ${systemStatus.bot.alive ? 'bg-green-600 text-white' : (systemStatus.helper.alive ? 'bg-red-600 text-white' : 'bg-neutral-400 text-white')}`} style={{borderRadius:'2px'}}>
+                            {systemStatus.bot.alive ? '정상' : (systemStatus.helper.alive ? '꺼짐' : '확인불가')}
+                          </div>
+                        </div>
+                        {systemStatus.bot.alive ? (
+                          <div className="text-[11px] text-neutral-700 space-y-0.5">
+                            <div>• 버전: <strong>{systemStatus.bot.version || '?'}</strong></div>
+                            <div>• 마지막 신호: <strong>{(() => {
+                              const s = systemStatus.bot.last_ping_seconds_ago;
+                              if (s == null) return '?';
+                              if (s < 60) return s + '초 전';
+                              return Math.floor(s/60) + '분 전';
+                            })()}</strong></div>
+                          </div>
+                        ) : systemStatus.helper.alive ? (
+                          <div className="text-[11px] text-red-700">
+                            <div className="font-bold mb-1">⚠️ 텔레그램 명령 못 받음</div>
+                            <div className="text-neutral-700">💡 켜는 방법:</div>
+                            <div className="text-neutral-700 ml-3">봇 폴더에서 bot_silent.vbs</div>
+                            <div className="text-neutral-700 ml-3">더블클릭</div>
+                          </div>
+                        ) : (
+                          <div className="text-[11px] text-neutral-600">
+                            헬퍼가 꺼져있어 봇 상태를 확인할 수 없습니다.
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* 마지막 출력 */}
+                      {systemStatus.last_print && systemStatus.last_print.at && (
+                        <div className="p-3 border border-neutral-300 bg-neutral-50" style={{borderRadius:'3px'}}>
+                          <div className="text-[10px] font-black text-neutral-500 mb-1">📋 마지막 출력</div>
+                          <div className="text-[11px] text-neutral-700">
+                            <div>• {(() => {
+                              const s = systemStatus.last_print.seconds_ago;
+                              if (s == null) return '?';
+                              if (s < 60) return s + '초 전';
+                              if (s < 3600) return Math.floor(s/60) + '분 전';
+                              return Math.floor(s/3600) + '시간 전';
+                            })()}</div>
+                            {systemStatus.last_print.info && (
+                              <div className="ml-2 text-neutral-600">
+                                {systemStatus.last_print.info.label_name}
+                                {systemStatus.last_print.info.color_name && ' / ' + systemStatus.last_print.info.color_name}
+                                {' · ' + (systemStatus.last_print.info.copies || 1) + '장'}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* 마지막 체크 */}
+                      <div className="text-[9px] text-neutral-400 text-center">
+                        마지막 체크: {systemStatus.lastCheck ? new Date(systemStatus.lastCheck).toLocaleTimeString('ko-KR') : '-'}
+                      </div>
+                    </div>
+                    
+                    {/* 푸터 */}
+                    <div className="px-5 py-3 bg-neutral-50 border-t border-neutral-200 flex justify-end">
+                      <button
+                        onClick={() => setSystemDetailOpen(false)}
+                        className="px-4 py-1.5 bg-black hover:bg-neutral-800 text-white text-xs font-black"
+                        style={{borderRadius:'2px'}}
+                      >닫기</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* v10.06: 토스트 슬라이드 애니메이션 */}
+              <style>{`
+                @keyframes slideInRight {
+                  from { transform: translateX(100%); opacity: 0; }
+                  to { transform: translateX(0); opacity: 1; }
+                }
+              `}</style>
             </div>
           </div>
           );
