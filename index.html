@@ -2407,7 +2407,7 @@ ${list}` }]
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260429.10.06</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260429.10.07</div>
                   </div>
                   
                   {/* v10.06: 헬퍼/봇 상태등 */}
@@ -2505,7 +2505,7 @@ ${list}` }]
                         labelPresets,                // ← 라벨 프리셋 (NEW)
                         nameChangeLogs,              // ← 상품명 변경이력 (v10.01)
                         exportDate: new Date().toISOString(),
-                        appVersion: 'v20260429.10.06'
+                        appVersion: 'v20260429.10.07'
                       };
                       const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
                       const url = URL.createObjectURL(blob);
@@ -9193,7 +9193,7 @@ ${list}` }]
                               <h3 className="text-base font-black text-black tracking-tight">🖨️ 라벨 인쇄 + 디자인 편집기</h3>
                               <span className="bg-black text-white text-[10px] font-black px-2 py-0.5 tracking-widest" style={{borderRadius:'4px'}}>EDITOR</span>
                             </div>
-                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260429.10.06 · 헬퍼 자동 인쇄 · 한글 100%</div>
+                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260429.10.07 · 헬퍼 자동 인쇄 · 한글 100%</div>
                           </div>
                           <button onClick={()=>setBarcodePrintPopup(null)} className="text-neutral-400 hover:text-black text-xl font-black">✕</button>
                         </div>
@@ -11219,55 +11219,26 @@ ${list}` }]
                               <p className="text-xs text-neutral-500 mt-0.5">등록된 상품은 일시품절·오늘출발OFF 등록 시 드롭다운으로 선택 가능</p>
                             </div>
                             <div className="flex gap-2">
-                              <button onClick={async () => {
-                                // 📤 봇 동기화 v20260429.10.06: 텔레그램 봇용 상품 데이터 export
-                                // - 썸네일 이미지 포함 (100x100 압축)
+                              <button onClick={() => {
+                                // 📤 봇 동기화 v20260429.10.07: 가벼운 동기화 (썸네일 제외)
+                                // - 썸네일 제외 → 파일 크기 작아짐 → 보안 차단 우회
                                 // - 부자재 바코드 통합
                                 const bcCount = masterProducts.filter(p => p.barcodes && Object.values(p.barcodes).some(v => v && v.length === 11)).length;
                                 if (bcCount === 0) {
                                   alert('⚠️ 바코드가 등록된 상품이 없습니다.\n\n9-1 상품을 수정 → 색상별 바코드를 입력해주세요.');
                                   return;
                                 }
-                                if (!confirm(`📤 텔레그램 봇 동기화 v10.05\n\n바코드 등록 상품: ${bcCount}개\n부자재 바코드: ${accessoryBarcodes.length}개\n전체 상품: ${masterProducts.length}개\n\n✨ 새 기능: 썸네일 + 검색/선택 지원\n\nlaceroom_products.json 파일을 다운로드합니다.\n이 파일을 ADMINCOM PC의 봇 폴더에 넣어주세요.\n\n진행하시겠습니까?`)) return;
+                                if (!confirm(`📤 텔레그램 봇 동기화 v10.07 (가벼운 버전)\n\n바코드 등록 상품: ${bcCount}개\n부자재 바코드: ${accessoryBarcodes.length}개\n전체 상품: ${masterProducts.length}개\n\n✨ 검색/선택 기능 지원 (썸네일 제외)\n\nlaceroom_products.json 파일을 다운로드합니다.\n이 파일을 ADMINCOM PC의 봇 폴더에 넣어주세요.\n\n진행하시겠습니까?`)) return;
                                 
-                                // 이미지를 100x100 썸네일로 압축하는 헬퍼
-                                const compressToThumbnail = (base64Image) => {
-                                  return new Promise((resolve) => {
-                                    if (!base64Image) { resolve(null); return; }
-                                    try {
-                                      const img = new Image();
-                                      img.onload = () => {
-                                        try {
-                                          const canvas = document.createElement('canvas');
-                                          const SIZE = 100; // 100x100 정사각형 썸네일
-                                          canvas.width = SIZE;
-                                          canvas.height = SIZE;
-                                          const ctx = canvas.getContext('2d');
-                                          ctx.fillStyle = '#FFFFFF';
-                                          ctx.fillRect(0, 0, SIZE, SIZE);
-                                          // 비율 유지하며 중앙 크롭
-                                          const ratio = Math.min(SIZE / img.width, SIZE / img.height);
-                                          const w = img.width * ratio;
-                                          const h = img.height * ratio;
-                                          const x = (SIZE - w) / 2;
-                                          const y = (SIZE - h) / 2;
-                                          ctx.drawImage(img, x, y, w, h);
-                                          const thumb = canvas.toDataURL('image/jpeg', 0.6); // JPEG 60% 품질
-                                          resolve(thumb);
-                                        } catch (e) { resolve(null); }
-                                      };
-                                      img.onerror = () => resolve(null);
-                                      img.src = base64Image;
-                                    } catch (e) { resolve(null); }
-                                  });
-                                };
-                                
-                                // 진행 상태 표시
+                                // 봇용 데이터: 썸네일 제외, 텍스트만 (보안 차단 회피)
                                 const filteredProducts = masterProducts.filter(p => p.barcodes && Object.values(p.barcodes).some(v => v && v.length === 11));
                                 
-                                // 썸네일 병렬 생성
-                                const productsWithThumb = await Promise.all(
-                                  filteredProducts.map(async (p) => ({
+                                const botData = {
+                                  version: 'v20260429.10.07',
+                                  exported_at: new Date().toISOString(),
+                                  exported_by: 'LACEROOM 9-1',
+                                  product_count: 0,
+                                  products: filteredProducts.map(p => ({
                                     id: p.id,
                                     name: p.name || '',
                                     label_name: p.labelName || p.name || '',
@@ -11276,18 +11247,9 @@ ${list}` }]
                                     barcodes: p.barcodes || {},
                                     positions: p.positions || {},
                                     custom_color_names: p.customColorNames || {},
-                                    featured: !!p.isFeatured,
-                                    thumbnail: await compressToThumbnail(p.image)
-                                  }))
-                                );
-                                
-                                // 봇용 데이터: 바코드 있는 상품 + 부자재 바코드
-                                const botData = {
-                                  version: 'v20260429.10.06',
-                                  exported_at: new Date().toISOString(),
-                                  exported_by: 'LACEROOM 9-1',
-                                  product_count: 0,
-                                  products: productsWithThumb,
+                                    featured: !!p.isFeatured
+                                    // thumbnail 제외 - 보안 차단 회피
+                                  })),
                                   accessories: (accessoryBarcodes || []).map(acc => ({
                                     id: acc.id,
                                     name: acc.name || '',
@@ -11314,11 +11276,11 @@ ${list}` }]
                                 URL.revokeObjectURL(url);
                                 
                                 setTimeout(() => {
-                                  alert(`✅ 봇 동기화 파일 생성 완료!\n\n파일명: laceroom_products.json\n상품 수: ${botData.product_count}개\n부자재 수: ${botData.accessory_count}개\n파일 크기: ${sizeKB}KB\n\n📂 다운로드 폴더에서 파일을 찾아\n봇 폴더로 옮겨주세요.\n(C:\\Users\\ADMINCOM\\Downloads에 저장됨)`);
+                                  alert(`✅ 봇 동기화 파일 생성 완료!\n\n파일명: laceroom_products.json\n상품 수: ${botData.product_count}개\n부자재 수: ${botData.accessory_count}개\n파일 크기: ${sizeKB}KB (가벼운 버전)\n\n📂 다운로드 폴더에서 파일을 찾아\n봇 폴더로 옮겨주세요.\n(C:\\Users\\ADMINCOM\\Downloads에 저장됨)`);
                                 }, 300);
                               }}
                               className="px-4 py-2.5 bg-white border-2 border-black hover:bg-black hover:text-white text-black text-sm font-black uppercase tracking-wider transition-all" style={{borderRadius:'2px'}}
-                              title="텔레그램 봇용 상품 데이터를 JSON으로 내보냅니다">📤 봇 동기화</button>
+                              title="텔레그램 봇용 상품 데이터를 JSON으로 내보냅니다 (가벼운 버전)">📤 봇 동기화</button>
                               <button onClick={() => setMasterPopup({type:'',name:'',colors:[],sizes:'',memo:''})}
                                 className="px-4 py-2.5 bg-black hover:bg-neutral-800 text-white text-sm font-black uppercase tracking-wider" style={{borderRadius:'2px'}}>+ 신상품 등록</button>
                             </div>
@@ -13455,7 +13417,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260429.10.06</p>
+                <p>© 2026 LACEROOM통합관리 v20260429.10.07</p>
               </footer>
               
               {/* v10.06: 시스템 상태 토스트 (자동 알림) */}
