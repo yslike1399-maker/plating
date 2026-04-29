@@ -2407,7 +2407,7 @@ ${list}` }]
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260429.10.07</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260429.10.08</div>
                   </div>
                   
                   {/* v10.06: 헬퍼/봇 상태등 */}
@@ -2505,7 +2505,7 @@ ${list}` }]
                         labelPresets,                // ← 라벨 프리셋 (NEW)
                         nameChangeLogs,              // ← 상품명 변경이력 (v10.01)
                         exportDate: new Date().toISOString(),
-                        appVersion: 'v20260429.10.07'
+                        appVersion: 'v20260429.10.08'
                       };
                       const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
                       const url = URL.createObjectURL(blob);
@@ -8948,6 +8948,17 @@ ${list}` }]
                               placeholder="예: 단가 50원, 거래처 등"
                               className="w-full px-3 py-2 border border-neutral-300 focus:border-black outline-none text-sm" style={{borderRadius:'2px'}}/>
                           </div>
+                          {/* v10.08: 봇 검색 태그 */}
+                          <div>
+                            <label className="block text-[11px] font-bold text-black mb-2 uppercase tracking-wider">
+                              🤖 봇 검색 태그 <span className="text-neutral-400 font-normal normal-case tracking-normal">(선택, 텔레그램 검색용)</span>
+                            </label>
+                            <input type="text" value={accessoryPopup.botTags||''}
+                              onChange={e=>setForm(p=>({...p, botTags: e.target.value}))}
+                              placeholder="예: 실리콘, 집게핀, 논슬립"
+                              className="w-full px-3 py-2 border border-neutral-300 focus:border-black outline-none text-sm" style={{borderRadius:'2px'}}/>
+                            <div className="text-[10px] text-neutral-500 mt-1.5">💡 텔레그램 봇에서 검색할 키워드를 쉼표(,)로 구분</div>
+                          </div>
                           <div className="flex gap-2 pt-2">
                             <button onClick={()=>setAccessoryPopup(null)}
                               className="flex-1 py-2.5 border border-neutral-300 text-neutral-600 hover:bg-neutral-100 text-sm font-bold uppercase tracking-wider" style={{borderRadius:'2px'}}>
@@ -8963,6 +8974,7 @@ ${list}` }]
                                 noticeLine1: accessoryPopup.noticeLine1 || '',
                                 noticeLine2: accessoryPopup.noticeLine2 || '',
                                 memo: accessoryPopup.memo || '',
+                                botTags: accessoryPopup.botTags || '',  // v10.08
                                 createdAt: accessoryPopup.createdAt || new Date().toISOString()
                               };
                               saveAccessoryBarcodes(isEdit ? accessoryBarcodes.map(a=>a.id===item.id?item:a) : [...accessoryBarcodes, item]);
@@ -9193,7 +9205,7 @@ ${list}` }]
                               <h3 className="text-base font-black text-black tracking-tight">🖨️ 라벨 인쇄 + 디자인 편집기</h3>
                               <span className="bg-black text-white text-[10px] font-black px-2 py-0.5 tracking-widest" style={{borderRadius:'4px'}}>EDITOR</span>
                             </div>
-                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260429.10.07 · 헬퍼 자동 인쇄 · 한글 100%</div>
+                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260429.10.08 · 헬퍼 자동 인쇄 · 한글 100%</div>
                           </div>
                           <button onClick={()=>setBarcodePrintPopup(null)} className="text-neutral-400 hover:text-black text-xl font-black">✕</button>
                         </div>
@@ -10095,6 +10107,18 @@ ${list}` }]
                                             )}
                                           </div>
                                         </div>
+                                        {/* v10.08: 봇 검색 태그 */}
+                                        <div>
+                                          <label className="block text-[11px] font-bold text-black mb-2 uppercase tracking-wider">
+                                            🤖 봇 검색 태그 <span className="text-neutral-400 font-normal normal-case tracking-normal">(선택, 텔레그램 검색용)</span>
+                                          </label>
+                                          <input type="text" value={form.botTags||''} onChange={e=>setForm(p=>({...p,botTags:e.target.value}))}
+                                            placeholder="예: 꼬임, 반묶음, 메탈, 집게핀"
+                                            className="w-full px-3 py-2.5 border border-neutral-300 focus:border-black outline-none text-sm" style={{borderRadius:'2px'}}/>
+                                          <div className="text-[10px] text-neutral-500 mt-1.5">
+                                            💡 텔레그램 봇에서 검색할 키워드를 쉼표(,)로 구분
+                                          </div>
+                                        </div>
                                         <div>
                                           <label className="block text-[11px] font-bold text-black mb-2 uppercase tracking-wider">도금거래처 상품명 <span className="text-neutral-400 font-normal normal-case tracking-normal">(선택)</span></label>
                                           <input type="text" value={form.platingOrderName||''} onChange={e=>setForm(p=>({...p,platingOrderName:e.target.value}))}
@@ -10894,6 +10918,7 @@ ${list}` }]
                                         positions: form.positions || {},
                                         customColorNames: form.customColorNames || {},
                                         unlockedColors: form.unlockedColors || [],
+                                        botTags: form.botTags || '',  // v10.08: 봇 검색 태그
                                         legacyProductId: form.legacyProductId||null,
                                         createdAt: form.createdAt||new Date().toISOString()
                                       };
@@ -11220,7 +11245,7 @@ ${list}` }]
                             </div>
                             <div className="flex gap-2">
                               <button onClick={() => {
-                                // 📤 봇 동기화 v20260429.10.07: 가벼운 동기화 (썸네일 제외)
+                                // 📤 봇 동기화 v20260429.10.08: 가벼운 동기화 (썸네일 제외)
                                 // - 썸네일 제외 → 파일 크기 작아짐 → 보안 차단 우회
                                 // - 부자재 바코드 통합
                                 const bcCount = masterProducts.filter(p => p.barcodes && Object.values(p.barcodes).some(v => v && v.length === 11)).length;
@@ -11228,13 +11253,13 @@ ${list}` }]
                                   alert('⚠️ 바코드가 등록된 상품이 없습니다.\n\n9-1 상품을 수정 → 색상별 바코드를 입력해주세요.');
                                   return;
                                 }
-                                if (!confirm(`📤 텔레그램 봇 동기화 v10.07 (가벼운 버전)\n\n바코드 등록 상품: ${bcCount}개\n부자재 바코드: ${accessoryBarcodes.length}개\n전체 상품: ${masterProducts.length}개\n\n✨ 검색/선택 기능 지원 (썸네일 제외)\n\nlaceroom_products.json 파일을 다운로드합니다.\n이 파일을 ADMINCOM PC의 봇 폴더에 넣어주세요.\n\n진행하시겠습니까?`)) return;
+                                if (!confirm(`📤 텔레그램 봇 동기화 v10.08 (가벼운 버전)\n\n바코드 등록 상품: ${bcCount}개\n부자재 바코드: ${accessoryBarcodes.length}개\n전체 상품: ${masterProducts.length}개\n\n✨ 검색/선택 + 봇 태그 검색 지원\n\nlaceroom_products.json 파일을 다운로드합니다.\n이 파일을 ADMINCOM PC의 봇 폴더에 넣어주세요.\n\n진행하시겠습니까?`)) return;
                                 
                                 // 봇용 데이터: 썸네일 제외, 텍스트만 (보안 차단 회피)
                                 const filteredProducts = masterProducts.filter(p => p.barcodes && Object.values(p.barcodes).some(v => v && v.length === 11));
                                 
                                 const botData = {
-                                  version: 'v20260429.10.07',
+                                  version: 'v20260429.10.08',
                                   exported_at: new Date().toISOString(),
                                   exported_by: 'LACEROOM 9-1',
                                   product_count: 0,
@@ -11247,7 +11272,8 @@ ${list}` }]
                                     barcodes: p.barcodes || {},
                                     positions: p.positions || {},
                                     custom_color_names: p.customColorNames || {},
-                                    featured: !!p.isFeatured
+                                    featured: !!p.isFeatured,
+                                    bot_tags: p.botTags || ''  // v10.08: 봇 검색 태그
                                     // thumbnail 제외 - 보안 차단 회피
                                   })),
                                   accessories: (accessoryBarcodes || []).map(acc => ({
@@ -11256,7 +11282,8 @@ ${list}` }]
                                     barcode: acc.barcode || '',
                                     notice_line1: acc.noticeLine1 || '',
                                     notice_line2: acc.noticeLine2 || '',
-                                    memo: acc.memo || ''
+                                    memo: acc.memo || '',
+                                    bot_tags: acc.botTags || ''  // v10.08: 봇 검색 태그
                                   }))
                                 };
                                 botData.product_count = botData.products.length;
@@ -13417,7 +13444,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260429.10.07</p>
+                <p>© 2026 LACEROOM통합관리 v20260429.10.08</p>
               </footer>
               
               {/* v10.06: 시스템 상태 토스트 (자동 알림) */}
