@@ -805,7 +805,7 @@ ${list}` }]
           const [editingFabric, setEditingFabric] = useState({});
           const [fabricColors, setFabricColors] = useState({});
           const [currentOrder, setCurrentOrder] = useState(null);
-          const [activeTab, setActiveTab] = useState('products');
+          const [activeTab, setActiveTab] = useState('order');
           const [products, setProducts] = useState([]);
           const [history, setHistory] = useState([]);
           
@@ -856,7 +856,7 @@ ${list}` }]
           // 수정 모드 (v09.10): 도금작업 수정 중인 ID 저장. null이면 신규 작성 모드
           const [editingPlatingOrderId, setEditingPlatingOrderId] = useState(null);
 
-          // 📊 월별 누적 도금 내역 (v20260501.07) - 2번 탭 전용 state
+          // 📊 월별 누적 도금 내역 (v20260501.09) - 2번 탭 전용 state
           const [billingViewMode, setBillingViewMode] = useState('order'); // 'order' | 'billing'
           const [costStartMonth, setCostStartMonth] = useState(() => {
             const today = new Date();
@@ -1441,7 +1441,7 @@ ${list}` }]
                         qty: parseInt(item.qty) || 0,
                         received: existingItem?.received || false,
                         receivedDate: existingItem?.receivedDate || '',
-                        billingDate: existingItem?.billingDate || ''  // 🟦 v20260501.07: 색상별 청구일 보존
+                        billingDate: existingItem?.billingDate || ''  // 🟦 v20260501.09: 색상별 청구일 보존
                       };
                     }),
                     total: product.items.reduce((sum, item) => sum + (parseInt(item.qty) || 0), 0)
@@ -1550,7 +1550,7 @@ ${list}` }]
                 id: Date.now(),
                 date: orderForm.date,
                 orderNum,
-                billingDate: '',  // 🟦 도금공장 청구일 (v20260501.07) - 5월부터 철저 입력
+                billingDate: '',  // 🟦 도금공장 청구일 (v20260501.09) - 5월부터 철저 입력
                 products: orderForm.products.map(product => ({
                   productId: product.productId,
                   productName: product.productName,
@@ -1562,7 +1562,7 @@ ${list}` }]
                     qty: parseInt(item.qty) || 0,
                     received: false,
                     receivedDate: '',
-                    billingDate: ''  // 🟦 v20260501.07: 색상별 도금공장 청구일
+                    billingDate: ''  // 🟦 v20260501.09: 색상별 도금공장 청구일
                   })),
                   total: product.items.reduce((sum, item) => sum + (parseInt(item.qty) || 0), 0)
                 })),
@@ -2422,7 +2422,7 @@ ${list}` }]
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260501.07</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260501.09</div>
                   </div>
                   
                   {/* v10.06: 헬퍼/봇 상태등 */}
@@ -2481,7 +2481,7 @@ ${list}` }]
                     return (
                     <button
                       key={tab}
-                      onClick={() => { setActiveMainTab(tab); if (tab === 'plating') setActiveTab('products'); }}
+                      onClick={() => { setActiveMainTab(tab); if (tab === 'plating') setActiveTab('order'); }}
                       className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-black tracking-tight transition-all text-left ${
                         activeMainTab === tab
                           ? 'bg-black text-white'
@@ -2520,7 +2520,7 @@ ${list}` }]
                         labelPresets,                // ← 라벨 프리셋 (NEW)
                         nameChangeLogs,              // ← 상품명 변경이력 (v10.01)
                         exportDate: new Date().toISOString(),
-                        appVersion: 'v20260501.07'
+                        appVersion: 'v20260501.09'
                       };
                       const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
                       const url = URL.createObjectURL(blob);
@@ -3521,7 +3521,7 @@ ${list}` }]
                   <div className="bg-white border-b border-slate-200 px-4 py-2 sticky top-0 z-40">
                     <div className="flex space-x-1">
                       {[
-                        ['products', '색상별 단가', '1-1'],
+                        // v20260501.09: 1-1 색상별 단가 탭 삭제 (9-1 상품 마스터로 통합)
                         ['order', '작업 지시서', '1-2'],
                         ['rework', '재도금 요청', '1-3'],
                         ['history', '작업 내역', '1-4'],
@@ -3539,424 +3539,7 @@ ${list}` }]
                 {/* 도금작업지시서 탭 */}
                 {activeMainTab === 'plating' && (
                   <>
-                {activeTab === 'products' && (
-                  <div className="space-y-6">
-                    {/* 이관 안내 - 9-1에 없는 제품이 있을 때만 */}
-                    {(() => {
-                      const unmigrated = products.filter(p =>
-                        !masterProducts.some(mp =>
-                          String(mp.legacyProductId) === String(p.id) || String(mp.id) === String(p.masterProductId) || mp.name === p.name
-                        )
-                      );
-                      if (unmigrated.length === 0) return null;
-                      return (
-                        <div className="bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-300 rounded-2xl p-4 flex items-start gap-3">
-                          <span className="text-2xl">🔄</span>
-                          <div className="flex-1">
-                            <div className="font-bold text-purple-800 text-sm mb-1">
-                              9-1 상품 마스터로 이관할 제품 {unmigrated.length}개가 있습니다
-                            </div>
-                            <div className="text-xs text-purple-700 leading-relaxed">
-                              기존 1-1 제품관리의 제품 {unmigrated.length}개가 아직 9-1에 등록되지 않았습니다.<br/>
-                              <strong>한 번 클릭하면 이미지·연마여부·단가 정보와 함께 9-1로 복사</strong>됩니다 (기존 데이터는 그대로 유지).
-                            </div>
-                            <button onClick={() => {
-                              if (!confirm(`${unmigrated.length}개 제품을 9-1 상품 마스터(헤어핀)로 이관합니다.\n\n기존 ${products.length}개 제품은 그대로 유지됩니다.\n진행하시겠습니까?`)) return;
-                              const newMasters = unmigrated.map(p => ({
-                                id: Date.now() + Math.random(),
-                                type: 'hairpin',
-                                name: p.name,
-                                colors: [],
-                                sizes: '',
-                                memo: '1-1 기존 제품에서 이관됨',
-                                grindRequired: p.grindRequired || false,
-                                image: p.image || null,
-                                platingCosts: p.platingCosts || {},
-                                grindCost: p.grindCost || '',
-                                injectionCost: p.injectionCost || '',
-                                springCost: p.springCost || '',
-                                pinCost: p.pinCost || '',
-                                legacyProductId: p.id,
-                                createdAt: p.createdAt || new Date().toISOString()
-                              }));
-                              const combined = [...masterProducts, ...newMasters];
-                              saveMasterProducts(combined);
-
-                              // products 배열의 masterProductId 매핑 갱신
-                              const updatedProducts = products.map(p => {
-                                const matchedMaster = newMasters.find(m => String(m.legacyProductId) === String(p.id));
-                                if (matchedMaster && !p.masterProductId) {
-                                  return {...p, masterProductId: matchedMaster.id};
-                                }
-                                return p;
-                              });
-                              saveProducts(updatedProducts);
-
-                              alert(`✅ ${newMasters.length}개 제품이 9-1 상품 마스터로 이관되었습니다!\n\n9-1 상품 마스터에서 색상 옵션/사이즈를 추가 편집하실 수 있습니다.`);
-                            }} className="mt-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-lg text-sm font-bold shadow-md">
-                              🔄 {unmigrated.length}개 제품 지금 이관하기
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })()}
-
-                    <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 flex items-start gap-3">
-                      <span className="text-2xl">💡</span>
-                      <div className="flex-1">
-                        <div className="font-bold text-amber-800 text-sm mb-1">이 탭은 색상별 도금 단가 관리용입니다</div>
-                        <div className="text-xs text-amber-700 leading-relaxed">
-                          제품 등록은 <strong>9-1 상품 마스터</strong>에서 먼저 등록하세요 (헤어핀 타입).<br/>
-                          여기서는 등록된 상품을 선택해 <strong>유광/반광 도금 단가 + 연마 단가</strong>를 입력합니다.<br/>
-                          곱창밴드는 도금하지 않으므로 헤어핀 상품만 표시됩니다.
-                        </div>
-                        <button onClick={() => { setActiveMainTab('productMgmt'); setProductMgmtTab('master'); }}
-                          className="mt-2 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-bold">
-                          9-1 상품 마스터로 이동 →
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8">
-                      <h2 className="text-xl font-bold text-slate-900 mb-6 flex items-center">
-                        🎨 <span className="ml-2">색상별 도금 단가 입력</span>
-                      </h2>
-
-                      <div className="space-y-5">
-                        <div>
-                          <label className="block text-sm font-semibold text-slate-700 mb-2">📌 헤어핀 상품 선택</label>
-                          {(() => {
-                            const hairpinMasters = masterProducts.filter(p => p.type === 'hairpin');
-                            if (hairpinMasters.length === 0) {
-                              return (
-                                <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 text-sm text-amber-700">
-                                  ⚠️ 9-1 상품 마스터에 등록된 헤어핀 상품이 없습니다. 먼저 등록해주세요.
-                                </div>
-                              );
-                            }
-                            return (
-                              <select value={productForm.selectedMasterId || ''}
-                                onChange={e => {
-                                  const mp = hairpinMasters.find(p => String(p.id) === e.target.value);
-                                  if (!mp) {
-                                    setProductForm({ name: '', grindRequired: true, image: null, imagePreview: null, grindCost: '', injectionCost: '', springCost: '', pinCost: '', platingCosts: {}, selectedMasterId: '' });
-                                    return;
-                                  }
-                                  // 기존 products에 연결된 단가 정보 가져오기
-                                  const linkedProduct = products.find(p => String(p.masterProductId) === String(mp.id) || String(p.id) === String(mp.legacyProductId));
-                                  setProductForm({
-                                    name: mp.name,
-                                    grindRequired: mp.grindRequired !== false,
-                                    image: mp.image || null,
-                                    imagePreview: mp.image || null,
-                                    grindCost: linkedProduct?.grindCost || mp.grindCost || '',
-                                    injectionCost: linkedProduct?.injectionCost || mp.injectionCost || '',
-                                    springCost: linkedProduct?.springCost || mp.springCost || '',
-                                    pinCost: linkedProduct?.pinCost || mp.pinCost || '',
-                                    platingCosts: linkedProduct?.platingCosts || mp.platingCosts || {},
-                                    selectedMasterId: mp.id,
-                                    existingProductId: linkedProduct?.id || null
-                                  });
-                                }}
-                                className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none bg-white">
-                                <option value="">-- 헤어핀 상품 선택 --</option>
-                                {hairpinMasters.sort((a,b)=>a.name.localeCompare(b.name)).map(mp => (
-                                  <option key={mp.id} value={mp.id}>
-                                    {mp.name} {mp.grindRequired ? '(연마필요)' : '(연마불필요)'}
-                                  </option>
-                                ))}
-                              </select>
-                            );
-                          })()}
-                        </div>
-
-                        {productForm.selectedMasterId && (
-                          <div className="bg-slate-50 rounded-xl p-4 flex items-center gap-4">
-                            {productForm.imagePreview ? (
-                              <img src={productForm.imagePreview} alt={productForm.name} className="w-20 h-20 object-cover rounded-lg border-2 border-white shadow shrink-0"/>
-                            ) : (
-                              <div className="w-20 h-20 bg-white rounded-lg border-2 border-slate-200 flex items-center justify-center text-3xl shrink-0">📌</div>
-                            )}
-                            <div className="flex-1">
-                              <div className="font-bold text-slate-900 text-base">{productForm.name}</div>
-                              <div className="text-xs text-slate-500 mt-0.5">
-                                {productForm.grindRequired ? '✓ 연마 필요' : '○ 연마 불필요'}
-                                {productForm.existingProductId && <span className="ml-2 bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded">기존 단가 불러옴</span>}
-                              </div>
-                              <div className="text-[11px] text-slate-400 mt-1">이미지/제품명/연마여부 변경은 9-1 상품 마스터에서 하세요</div>
-                            </div>
-                          </div>
-                        )}
-
-                        {productForm.selectedMasterId && (
-                          <>
-                          <h3 className="text-sm font-bold text-slate-700 mb-4">도금 단가 (색상별)</h3>
-                          <div className="overflow-x-auto mb-6">
-                            <table className="w-full text-xs border border-slate-200">
-                              <thead className="bg-slate-100">
-                                <tr>
-                                  <th className="border border-slate-300 px-3 py-2 text-left font-bold">색상</th>
-                                  <th className="border border-slate-300 px-3 py-2 text-center font-bold">유광 (원)</th>
-                                  <th className="border border-slate-300 px-3 py-2 text-center font-bold">반무광 (원)</th>
-                                  <th className="border border-slate-300 px-3 py-2 text-center font-bold">기타 (원)</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {COLOR_DEFS.map(color => (
-                                  <tr key={color.name}>
-                                    <td className="border border-slate-300 px-3 py-2 font-semibold">{color.displayName}</td>
-                                    <td className="border border-slate-300 px-2 py-1">
-                                      {(color.finishType === 'both' || color.finishType === 'glossOnly') ? (
-                                        <input
-                                          type="number"
-                                          value={productForm.platingCosts[`${color.name}_유광`] || ''}
-                                          onChange={(e) => setProductForm({
-                                            ...productForm,
-                                            platingCosts: {
-                                              ...productForm.platingCosts,
-                                              [`${color.name}_유광`]: e.target.value
-                                            }
-                                          })}
-                                          className="w-full px-2 py-1 rounded border border-slate-300 focus:border-blue-500 outline-none text-center"
-                                          placeholder="0"
-                                        />
-                                      ) : (
-                                        <span className="text-slate-400 text-center block text-xs">-</span>
-                                      )}
-                                    </td>
-                                    <td className="border border-slate-300 px-2 py-1">
-                                      {color.finishType === 'both' ? (
-                                        <input
-                                          type="number"
-                                          value={productForm.platingCosts[`${color.name}_반무광`] || ''}
-                                          onChange={(e) => setProductForm({
-                                            ...productForm,
-                                            platingCosts: {
-                                              ...productForm.platingCosts,
-                                              [`${color.name}_반무광`]: e.target.value
-                                            }
-                                          })}
-                                          className="w-full px-2 py-1 rounded border border-slate-300 focus:border-blue-500 outline-none text-center"
-                                          placeholder="0"
-                                        />
-                                      ) : (
-                                        <span className="text-slate-400 text-center block text-xs">-</span>
-                                      )}
-                                    </td>
-                                    <td className="border border-slate-300 px-2 py-1">
-                                      {color.finishType === 'other' ? (
-                                        <input
-                                          type="number"
-                                          value={productForm.platingCosts[color.name] || ''}
-                                          onChange={(e) => setProductForm({
-                                            ...productForm,
-                                            platingCosts: {
-                                              ...productForm.platingCosts,
-                                              [color.name]: e.target.value
-                                            }
-                                          })}
-                                          className="w-full px-2 py-1 rounded border border-slate-300 focus:border-blue-500 outline-none text-center"
-                                          placeholder="0"
-                                        />
-                                      ) : (
-                                        <span className="text-slate-400 text-center block text-xs">-</span>
-                                      )}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-
-                          <h3 className="text-sm font-bold text-slate-700 mb-4">기타 원가 (선택)</h3>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <div>
-                              <label className="block text-xs font-semibold text-slate-600 mb-1">연마 원가</label>
-                              <input
-                                type="number"
-                                value={productForm.grindCost}
-                                onChange={(e) => setProductForm({...productForm, grindCost: e.target.value})}
-                                className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-blue-500 outline-none text-sm"
-                                placeholder="원"
-                              />
-                            </div>
-                          </div>
-                        </>
-                        )}
-
-                        {productForm.selectedMasterId && (
-                        <div className="flex items-center gap-3 bg-gradient-to-r from-green-50 to-blue-50 border-2 border-green-200 rounded-2xl p-4">
-                          <div className="flex-1">
-                            {autoSaveStatus === 'saving' && (
-                              <div className="flex items-center gap-2 text-blue-600 text-sm font-bold">
-                                <span className="animate-spin inline-block w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full"></span>
-                                저장 중...
-                              </div>
-                            )}
-                            {autoSaveStatus === 'saved' && (
-                              <div className="flex items-center gap-2 text-green-600 text-sm font-bold">
-                                <span>✅</span> 자동 저장됨
-                              </div>
-                            )}
-                            {!autoSaveStatus && (
-                              <div className="flex items-center gap-2 text-slate-600 text-sm">
-                                <span>💡</span> 입력하면 자동으로 저장되고 9-1 상품 마스터에 동기화됩니다
-                              </div>
-                            )}
-                          </div>
-                          <button
-                            onClick={() => {
-                              setProductForm({ name: '', grindRequired: true, image: null, imagePreview: null, grindCost: '', injectionCost: '', springCost: '', pinCost: '', platingCosts: {}, selectedMasterId: '' });
-                            }}
-                            className="px-4 py-2 bg-slate-500 hover:bg-slate-600 text-white rounded-xl font-bold text-sm"
-                          >
-                            ✕ 선택 해제
-                          </button>
-                        </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8">
-                      {(() => {
-                        const migratedCount = products.filter(product =>
-                          masterProducts.some(mp =>
-                            String(mp.id) === String(product.masterProductId) ||
-                            String(mp.legacyProductId) === String(product.id) ||
-                            mp.name === product.name
-                          )
-                        ).length;
-                        const needMigrationCount = products.length - migratedCount;
-                        return (
-                          <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-                            <h2 className="text-xl font-bold text-slate-900">단가 등록된 제품 ({products.length})</h2>
-                            <div className="flex gap-2 flex-wrap">
-                              <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-1.5 text-xs font-bold text-green-700">
-                                ✅ 이관완료 {migratedCount}
-                              </div>
-                              {needMigrationCount > 0 && (
-                                <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-1.5 text-xs font-bold text-red-700">
-                                  ⚠️ 이관필요 {needMigrationCount}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })()}
-                      
-                      {products.length === 0 ? (
-                        <div className="text-center py-12 text-slate-400">
-                          <div className="flex justify-center mb-4"><Package /></div>
-                          <p className="font-medium">단가가 입력된 제품이 없습니다</p>
-                          <p className="text-xs mt-1">위에서 9-1 상품을 선택하여 단가를 입력해주세요</p>
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                          {[...products].sort((a, b) => a.name.localeCompare(b.name, 'ko-KR')).map(product => {
-                            // v10.03: 9-1 마스터의 colorPlatingCosts와 1-1의 platingCosts 둘 다 카운트
-                            const linkedMpForCount = masterProducts.find(mp =>
-                              String(mp.id) === String(product.masterProductId) ||
-                              String(mp.legacyProductId) === String(product.id) ||
-                              mp.name === product.name
-                            );
-                            const newCpc = linkedMpForCount?.colorPlatingCosts || {};
-                            const newCount = Object.values(newCpc).filter(v=>v&&v!=='' && Number(v)>0).length;
-                            const legacyCount = Object.values(product.platingCosts||{}).filter(v=>v&&v!=='').length;
-                            const platingCount = newCount > 0 ? newCount : legacyCount;
-                            const isMigrated = !!linkedMpForCount;
-                            return (
-                              <div key={product.id} className="relative p-4 rounded-2xl border-2 border-slate-100 hover:border-blue-300 hover:shadow-lg transition-all group cursor-pointer"
-                                onClick={() => {
-                                  // 9-1에서 원본 상품 찾기
-                                  let mp = masterProducts.find(p =>
-                                    String(p.id) === String(product.masterProductId) ||
-                                    String(p.legacyProductId) === String(product.id) ||
-                                    p.name === product.name
-                                  );
-
-                                  // 없으면 즉시 9-1에 추가
-                                  if (!mp) {
-                                    if (!confirm(`"${product.name}"은(는) 9-1 상품 마스터에 없습니다.\n지금 9-1에 자동 이관한 뒤 단가를 수정할까요?`)) return;
-                                    mp = {
-                                      id: Date.now() + Math.random(),
-                                      type: 'hairpin',
-                                      name: product.name,
-                                      colors: [],
-                                      sizes: '',
-                                      memo: '1-1에서 자동 이관됨',
-                                      grindRequired: product.grindRequired || false,
-                                      image: product.image || null,
-                                      platingCosts: product.platingCosts || {},
-                                      grindCost: product.grindCost || '',
-                                      injectionCost: product.injectionCost || '',
-                                      springCost: product.springCost || '',
-                                      pinCost: product.pinCost || '',
-                                      legacyProductId: product.id,
-                                      createdAt: product.createdAt || new Date().toISOString()
-                                    };
-                                    saveMasterProducts([...masterProducts, mp]);
-                                    saveProducts(products.map(p => p.id===product.id ? {...p, masterProductId: mp.id} : p));
-                                  }
-
-                                  setProductForm({
-                                    name: mp.name,
-                                    grindRequired: mp.grindRequired !== false,
-                                    image: mp.image || null,
-                                    imagePreview: mp.image || null,
-                                    grindCost: product.grindCost || '',
-                                    injectionCost: product.injectionCost || '',
-                                    springCost: product.springCost || '',
-                                    pinCost: product.pinCost || '',
-                                    platingCosts: product.platingCosts || {},
-                                    selectedMasterId: mp.id,
-                                    existingProductId: product.id
-                                  });
-                                  window.scrollTo({top: 0, behavior: 'smooth'});
-                                }}>
-                                <div className="flex gap-3 mb-3">
-                                  {product.image ? (
-                                    <img src={product.image} alt={product.name} className="w-20 h-20 rounded-xl object-cover border-2 border-slate-200 shrink-0" />
-                                  ) : (
-                                    <div className="w-20 h-20 rounded-xl bg-slate-100 flex items-center justify-center border-2 border-slate-200 shrink-0">
-                                      <span className="text-2xl">📌</span>
-                                    </div>
-                                  )}
-                                  <div className="flex-1 min-w-0">
-                                    <h3 className="font-bold text-slate-900 text-sm line-clamp-2">{product.name}</h3>
-                                    <div className="flex flex-wrap gap-1 mt-1">
-                                      {isMigrated ? (
-                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700 font-bold">
-                                          ✅ 이관완료
-                                        </span>
-                                      ) : (
-                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-bold animate-pulse">
-                                          ⚠️ 이관필요
-                                        </span>
-                                      )}
-                                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${product.grindRequired?'bg-orange-100 text-orange-600':'bg-slate-100 text-slate-500'}`}>
-                                        {product.grindRequired ? '연마필요' : '연마불필요'}
-                                      </span>
-                                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-600 font-bold">
-                                        색상 {platingCount}개 단가 입력됨
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="text-xs space-y-0.5 bg-slate-50 rounded-lg p-2">
-                                  {product.grindCost && <div className="flex justify-between"><span className="text-slate-500">연마</span><span className="font-semibold">{Number(product.grindCost).toLocaleString()}원</span></div>}
-                                  {product.injectionCost && <div className="flex justify-between"><span className="text-slate-500">사출</span><span className="font-semibold">{Number(product.injectionCost).toLocaleString()}원</span></div>}
-                                  {product.springCost && <div className="flex justify-between"><span className="text-slate-500">스프링</span><span className="font-semibold">{Number(product.springCost).toLocaleString()}원</span></div>}
-                                  {product.pinCost && <div className="flex justify-between"><span className="text-slate-500">핀대</span><span className="font-semibold">{Number(product.pinCost).toLocaleString()}원</span></div>}
-                                </div>
-                                <div className="text-[10px] text-blue-500 text-center mt-2 font-semibold">클릭하여 단가 수정 ↑</div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
+                {/* 1-1 색상별 단가 탭 v20260501.09에서 삭제 (9-1 상품 마스터로 통합) */}
 
                 {activeTab === 'order' && (
                   <div className="space-y-6">
@@ -4598,7 +4181,7 @@ ${list}` }]
                                           </div>
 
                                           <div className="flex items-center gap-2">
-                                            {/* 🟦 색상별 도금공장 청구일 (v20260501.07) */}
+                                            {/* 🟦 색상별 도금공장 청구일 (v20260501.09) */}
                                             <div className="flex items-center bg-blue-500 border-2 border-blue-300 rounded-lg px-2 py-1 shadow-sm" title="이 색상의 도금공장 청구일">
                                               <span className="text-white text-[10px] font-bold mr-1.5">📅 청구일</span>
                                               <input
@@ -5030,7 +4613,7 @@ ${list}` }]
                 </>
                 )}
 
-                {/* 월별 누적 도금 내역 탭 (v20260501.07) */}
+                {/* 월별 누적 도금 내역 탭 (v20260501.09) */}
                 {activeMainTab === 'cost' && (
                   <div className="space-y-6">
                     <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8">
@@ -5087,7 +4670,7 @@ ${list}` }]
                         };
 
                         // 색상별 도금 단가 조회
-                        // v20260501.07: 작업내역의 공장색상(item.color='대금', item.finish='유광')을
+                        // v20260501.09: 작업내역의 공장색상(item.color='대금', item.finish='유광')을
                         // 9-1 판매색상키('골드(유광)')로 역변환하여 colorPlatingCosts에서 조회
                         const getPlatingCost = (costs, color, finish) => {
                           const { colorPlatingCosts, platingCostsLegacy } = costs;
@@ -9454,7 +9037,7 @@ ${list}` }]
                               <h3 className="text-base font-black text-black tracking-tight">🖨️ 라벨 인쇄 + 디자인 편집기</h3>
                               <span className="bg-black text-white text-[10px] font-black px-2 py-0.5 tracking-widest" style={{borderRadius:'4px'}}>EDITOR</span>
                             </div>
-                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260501.07 · 헬퍼 자동 인쇄 · 한글 100%</div>
+                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260501.09 · 헬퍼 자동 인쇄 · 한글 100%</div>
                           </div>
                           <button onClick={()=>setBarcodePrintPopup(null)} className="text-neutral-400 hover:text-black text-xl font-black">✕</button>
                         </div>
@@ -10489,7 +10072,7 @@ ${list}` }]
                                               {/* 색상 카드 리스트 - 2열 그리드, 무신사 스타일 */}
                                               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                               {(() => {
-                                                // v20260501.07: 좌=유광, 우=반광 짝맞추기 정렬
+                                                // v20260501.09: 좌=유광, 우=반광 짝맞추기 정렬
                                                 // 색상 그룹별 (골드→실버→블랙→다크골드→로즈골드), 유광 다음 반광
                                                 // 단독 색상(14K도금, 은): 마지막에 왼쪽 단독 배치
                                                 const colorOrder = [
@@ -10772,7 +10355,11 @@ ${list}` }]
                                                 onError={(e)=>{e.target.style.display='none';e.target.nextElementSibling.style.display='flex';}}/>
                                               <div className="hidden w-20 h-20 bg-neutral-100 border border-neutral-300 items-center justify-center text-xs text-neutral-500" style={{borderRadius:'2px'}}>로드 실패</div>
                                               <div className="flex-1 min-w-0">
-                                                <div className="text-xs text-neutral-600 truncate" title={form.image}>{form.image.startsWith('data:')?'직접 업로드':'GitHub URL'}</div>
+                                                <div className="text-xs text-neutral-600 truncate" title={form.image}>{
+                                                  form.image.startsWith('data:') ? '직접 업로드' : 
+                                                  form.image.startsWith('https://yslike1399-maker.github.io/plating/images/') ? 'GitHub URL' :
+                                                  '외부 URL'
+                                                }</div>
                                                 <button onClick={()=>setForm(p=>({...p, image: null, _imgMode: undefined}))}
                                                   className="text-[11px] text-black hover:bg-black hover:text-white px-2 py-1 border border-neutral-300 mt-1.5 font-bold" style={{borderRadius:'2px'}}>이미지 삭제</button>
                                               </div>
@@ -10804,6 +10391,18 @@ ${list}` }]
                                                   <div className={`text-[10px] ${form._imgMode==='upload'?'text-neutral-300':'text-neutral-500'}`}>자동 압축</div>
                                                 </div>
                                               </label>
+                                              {/* 🟦 v20260501.09: 외부 URL 옵션 추가 (Google Drive 등) */}
+                                              <label className={`flex-1 flex items-center gap-2 p-2 cursor-pointer transition ${
+                                                form._imgMode === 'external' ? 'bg-black text-white' : 'bg-white border border-neutral-300 hover:border-black'
+                                              }`} style={{borderRadius:'2px'}}>
+                                                <input type="radio" name="imgMode" checked={form._imgMode==='external'}
+                                                  onChange={()=>setForm(p=>({...p, _imgMode: 'external'}))}
+                                                  className="w-4 h-4 accent-black"/>
+                                                <div className="flex-1">
+                                                  <div className={`text-xs font-bold ${form._imgMode==='external'?'text-white':'text-black'}`}>외부 URL</div>
+                                                  <div className={`text-[10px] ${form._imgMode==='external'?'text-neutral-300':'text-neutral-500'}`}>Google Drive 등</div>
+                                                </div>
+                                              </label>
                                             </div>
 
                                             {/* GitHub URL 모드 */}
@@ -10812,7 +10411,7 @@ ${list}` }]
                                                 <div className="flex items-center gap-0">
                                                   <span className="text-[11px] font-mono text-neutral-600 bg-neutral-100 px-2 py-1.5 border border-neutral-300" style={{borderRadius:'2px 0 0 2px'}}>https://yslike1399-maker.github.io/plating/images/</span>
                                                   <input type="text"
-                                                    value={form.image && !form.image.startsWith('data:') ? form.image.replace('https://yslike1399-maker.github.io/plating/images/','') : ''}
+                                                    value={form.image && form.image.startsWith('https://yslike1399-maker.github.io/plating/images/') ? form.image.replace('https://yslike1399-maker.github.io/plating/images/','') : ''}
                                                     onChange={e=>{
                                                       const filename = e.target.value.trim();
                                                       if (!filename) {
@@ -10856,6 +10455,34 @@ ${list}` }]
                                                 <div className="text-[10px] text-amber-600 mt-1">⚠️ localStorage 용량 차지함 (가급적 GitHub URL 권장)</div>
                                               </label>
                                             )}
+
+                                            {/* 🟦 v20260501.09: 외부 URL 모드 */}
+                                            {form._imgMode === 'external' && (
+                                              <div className="space-y-2">
+                                                <input type="text"
+                                                  value={form.image && !form.image.startsWith('data:') && !form.image.startsWith('https://yslike1399-maker.github.io/plating/images/') ? form.image : ''}
+                                                  onChange={e=>{
+                                                    const url = e.target.value.trim();
+                                                    if (!url) {
+                                                      setForm(p=>({...p, image: null}));
+                                                    } else {
+                                                      setForm(p=>({...p, image: url}));
+                                                    }
+                                                  }}
+                                                  placeholder="https://lh3.googleusercontent.com/d/..."
+                                                  className="w-full px-2 py-1.5 rounded-lg border border-slate-300 text-sm bg-white focus:border-blue-400 outline-none font-mono"/>
+                                                <details className="bg-white rounded-lg p-2 border border-emerald-200">
+                                                  <summary className="text-[11px] text-emerald-700 font-bold cursor-pointer">💡 외부 URL 사용 안내</summary>
+                                                  <ul className="text-[10px] text-slate-600 mt-2 space-y-0.5 pl-3 list-disc">
+                                                    <li><b>Google Drive</b>: <code className="text-[9px] bg-neutral-100 px-1">https://lh3.googleusercontent.com/d/파일ID</code></li>
+                                                    <li>네이버, 인스타 등 직접 이미지 링크 가능</li>
+                                                    <li>전체 URL을 그대로 입력해주세요</li>
+                                                    <li>⚠️ 외부 호스트가 사라지면 이미지 안 보임</li>
+                                                    <li>💚 셀메이트 이미지 그대로 재사용 가능</li>
+                                                  </ul>
+                                                </details>
+                                              </div>
+                                            )}
                                           </div>
                                         </div>
 
@@ -10883,7 +10510,7 @@ ${list}` }]
                                             {/* v10.03: 색상카드의 도금 단가 요약 (읽기전용) */}
                                             {(() => {
                                               const cpc = form.colorPlatingCosts || {};
-                                              // v20260501.07: 좌=유광 우=반광 짝맞추기 정렬 적용
+                                              // v20260501.09: 좌=유광 우=반광 짝맞추기 정렬 적용
                                               const colorOrder = [
                                                 '골드(유광)','골드(반광)',
                                                 '실버(유광)','실버(반광)',
@@ -10916,7 +10543,7 @@ ${list}` }]
                                                     </div>
                                                   ) : (
                                                     <div className="grid grid-cols-2 gap-1">
-                                                      {/* v20260501.07: 입력/미입력 분리 안 하고 정렬 순서대로 표시 (짝맞춤 유지) */}
+                                                      {/* v20260501.09: 입력/미입력 분리 안 하고 정렬 순서대로 표시 (짝맞춤 유지) */}
                                                       {allColors.map(c => {
                                                         const hasValue = cpc[c] && cpc[c] !== '' && Number(cpc[c]) > 0;
                                                         return hasValue ? (
@@ -11430,7 +11057,7 @@ ${list}` }]
                               if (!currentColors.has(c)) {
                                 setForm(p => {
                                   const newState = {...p, colors: [...(p.colors||[]), c]};
-                                  // 🟦 v20260501.07: 반광 색상 추가 시 자동 ★ 라벨 입력
+                                  // 🟦 v20260501.09: 반광 색상 추가 시 자동 ★ 라벨 입력
                                   // 단, 기존 라벨이 있으면 보존
                                   if (c.includes('(반광)')) {
                                     const existing = (p.customColorNames || {})[c];
@@ -11530,7 +11157,7 @@ ${list}` }]
                             </div>
                             <div className="flex gap-2">
                               <button onClick={() => {
-                                // 📤 봇 동기화 v20260501.07: 가벼운 동기화 (썸네일 제외)
+                                // 📤 봇 동기화 v20260501.09: 가벼운 동기화 (썸네일 제외)
                                 // - 썸네일 제외 → 파일 크기 작아짐 → 보안 차단 우회
                                 // - 부자재 바코드 통합
                                 const bcCount = masterProducts.filter(p => p.barcodes && Object.values(p.barcodes).some(v => v && v.length === 11)).length;
@@ -11544,7 +11171,7 @@ ${list}` }]
                                 const filteredProducts = masterProducts.filter(p => p.barcodes && Object.values(p.barcodes).some(v => v && v.length === 11));
                                 
                                 const botData = {
-                                  version: 'v20260501.07',
+                                  version: 'v20260501.09',
                                   exported_at: new Date().toISOString(),
                                   exported_by: 'LACEROOM 9-1',
                                   product_count: 0,
@@ -13729,7 +13356,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260501.07</p>
+                <p>© 2026 LACEROOM통합관리 v20260501.09</p>
               </footer>
               
               {/* v10.06: 시스템 상태 토스트 (자동 알림) */}
