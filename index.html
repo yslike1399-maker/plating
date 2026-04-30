@@ -856,6 +856,18 @@ ${list}` }]
           // 수정 모드 (v09.10): 도금작업 수정 중인 ID 저장. null이면 신규 작성 모드
           const [editingPlatingOrderId, setEditingPlatingOrderId] = useState(null);
 
+          // 📊 월별 누적 도금 내역 (v20260501.03) - 2번 탭 전용 state
+          const [billingViewMode, setBillingViewMode] = useState('order'); // 'order' | 'billing'
+          const [costStartMonth, setCostStartMonth] = useState(() => {
+            const today = new Date();
+            return `${today.getFullYear()}-01`;
+          });
+          const [costEndMonth, setCostEndMonth] = useState(() => {
+            const today = new Date();
+            const m = String(today.getMonth() + 1).padStart(2, '0');
+            return `${today.getFullYear()}-${m}`;
+          });
+
           useEffect(() => {
             try {
               const savedProducts = localStorage.getItem('plating_products');
@@ -1537,7 +1549,7 @@ ${list}` }]
                 id: Date.now(),
                 date: orderForm.date,
                 orderNum,
-                billingDate: '',  // 🟦 도금공장 청구일 (v20260501.01) - 5월부터 철저 입력
+                billingDate: '',  // 🟦 도금공장 청구일 (v20260501.03) - 5월부터 철저 입력
                 products: orderForm.products.map(product => ({
                   productId: product.productId,
                   productName: product.productName,
@@ -2408,7 +2420,7 @@ ${list}` }]
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260501.01</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260501.03</div>
                   </div>
                   
                   {/* v10.06: 헬퍼/봇 상태등 */}
@@ -2446,7 +2458,7 @@ ${list}` }]
                   <div className="border-t border-neutral-200 my-2"></div>
                   {[
                     ['plating', '도금작업지시서', '1'],
-                    ['cost', '도금/연마 원가표', '2'],
+                    ['cost', '월별 누적 도금 내역', '2'],
                     ['receivable', '거래처관리', '3'],
                     ['fabricSuppliers', '원단거래처', '4'],
                     ['labor', '프리랜서 관리', '5'],
@@ -2506,7 +2518,7 @@ ${list}` }]
                         labelPresets,                // ← 라벨 프리셋 (NEW)
                         nameChangeLogs,              // ← 상품명 변경이력 (v10.01)
                         exportDate: new Date().toISOString(),
-                        appVersion: 'v20260501.01'
+                        appVersion: 'v20260501.03'
                       };
                       const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
                       const url = URL.createObjectURL(blob);
@@ -4444,6 +4456,7 @@ ${list}` }]
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center space-x-3">
                                   <Calendar />
+                                  <span className="text-blue-100 text-xs font-medium">발주서 작성 날짜 -</span>
                                   <h3 className="text-lg font-bold">{order.date}</h3>
                                   {order.type === 'rework' ? (
                                     <span className="px-4 py-1.5 bg-red-600 text-white rounded-lg font-extrabold text-sm shadow-lg border-2 border-red-700">
@@ -4452,45 +4465,8 @@ ${list}` }]
                                   ) : (
                                     <span className="px-3 py-1 bg-white/20 backdrop-blur rounded-lg font-bold text-sm">{order.orderNum}차</span>
                                   )}
-                                  <span className="text-blue-100 text-sm">{order.products.length}개 제품 · 총 {order.products.reduce((sum, p) => sum + p.quantity, 0)}개</span>
+                                  <span className="text-blue-100 text-sm">{order.products.length}개 제품 · 총 {order.totalQty || order.products.reduce((sum, p) => sum + (p.total || (p.items ? p.items.reduce((s, it) => s + (parseInt(it.qty) || 0), 0) : 0)), 0)}개</span>
                                 </div>
-                                {/* 🟦 도금공장 청구일 (v20260501.01) - 오른쪽 끝, 파란색 배지로 시각적 구분 */}
-                                {order.type !== 'rework' && (
-                                  <div className="flex items-center bg-blue-500 border-2 border-blue-300 rounded-xl px-3 py-2 shadow-lg ml-auto mr-3" title="도금공장에서 청구한 실제 날짜">
-                                    <span className="text-white text-xs font-bold mr-2">📅 청구일</span>
-                                    <input
-                                      type="date"
-                                      value={order.billingDate || ''}
-                                      onChange={(e) => {
-                                        const newDate = e.target.value;
-                                        const updated = history.map(h => 
-                                          h.id === order.id ? { ...h, billingDate: newDate } : h
-                                        );
-                                        setHistory(updated);
-                                        localStorage.setItem('plating_history', JSON.stringify(updated));
-                                      }}
-                                      className="bg-white text-blue-700 font-bold text-sm rounded-lg px-2 py-1 border-2 border-blue-200 focus:outline-none focus:border-blue-500 cursor-pointer"
-                                      style={{ colorScheme: 'light' }}
-                                    />
-                                    {order.billingDate && (
-                                      <button
-                                        onClick={() => {
-                                          if (confirm('청구일을 삭제하시겠습니까?')) {
-                                            const updated = history.map(h => 
-                                              h.id === order.id ? { ...h, billingDate: '' } : h
-                                            );
-                                            setHistory(updated);
-                                            localStorage.setItem('plating_history', JSON.stringify(updated));
-                                          }
-                                        }}
-                                        className="ml-1 text-white hover:text-red-200 text-xs font-bold"
-                                        title="청구일 삭제"
-                                      >
-                                        ✕
-                                      </button>
-                                    )}
-                                  </div>
-                                )}
                                 <div className="flex space-x-2">
                                   {order.type !== 'rework' && (
                                     <>
@@ -5004,162 +4980,325 @@ ${list}` }]
                 </>
                 )}
 
-                {/* 도금/연마 원가표 탭 */}
+                {/* 월별 누적 도금 내역 탭 (v20260501.03) */}
                 {activeMainTab === 'cost' && (
                   <div className="space-y-6">
                     <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8">
-                      <h2 className="text-xl font-bold text-slate-900 mb-6">월별 도금/연마 원가 집계</h2>
-                      
+                      <div className="flex items-center justify-between mb-6">
+                        <div>
+                          <h2 className="text-xl font-bold text-slate-900">📊 월별 누적 도금 내역</h2>
+                          <p className="text-sm text-slate-500 mt-1">1번 작업내역서 기반 · 9-1 상품 마스터 단가 자동 적용</p>
+                        </div>
+                      </div>
+
                       {(() => {
-                        // 월별로 그룹화
-                        const monthlyData = {};
-                        history.forEach(order => {
-                          const month = order.date.substring(0, 7); // YYYY-MM
-                          if (!monthlyData[month]) monthlyData[month] = {};
+                        // 외부 state 사용 (billingViewMode, costStartMonth, costEndMonth)
+                        const startMonth = costStartMonth;
+                        const endMonth = costEndMonth;
+
+                        // 월 범위 생성 (시작월 ~ 끝월)
+                        const generateMonths = (start, end) => {
+                          const months = [];
+                          const [sy, sm] = start.split('-').map(Number);
+                          const [ey, em] = end.split('-').map(Number);
+                          let y = sy, m = sm;
+                          while (y < ey || (y === ey && m <= em)) {
+                            months.push(`${y}-${String(m).padStart(2, '0')}`);
+                            m++;
+                            if (m > 12) { m = 1; y++; }
+                          }
+                          return months;
+                        };
+                        const months = generateMonths(startMonth, endMonth);
+
+                        // 9-1 상품 마스터에서 단가 조회 헬퍼
+                        const getMasterCosts = (productId, productName) => {
+                          // products에서 우선 찾고, masterProducts에서도 검색
+                          const prod = products.find(p => p.id === productId);
+                          const linkedMaster = masterProducts.find(mp =>
+                            String(mp.id) === String(prod?.masterProductId) ||
+                            String(mp.legacyProductId) === String(prod?.id) ||
+                            mp.name === productName
+                          );
+                          // 9-1 마스터에서 직접 검색 (linkedMaster 못 찾으면)
+                          const directMaster = masterProducts.find(mp => 
+                            String(mp.id) === String(productId) || mp.name === productName
+                          );
+                          const master = linkedMaster || directMaster;
                           
+                          return {
+                            master,
+                            prod,
+                            grindRequired: master?.grindRequired !== false && prod?.grindRequired !== false,
+                            grindCost: parseFloat(master?.grindCost || prod?.grindCost) || 0,
+                            colorPlatingCosts: master?.colorPlatingCosts || prod?.colorPlatingCosts || {},
+                            platingCostsLegacy: prod?.platingCosts || {}
+                          };
+                        };
+
+                        // 색상별 도금 단가 조회
+                        const getPlatingCost = (costs, color, finish) => {
+                          const { colorPlatingCosts, platingCostsLegacy } = costs;
+                          // 신규 구조 (colorPlatingCosts) 우선
+                          const colorKey = finish ? `${color}(${finish === '반무광' ? '반광' : finish})` : color;
+                          let cost = parseFloat(colorPlatingCosts[colorKey]) || parseFloat(colorPlatingCosts[color]) || 0;
+                          if (cost > 0) return cost;
+                          // 레거시 fallback
+                          const colorDef = COLOR_DEFS.find(c => c.name === color);
+                          if (platingCostsLegacy && colorDef) {
+                            if (colorDef.finishType === 'both') {
+                              cost = parseFloat(platingCostsLegacy[`${color}_${finish}`]) || 0;
+                            } else if (colorDef.finishType === 'glossOnly') {
+                              cost = parseFloat(platingCostsLegacy[`${color}_유광`]) || 0;
+                            } else if (colorDef.finishType === 'other') {
+                              cost = parseFloat(platingCostsLegacy[color]) || 0;
+                            }
+                          }
+                          return cost;
+                        };
+
+                        // 데이터 집계: 제품_색상_마감 단위로 월별 누적
+                        // pivot[key] = { productName, color, finish, platingCost, grindCost, grindRequired, byMonth: {...}, unset: 0 }
+                        const pivot = {};
+                        history.filter(o => !o.type || o.type === 'work').forEach(order => {
                           order.products.forEach(product => {
-                            const prod = products.find(p => p.id === product.productId);
-                            if (!prod) return;
-                            // v10.03: 9-1 마스터에서 colorPlatingCosts 가져오기 (신규 구조 우선)
-                            const linkedMaster = masterProducts.find(mp =>
-                              String(mp.id) === String(prod.masterProductId) ||
-                              String(mp.legacyProductId) === String(prod.id) ||
-                              mp.name === prod.name
-                            );
-                            const newColorCosts = linkedMaster?.colorPlatingCosts || prod.colorPlatingCosts || {};
+                            const costs = getMasterCosts(product.productId, product.productName);
                             
-                            product.items.forEach(item => {
-                              const key = `${product.productName}_${item.color}_${item.finish || 'other'}`;
+                            (product.items || []).forEach(item => {
+                              const finish = item.finish || '';
+                              const key = `${product.productName}|${item.color}|${finish}`;
                               
-                              if (!monthlyData[month][key]) {
-                                // 색상별 도금 단가 가져오기
-                                let platingCost = 0;
-                                const colorDef = COLOR_DEFS.find(c => c.name === item.color);
-                                
-                                // v10.03: 색상카드의 colorPlatingCosts 우선 (신규 구조)
-                                // 색상명 키 후보: '골드(유광)', '골드(반광)', '14K도금' 등
-                                const colorKey = item.finish ? `${item.color}(${item.finish === '반무광' ? '반광' : item.finish})` : item.color;
-                                const newCost = parseFloat(newColorCosts[colorKey]) || parseFloat(newColorCosts[item.color]) || 0;
-                                
-                                if (newCost > 0) {
-                                  platingCost = newCost;
-                                } else if (prod.platingCosts && colorDef) {
-                                  // 레거시 fallback: 기존 platingCosts 구조
-                                  if (colorDef.finishType === 'both') {
-                                    // 유광/반무광 둘 다 있음
-                                    platingCost = parseFloat(prod.platingCosts[`${item.color}_${item.finish}`]) || 0;
-                                  } else if (colorDef.finishType === 'glossOnly') {
-                                    // 유광만 (은, 14k대용금)
-                                    platingCost = parseFloat(prod.platingCosts[`${item.color}_유광`]) || 0;
-                                  } else if (colorDef.finishType === 'other') {
-                                    // 기타 (동착)
-                                    platingCost = parseFloat(prod.platingCosts[item.color]) || 0;
-                                  }
-                                }
-                                
-                                monthlyData[month][key] = {
+                              if (!pivot[key]) {
+                                pivot[key] = {
                                   productName: product.productName,
+                                  productId: product.productId,
                                   color: item.color,
-                                  finish: item.finish || '',
-                                  finishType: colorDef?.finishType || 'both',
-                                  totalQty: 0,
-                                  platingCost: platingCost,
-                                  grindCost: parseFloat(linkedMaster?.grindCost || prod.grindCost) || 0,
-                                  grindQty: 0,
-                                  platingQty: 0
+                                  finish: finish,
+                                  grindRequired: costs.grindRequired,
+                                  platingCost: getPlatingCost(costs, item.color, finish),
+                                  grindCost: costs.grindRequired ? costs.grindCost : 0,
+                                  byMonth: {},
+                                  unset: 0,
+                                  hasData: true
                                 };
                               }
                               
-                              const qty = item.qty;
-                              monthlyData[month][key].totalQty += qty;
-                              
-                              // 연마 여부에 따라 구분
-                              if (product.grind === '연마' || product.grind === '연마 완료') {
-                                monthlyData[month][key].grindQty += qty;
+                              // 기준 날짜 결정
+                              let targetMonth = null;
+                              if (billingViewMode === 'order') {
+                                // 발주일 기준
+                                targetMonth = (order.date || '').substring(0, 7);
+                              } else {
+                                // 청구일 기준 (item.billingDate 우선, 없으면 order.billingDate)
+                                const billingDate = item.billingDate || order.billingDate || '';
+                                targetMonth = billingDate ? billingDate.substring(0, 7) : null;
                               }
-                              monthlyData[month][key].platingQty += qty;
+                              
+                              const qty = parseInt(item.qty) || 0;
+                              if (targetMonth) {
+                                pivot[key].byMonth[targetMonth] = (pivot[key].byMonth[targetMonth] || 0) + qty;
+                              } else {
+                                // 청구일 미입력
+                                pivot[key].unset += qty;
+                              }
                             });
                           });
                         });
-                        
-                        const months = Object.keys(monthlyData).sort().reverse();
-                        
-                        return months.length === 0 ? (
-                          <div className="text-center py-12 text-slate-400">
-                            <p className="font-medium">작업 내역이 없습니다</p>
-                          </div>
-                        ) : (
-                          <div className="space-y-8">
-                            {months.map(month => {
-                              const items = Object.values(monthlyData[month]);
-                              const totalPlating = items.reduce((sum, item) => sum + (item.platingQty * item.platingCost), 0);
-                              const totalGrind = items.reduce((sum, item) => sum + (item.grindQty * item.grindCost), 0);
-                              const grandTotal = totalPlating + totalGrind;
-                              
-                              return (
-                                <div key={month} className="border-2 border-slate-200 rounded-2xl p-6">
-                                  <h3 className="text-lg font-bold text-slate-900 mb-4">{month}</h3>
-                                  
-                                  <div className="overflow-x-auto">
-                                    <table className="w-full text-sm">
-                                      <thead>
-                                        <tr className="border-b-2 border-slate-300">
-                                          <th className="text-left py-3 px-4 font-bold">제품명</th>
-                                          <th className="text-center py-3 px-4 font-bold">색상</th>
-                                          <th className="text-center py-3 px-4 font-bold">구분</th>
-                                          <th className="text-center py-3 px-4 font-bold">도금<br/>수량</th>
-                                          <th className="text-right py-3 px-4 font-bold">도금<br/>단가</th>
-                                          <th className="text-right py-3 px-4 font-bold">도금<br/>금액</th>
-                                          <th className="text-center py-3 px-4 font-bold">연마<br/>수량</th>
-                                          <th className="text-right py-3 px-4 font-bold">연마<br/>단가</th>
-                                          <th className="text-right py-3 px-4 font-bold">연마<br/>금액</th>
-                                          <th className="text-right py-3 px-4 font-bold">합계</th>
-                                        </tr>
-                                      </thead>
-                                      <tbody>
-                                        {items.map((item, idx) => {
-                                          const platingAmount = item.platingQty * item.platingCost;
-                                          const grindAmount = item.grindQty * item.grindCost;
-                                          const itemTotal = platingAmount + grindAmount;
-                                          
-                                          // 구분 표시
-                                          let finishDisplay = '-';
-                                          if (item.finishType === 'both') {
-                                            finishDisplay = item.finish || '-';
-                                          } else if (item.finishType === 'glossOnly') {
-                                            finishDisplay = '유광';
-                                          } else if (item.finishType === 'other') {
-                                            finishDisplay = '기타';
-                                          }
-                                          
-                                          return (
-                                            <tr key={idx} className="border-b border-slate-200 hover:bg-slate-50">
-                                              <td className="py-3 px-4">{item.productName}</td>
-                                              <td className="text-center py-3 px-4">{getColorDisplayName(item.color)}</td>
-                                              <td className="text-center py-3 px-4">{finishDisplay}</td>
-                                              <td className="text-center py-3 px-4">{item.platingQty.toLocaleString()}</td>
-                                              <td className="text-right py-3 px-4">{item.platingCost.toLocaleString()}원</td>
-                                              <td className="text-right py-3 px-4 font-semibold">{platingAmount.toLocaleString()}원</td>
-                                              <td className="text-center py-3 px-4">{item.grindQty.toLocaleString()}</td>
-                                              <td className="text-right py-3 px-4">{item.grindCost.toLocaleString()}원</td>
-                                              <td className="text-right py-3 px-4 font-semibold">{grindAmount.toLocaleString()}원</td>
-                                              <td className="text-right py-3 px-4 font-bold text-blue-600">{itemTotal.toLocaleString()}원</td>
-                                            </tr>
-                                          );
-                                        })}
-                                        <tr className="bg-slate-100 font-bold">
-                                          <td className="py-4 px-4" colSpan="5">월 합계</td>
-                                          <td className="text-right py-4 px-4 text-blue-600">{totalPlating.toLocaleString()}원</td>
-                                          <td className="py-4 px-4" colSpan="2"></td>
-                                          <td className="text-right py-4 px-4 text-blue-600">{totalGrind.toLocaleString()}원</td>
-                                          <td className="text-right py-4 px-4 text-lg text-red-600">{grandTotal.toLocaleString()}원</td>
-                                        </tr>
-                                      </tbody>
-                                    </table>
+
+                        // 정렬: 제품명 → 색상 → 마감
+                        const rows = Object.values(pivot).sort((a, b) => {
+                          if (a.productName !== b.productName) return a.productName.localeCompare(b.productName);
+                          if (a.color !== b.color) return a.color.localeCompare(b.color);
+                          return a.finish.localeCompare(b.finish);
+                        });
+
+                        // 합계 계산
+                        const totals = {
+                          unset: 0,
+                          byMonth: {},
+                          unsetAmount: 0,
+                          byMonthAmount: {},
+                          unsetGrind: 0,
+                          byMonthGrind: {}
+                        };
+                        rows.forEach(r => {
+                          totals.unset += r.unset;
+                          totals.unsetAmount += r.unset * r.platingCost;
+                          totals.unsetGrind += r.unset * r.grindCost;
+                          months.forEach(m => {
+                            const q = r.byMonth[m] || 0;
+                            totals.byMonth[m] = (totals.byMonth[m] || 0) + q;
+                            totals.byMonthAmount[m] = (totals.byMonthAmount[m] || 0) + q * r.platingCost;
+                            totals.byMonthGrind[m] = (totals.byMonthGrind[m] || 0) + q * r.grindCost;
+                          });
+                        });
+
+                        return (
+                          <div>
+                            {/* 컨트롤 패널 */}
+                            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-5 mb-6 border-2 border-blue-200">
+                              <div className="flex flex-wrap items-center gap-4">
+                                {/* 조회 기준 토글 */}
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-bold text-slate-700">📅 조회 기준:</span>
+                                  <div className="flex bg-white rounded-xl p-1 shadow-md border-2 border-slate-200">
+                                    <button
+                                      onClick={() => billingViewMode !== 'order' && setBillingViewMode('order')}
+                                      className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                                        billingViewMode === 'order'
+                                          ? 'bg-blue-600 text-white shadow-md'
+                                          : 'text-slate-600 hover:bg-slate-100'
+                                      }`}
+                                    >
+                                      📝 발주서 작성일
+                                    </button>
+                                    <button
+                                      onClick={() => billingViewMode !== 'billing' && setBillingViewMode('billing')}
+                                      className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                                        billingViewMode === 'billing'
+                                          ? 'bg-blue-600 text-white shadow-md'
+                                          : 'text-slate-600 hover:bg-slate-100'
+                                      }`}
+                                    >
+                                      💰 도금공장 청구일
+                                    </button>
                                   </div>
                                 </div>
-                              );
-                            })}
+
+                                {/* 기간 선택 */}
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-bold text-slate-700">📊 기간:</span>
+                                  <input
+                                    type="month"
+                                    value={startMonth}
+                                    onChange={(e) => setCostStartMonth(e.target.value)}
+                                    className="px-3 py-2 rounded-lg border-2 border-slate-300 text-sm font-semibold focus:border-blue-500 outline-none"
+                                  />
+                                  <span className="text-slate-500 font-bold">~</span>
+                                  <input
+                                    type="month"
+                                    value={endMonth}
+                                    onChange={(e) => setCostEndMonth(e.target.value)}
+                                    className="px-3 py-2 rounded-lg border-2 border-slate-300 text-sm font-semibold focus:border-blue-500 outline-none"
+                                  />
+                                </div>
+
+                                {/* 안내 */}
+                                {billingViewMode === 'billing' && totals.unset > 0 && (
+                                  <div className="ml-auto bg-amber-100 border-2 border-amber-300 rounded-xl px-4 py-2">
+                                    <span className="text-sm font-bold text-amber-800">⚠️ 청구일 미입력: {totals.unset.toLocaleString()}개</span>
+                                    <p className="text-xs text-amber-700 mt-0.5">1-4 작업내역에서 청구일 입력 시 자동 이동</p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* 피벗 테이블 */}
+                            {rows.length === 0 ? (
+                              <div className="text-center py-12 text-slate-400">
+                                <p className="font-medium">작업 내역이 없습니다</p>
+                              </div>
+                            ) : (
+                              <div className="overflow-x-auto border-2 border-slate-200 rounded-2xl">
+                                <table className="w-full text-sm">
+                                  <thead className="bg-slate-100 sticky top-0">
+                                    <tr className="border-b-2 border-slate-300">
+                                      <th className="text-left py-3 px-3 font-bold text-slate-700 sticky left-0 bg-slate-100" style={{minWidth: '140px'}}>제품</th>
+                                      <th className="text-center py-3 px-3 font-bold text-slate-700" style={{minWidth: '100px'}}>색상</th>
+                                      <th className="text-center py-3 px-3 font-bold text-slate-700" style={{minWidth: '70px'}}>마감</th>
+                                      <th className="text-right py-3 px-3 font-bold text-slate-700" style={{minWidth: '80px'}}>도금<br/>단가</th>
+                                      <th className="text-right py-3 px-3 font-bold text-slate-700" style={{minWidth: '80px'}}>연마<br/>단가</th>
+                                      {billingViewMode === 'billing' && (
+                                        <th className="text-center py-3 px-3 font-bold text-amber-700 bg-amber-50" style={{minWidth: '70px'}}>미입력</th>
+                                      )}
+                                      {months.map(m => (
+                                        <th key={m} className="text-center py-3 px-3 font-bold text-blue-700" style={{minWidth: '70px'}}>{m.substring(2)}</th>
+                                      ))}
+                                      <th className="text-right py-3 px-3 font-bold text-slate-900 bg-yellow-100" style={{minWidth: '90px'}}>총수량</th>
+                                      <th className="text-right py-3 px-3 font-bold text-slate-900 bg-yellow-100" style={{minWidth: '110px'}}>총금액</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {rows.map((r, idx) => {
+                                      const rowTotalQty = r.unset + months.reduce((s, m) => s + (r.byMonth[m] || 0), 0);
+                                      const rowTotalAmount = rowTotalQty * (r.platingCost + r.grindCost);
+                                      return (
+                                        <tr key={idx} className="border-b border-slate-200 hover:bg-blue-50">
+                                          <td className="py-3 px-3 font-semibold text-slate-800 sticky left-0 bg-white" style={{borderRight: '1px solid #e2e8f0'}}>{r.productName}</td>
+                                          <td className="text-center py-3 px-3">{getColorDisplayName ? getColorDisplayName(r.color) : r.color}</td>
+                                          <td className="text-center py-3 px-3">{r.finish || '-'}</td>
+                                          <td className={`text-right py-3 px-3 ${r.platingCost === 0 ? 'text-red-500 font-bold' : 'text-slate-700'}`}>
+                                            {r.platingCost > 0 ? `${r.platingCost.toLocaleString()}원` : '⚠️ 미입력'}
+                                          </td>
+                                          <td className={`text-right py-3 px-3 ${!r.grindRequired ? 'text-slate-400' : (r.grindCost === 0 ? 'text-red-500 font-bold' : 'text-slate-700')}`}>
+                                            {!r.grindRequired ? '연마X' : (r.grindCost > 0 ? `${r.grindCost.toLocaleString()}원` : '⚠️ 미입력')}
+                                          </td>
+                                          {billingViewMode === 'billing' && (
+                                            <td className={`text-center py-3 px-3 font-bold ${r.unset > 0 ? 'bg-amber-50 text-amber-700' : 'text-slate-300'}`}>
+                                              {r.unset > 0 ? r.unset.toLocaleString() : '-'}
+                                            </td>
+                                          )}
+                                          {months.map(m => (
+                                            <td key={m} className={`text-center py-3 px-3 ${(r.byMonth[m] || 0) > 0 ? 'font-bold text-blue-700' : 'text-slate-300'}`}>
+                                              {(r.byMonth[m] || 0) > 0 ? r.byMonth[m].toLocaleString() : '-'}
+                                            </td>
+                                          ))}
+                                          <td className="text-right py-3 px-3 font-bold text-slate-900 bg-yellow-50">{rowTotalQty.toLocaleString()}</td>
+                                          <td className="text-right py-3 px-3 font-bold text-blue-600 bg-yellow-50">{rowTotalAmount.toLocaleString()}원</td>
+                                        </tr>
+                                      );
+                                    })}
+                                    {/* 합계 행 */}
+                                    <tr className="bg-slate-200 font-bold border-t-2 border-slate-400 sticky bottom-0">
+                                      <td className="py-4 px-3 text-slate-900 sticky left-0 bg-slate-200" colSpan="5">📊 합계 (수량)</td>
+                                      {billingViewMode === 'billing' && (
+                                        <td className="text-center py-4 px-3 text-amber-700 bg-amber-100">{totals.unset.toLocaleString()}</td>
+                                      )}
+                                      {months.map(m => (
+                                        <td key={m} className="text-center py-4 px-3 text-blue-700">{(totals.byMonth[m] || 0).toLocaleString()}</td>
+                                      ))}
+                                      <td className="text-right py-4 px-3 text-slate-900 bg-yellow-200">
+                                        {(totals.unset + months.reduce((s, m) => s + (totals.byMonth[m] || 0), 0)).toLocaleString()}
+                                      </td>
+                                      <td className="text-right py-4 px-3 text-blue-700 bg-yellow-200">
+                                        {(totals.unsetAmount + totals.unsetGrind + months.reduce((s, m) => s + (totals.byMonthAmount[m] || 0) + (totals.byMonthGrind[m] || 0), 0)).toLocaleString()}원
+                                      </td>
+                                    </tr>
+                                    {/* 도금비 합계 행 */}
+                                    <tr className="bg-blue-50 font-semibold">
+                                      <td className="py-3 px-3 text-blue-800 sticky left-0 bg-blue-50" colSpan="5">💰 도금비 합계</td>
+                                      {billingViewMode === 'billing' && (
+                                        <td className="text-right py-3 px-3 text-blue-700">{totals.unsetAmount.toLocaleString()}원</td>
+                                      )}
+                                      {months.map(m => (
+                                        <td key={m} className="text-right py-3 px-3 text-blue-700 text-xs">{(totals.byMonthAmount[m] || 0).toLocaleString()}</td>
+                                      ))}
+                                      <td className="py-3 px-3" colSpan="2"></td>
+                                    </tr>
+                                    {/* 연마비 합계 행 */}
+                                    <tr className="bg-emerald-50 font-semibold">
+                                      <td className="py-3 px-3 text-emerald-800 sticky left-0 bg-emerald-50" colSpan="5">🔧 연마비 합계</td>
+                                      {billingViewMode === 'billing' && (
+                                        <td className="text-right py-3 px-3 text-emerald-700">{totals.unsetGrind.toLocaleString()}원</td>
+                                      )}
+                                      {months.map(m => (
+                                        <td key={m} className="text-right py-3 px-3 text-emerald-700 text-xs">{(totals.byMonthGrind[m] || 0).toLocaleString()}</td>
+                                      ))}
+                                      <td className="py-3 px-3" colSpan="2"></td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+
+                            {/* 안내 */}
+                            <div className="mt-4 text-xs text-slate-500 space-y-1">
+                              <p>💡 도금/연마 단가는 9-1 상품 마스터에서 자동 적용됩니다. 단가 미입력 시 "⚠️ 미입력" 표시되며, 9-1에서 단가를 입력해주세요.</p>
+                              <p>💡 연마 불필요 제품(꼬임슬림 등)은 연마 단가가 "연마X"로 표시됩니다.</p>
+                              {billingViewMode === 'billing' && (
+                                <p>💡 청구일 기준 조회: 1-4 작업내역에서 색상별 청구일을 입력하면 해당 월로 자동 이동합니다.</p>
+                              )}
+                            </div>
                           </div>
                         );
                       })()}
@@ -9243,7 +9382,7 @@ ${list}` }]
                               <h3 className="text-base font-black text-black tracking-tight">🖨️ 라벨 인쇄 + 디자인 편집기</h3>
                               <span className="bg-black text-white text-[10px] font-black px-2 py-0.5 tracking-widest" style={{borderRadius:'4px'}}>EDITOR</span>
                             </div>
-                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260501.01 · 헬퍼 자동 인쇄 · 한글 100%</div>
+                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260501.03 · 헬퍼 자동 인쇄 · 한글 100%</div>
                           </div>
                           <button onClick={()=>setBarcodePrintPopup(null)} className="text-neutral-400 hover:text-black text-xl font-black">✕</button>
                         </div>
@@ -11283,7 +11422,7 @@ ${list}` }]
                             </div>
                             <div className="flex gap-2">
                               <button onClick={() => {
-                                // 📤 봇 동기화 v20260501.01: 가벼운 동기화 (썸네일 제외)
+                                // 📤 봇 동기화 v20260501.03: 가벼운 동기화 (썸네일 제외)
                                 // - 썸네일 제외 → 파일 크기 작아짐 → 보안 차단 우회
                                 // - 부자재 바코드 통합
                                 const bcCount = masterProducts.filter(p => p.barcodes && Object.values(p.barcodes).some(v => v && v.length === 11)).length;
@@ -11297,7 +11436,7 @@ ${list}` }]
                                 const filteredProducts = masterProducts.filter(p => p.barcodes && Object.values(p.barcodes).some(v => v && v.length === 11));
                                 
                                 const botData = {
-                                  version: 'v20260501.01',
+                                  version: 'v20260501.03',
                                   exported_at: new Date().toISOString(),
                                   exported_by: 'LACEROOM 9-1',
                                   product_count: 0,
@@ -13482,7 +13621,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260501.01</p>
+                <p>© 2026 LACEROOM통합관리 v20260501.03</p>
               </footer>
               
               {/* v10.06: 시스템 상태 토스트 (자동 알림) */}
