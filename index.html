@@ -856,7 +856,7 @@ ${list}` }]
           // 수정 모드 (v09.10): 도금작업 수정 중인 ID 저장. null이면 신규 작성 모드
           const [editingPlatingOrderId, setEditingPlatingOrderId] = useState(null);
 
-          // 📊 월별 누적 도금 내역 (v20260501.05) - 2번 탭 전용 state
+          // 📊 월별 누적 도금 내역 (v20260501.07) - 2번 탭 전용 state
           const [billingViewMode, setBillingViewMode] = useState('order'); // 'order' | 'billing'
           const [costStartMonth, setCostStartMonth] = useState(() => {
             const today = new Date();
@@ -1441,7 +1441,7 @@ ${list}` }]
                         qty: parseInt(item.qty) || 0,
                         received: existingItem?.received || false,
                         receivedDate: existingItem?.receivedDate || '',
-                        billingDate: existingItem?.billingDate || ''  // 🟦 v20260501.05: 색상별 청구일 보존
+                        billingDate: existingItem?.billingDate || ''  // 🟦 v20260501.07: 색상별 청구일 보존
                       };
                     }),
                     total: product.items.reduce((sum, item) => sum + (parseInt(item.qty) || 0), 0)
@@ -1550,7 +1550,7 @@ ${list}` }]
                 id: Date.now(),
                 date: orderForm.date,
                 orderNum,
-                billingDate: '',  // 🟦 도금공장 청구일 (v20260501.05) - 5월부터 철저 입력
+                billingDate: '',  // 🟦 도금공장 청구일 (v20260501.07) - 5월부터 철저 입력
                 products: orderForm.products.map(product => ({
                   productId: product.productId,
                   productName: product.productName,
@@ -1562,7 +1562,7 @@ ${list}` }]
                     qty: parseInt(item.qty) || 0,
                     received: false,
                     receivedDate: '',
-                    billingDate: ''  // 🟦 v20260501.05: 색상별 도금공장 청구일
+                    billingDate: ''  // 🟦 v20260501.07: 색상별 도금공장 청구일
                   })),
                   total: product.items.reduce((sum, item) => sum + (parseInt(item.qty) || 0), 0)
                 })),
@@ -2422,7 +2422,7 @@ ${list}` }]
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260501.05</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260501.07</div>
                   </div>
                   
                   {/* v10.06: 헬퍼/봇 상태등 */}
@@ -2520,7 +2520,7 @@ ${list}` }]
                         labelPresets,                // ← 라벨 프리셋 (NEW)
                         nameChangeLogs,              // ← 상품명 변경이력 (v10.01)
                         exportDate: new Date().toISOString(),
-                        appVersion: 'v20260501.05'
+                        appVersion: 'v20260501.07'
                       };
                       const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
                       const url = URL.createObjectURL(blob);
@@ -4598,7 +4598,7 @@ ${list}` }]
                                           </div>
 
                                           <div className="flex items-center gap-2">
-                                            {/* 🟦 색상별 도금공장 청구일 (v20260501.05) */}
+                                            {/* 🟦 색상별 도금공장 청구일 (v20260501.07) */}
                                             <div className="flex items-center bg-blue-500 border-2 border-blue-300 rounded-lg px-2 py-1 shadow-sm" title="이 색상의 도금공장 청구일">
                                               <span className="text-white text-[10px] font-bold mr-1.5">📅 청구일</span>
                                               <input
@@ -5030,7 +5030,7 @@ ${list}` }]
                 </>
                 )}
 
-                {/* 월별 누적 도금 내역 탭 (v20260501.05) */}
+                {/* 월별 누적 도금 내역 탭 (v20260501.07) */}
                 {activeMainTab === 'cost' && (
                   <div className="space-y-6">
                     <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8">
@@ -5087,13 +5087,35 @@ ${list}` }]
                         };
 
                         // 색상별 도금 단가 조회
+                        // v20260501.07: 작업내역의 공장색상(item.color='대금', item.finish='유광')을
+                        // 9-1 판매색상키('골드(유광)')로 역변환하여 colorPlatingCosts에서 조회
                         const getPlatingCost = (costs, color, finish) => {
                           const { colorPlatingCosts, platingCostsLegacy } = costs;
-                          // 신규 구조 (colorPlatingCosts) 우선
+                          
+                          // 1) 공장색상 → 판매색상 역변환 시도 (apply_costs.js로 적용한 단가 매칭용)
+                          // 예: '대금'/'유광' → '골드(유광)', '니켈'/'반무광' → '실버(반광)'
+                          let saleColorKey = null;
+                          if (typeof SALE_TO_FACTORY_MAP !== 'undefined') {
+                            for (const [saleColor, factory] of Object.entries(SALE_TO_FACTORY_MAP)) {
+                              if (factory.factoryColor === color && factory.factoryFinish === (finish || '')) {
+                                saleColorKey = saleColor;
+                                break;
+                              }
+                            }
+                          }
+                          
+                          // 2) 판매색상키로 colorPlatingCosts 조회 (1순위)
+                          if (saleColorKey && colorPlatingCosts[saleColorKey]) {
+                            const cost = parseFloat(colorPlatingCosts[saleColorKey]);
+                            if (cost > 0) return cost;
+                          }
+                          
+                          // 3) 기존 방식 (구버전 호환): factoryColor(factoryFinish) 형식
                           const colorKey = finish ? `${color}(${finish === '반무광' ? '반광' : finish})` : color;
                           let cost = parseFloat(colorPlatingCosts[colorKey]) || parseFloat(colorPlatingCosts[color]) || 0;
                           if (cost > 0) return cost;
-                          // 레거시 fallback
+                          
+                          // 4) 레거시 fallback (1-1 platingCosts 구조)
                           const colorDef = COLOR_DEFS.find(c => c.name === color);
                           if (platingCostsLegacy && colorDef) {
                             if (colorDef.finishType === 'both') {
@@ -9432,7 +9454,7 @@ ${list}` }]
                               <h3 className="text-base font-black text-black tracking-tight">🖨️ 라벨 인쇄 + 디자인 편집기</h3>
                               <span className="bg-black text-white text-[10px] font-black px-2 py-0.5 tracking-widest" style={{borderRadius:'4px'}}>EDITOR</span>
                             </div>
-                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260501.05 · 헬퍼 자동 인쇄 · 한글 100%</div>
+                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260501.07 · 헬퍼 자동 인쇄 · 한글 100%</div>
                           </div>
                           <button onClick={()=>setBarcodePrintPopup(null)} className="text-neutral-400 hover:text-black text-xl font-black">✕</button>
                         </div>
@@ -10467,7 +10489,7 @@ ${list}` }]
                                               {/* 색상 카드 리스트 - 2열 그리드, 무신사 스타일 */}
                                               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                               {(() => {
-                                                // v20260501.05: 좌=유광, 우=반광 짝맞추기 정렬
+                                                // v20260501.07: 좌=유광, 우=반광 짝맞추기 정렬
                                                 // 색상 그룹별 (골드→실버→블랙→다크골드→로즈골드), 유광 다음 반광
                                                 // 단독 색상(14K도금, 은): 마지막에 왼쪽 단독 배치
                                                 const colorOrder = [
@@ -10861,7 +10883,20 @@ ${list}` }]
                                             {/* v10.03: 색상카드의 도금 단가 요약 (읽기전용) */}
                                             {(() => {
                                               const cpc = form.colorPlatingCosts || {};
-                                              const allColors = form.colors || [];
+                                              // v20260501.07: 좌=유광 우=반광 짝맞추기 정렬 적용
+                                              const colorOrder = [
+                                                '골드(유광)','골드(반광)',
+                                                '실버(유광)','실버(반광)',
+                                                '블랙(유광)','블랙(반광)',
+                                                '다크골드(유광)','다크골드(반광)',
+                                                '로즈골드(유광)','로즈골드(반광)',
+                                                '14K도금','은','흑무광'
+                                              ];
+                                              const allColors = [...(form.colors || [])].sort((a,b) => {
+                                                const ai = colorOrder.indexOf(a);
+                                                const bi = colorOrder.indexOf(b);
+                                                return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+                                              });
                                               const enteredColors = allColors.filter(c => cpc[c] && cpc[c] !== '' && Number(cpc[c]) > 0);
                                               const missingColors = allColors.filter(c => !cpc[c] || cpc[c] === '' || Number(cpc[c]) <= 0);
 
@@ -10881,18 +10916,21 @@ ${list}` }]
                                                     </div>
                                                   ) : (
                                                     <div className="grid grid-cols-2 gap-1">
-                                                      {enteredColors.map(c => (
-                                                        <div key={c} className="flex justify-between items-center bg-amber-50 border border-amber-200 px-2 py-1 text-[11px]" style={{borderRadius:'2px'}}>
-                                                          <span className="text-neutral-700 truncate">{c}</span>
-                                                          <span className="font-bold text-amber-900 ml-1">{Number(cpc[c]).toLocaleString()}원</span>
-                                                        </div>
-                                                      ))}
-                                                      {missingColors.map(c => (
-                                                        <div key={c} className="flex justify-between items-center bg-neutral-100 border border-neutral-200 px-2 py-1 text-[11px]" style={{borderRadius:'2px'}}>
-                                                          <span className="text-neutral-400 truncate">{c}</span>
-                                                          <span className="text-neutral-400 ml-1">미입력</span>
-                                                        </div>
-                                                      ))}
+                                                      {/* v20260501.07: 입력/미입력 분리 안 하고 정렬 순서대로 표시 (짝맞춤 유지) */}
+                                                      {allColors.map(c => {
+                                                        const hasValue = cpc[c] && cpc[c] !== '' && Number(cpc[c]) > 0;
+                                                        return hasValue ? (
+                                                          <div key={c} className="flex justify-between items-center bg-amber-50 border border-amber-200 px-2 py-1 text-[11px]" style={{borderRadius:'2px'}}>
+                                                            <span className="text-neutral-700 truncate">{c}</span>
+                                                            <span className="font-bold text-amber-900 ml-1">{Number(cpc[c]).toLocaleString()}원</span>
+                                                          </div>
+                                                        ) : (
+                                                          <div key={c} className="flex justify-between items-center bg-neutral-100 border border-neutral-200 px-2 py-1 text-[11px]" style={{borderRadius:'2px'}}>
+                                                            <span className="text-neutral-400 truncate">{c}</span>
+                                                            <span className="text-neutral-400 ml-1">미입력</span>
+                                                          </div>
+                                                        );
+                                                      })}
                                                     </div>
                                                   )}
                                                 </div>
@@ -11392,7 +11430,7 @@ ${list}` }]
                               if (!currentColors.has(c)) {
                                 setForm(p => {
                                   const newState = {...p, colors: [...(p.colors||[]), c]};
-                                  // 🟦 v20260501.05: 반광 색상 추가 시 자동 ★ 라벨 입력
+                                  // 🟦 v20260501.07: 반광 색상 추가 시 자동 ★ 라벨 입력
                                   // 단, 기존 라벨이 있으면 보존
                                   if (c.includes('(반광)')) {
                                     const existing = (p.customColorNames || {})[c];
@@ -11492,7 +11530,7 @@ ${list}` }]
                             </div>
                             <div className="flex gap-2">
                               <button onClick={() => {
-                                // 📤 봇 동기화 v20260501.05: 가벼운 동기화 (썸네일 제외)
+                                // 📤 봇 동기화 v20260501.07: 가벼운 동기화 (썸네일 제외)
                                 // - 썸네일 제외 → 파일 크기 작아짐 → 보안 차단 우회
                                 // - 부자재 바코드 통합
                                 const bcCount = masterProducts.filter(p => p.barcodes && Object.values(p.barcodes).some(v => v && v.length === 11)).length;
@@ -11506,7 +11544,7 @@ ${list}` }]
                                 const filteredProducts = masterProducts.filter(p => p.barcodes && Object.values(p.barcodes).some(v => v && v.length === 11));
                                 
                                 const botData = {
-                                  version: 'v20260501.05',
+                                  version: 'v20260501.07',
                                   exported_at: new Date().toISOString(),
                                   exported_by: 'LACEROOM 9-1',
                                   product_count: 0,
@@ -13691,7 +13729,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260501.05</p>
+                <p>© 2026 LACEROOM통합관리 v20260501.07</p>
               </footer>
               
               {/* v10.06: 시스템 상태 토스트 (자동 알림) */}
