@@ -117,6 +117,27 @@
 
         const formatDate = (date) => date.toISOString().split('T')[0];
 
+        // 🟦 v20260502.01: 곱창밴드 자주 쓰는 색상/금속라벨 자동 학습 (빈도순)
+        const getFrequentGocchangColors = (masterProducts) => {
+          const counter = {};
+          (masterProducts||[]).filter(p => p.type === 'gocchang').forEach(p => {
+            (p.colors || []).forEach(c => {
+              if (c) counter[c] = (counter[c] || 0) + 1;
+            });
+          });
+          return Object.entries(counter).sort((a,b) => b[1] - a[1]).slice(0, 12).map(([c]) => c);
+        };
+        const getFrequentMetalLabels = (masterProducts) => {
+          const counter = {};
+          (masterProducts||[]).filter(p => p.type === 'gocchang').forEach(p => {
+            const ml = p.metalLabels || {};
+            Object.values(ml).forEach(label => {
+              if (label && label.trim()) counter[label.trim()] = (counter[label.trim()] || 0) + 1;
+            });
+          });
+          return Object.entries(counter).sort((a,b) => b[1] - a[1]).slice(0, 8).map(([c]) => c);
+        };
+
         // v10.03: 도금단가 완성 여부 체크 (9-1 황금점 표시용)
         // 조건: grindCost(연마) 입력 + 모든 색상에 colorPlatingCosts 입력
         const isCostComplete = (master, linkedProduct) => {
@@ -472,6 +493,23 @@
                   localStorage.setItem('master_products', JSON.stringify(mp));
                   localStorage.setItem('master_migrated_v1', '1');
                 } catch(e) { console.warn('마이그레이션 실패:', e); }
+              }
+
+              // 🟦 v20260502.01: 곱창밴드 metalLabels 필드 추가 마이그레이션
+              const gocchangMigrated = localStorage.getItem('gocchang_metalLabels_migrated');
+              if (!gocchangMigrated) {
+                try {
+                  let changed = false;
+                  mp = mp.map(p => {
+                    if (p.type === 'gocchang' && !p.metalLabels) {
+                      changed = true;
+                      return { ...p, metalLabels: {} };
+                    }
+                    return p;
+                  });
+                  if (changed) localStorage.setItem('master_products', JSON.stringify(mp));
+                  localStorage.setItem('gocchang_metalLabels_migrated', '1');
+                } catch(e) { console.warn('곱창밴드 마이그레이션 실패:', e); }
               }
               return mp;
             } catch { return []; }
@@ -856,7 +894,7 @@ ${list}` }]
           // 수정 모드 (v09.10): 도금작업 수정 중인 ID 저장. null이면 신규 작성 모드
           const [editingPlatingOrderId, setEditingPlatingOrderId] = useState(null);
 
-          // 📊 월별 누적 도금 내역 (v20260501.09) - 2번 탭 전용 state
+          // 📊 월별 누적 도금 내역 (v20260502.01) - 2번 탭 전용 state
           const [billingViewMode, setBillingViewMode] = useState('order'); // 'order' | 'billing'
           const [costStartMonth, setCostStartMonth] = useState(() => {
             const today = new Date();
@@ -1441,7 +1479,7 @@ ${list}` }]
                         qty: parseInt(item.qty) || 0,
                         received: existingItem?.received || false,
                         receivedDate: existingItem?.receivedDate || '',
-                        billingDate: existingItem?.billingDate || ''  // 🟦 v20260501.09: 색상별 청구일 보존
+                        billingDate: existingItem?.billingDate || ''  // 🟦 v20260502.01: 색상별 청구일 보존
                       };
                     }),
                     total: product.items.reduce((sum, item) => sum + (parseInt(item.qty) || 0), 0)
@@ -1550,7 +1588,7 @@ ${list}` }]
                 id: Date.now(),
                 date: orderForm.date,
                 orderNum,
-                billingDate: '',  // 🟦 도금공장 청구일 (v20260501.09) - 5월부터 철저 입력
+                billingDate: '',  // 🟦 도금공장 청구일 (v20260502.01) - 5월부터 철저 입력
                 products: orderForm.products.map(product => ({
                   productId: product.productId,
                   productName: product.productName,
@@ -1562,7 +1600,7 @@ ${list}` }]
                     qty: parseInt(item.qty) || 0,
                     received: false,
                     receivedDate: '',
-                    billingDate: ''  // 🟦 v20260501.09: 색상별 도금공장 청구일
+                    billingDate: ''  // 🟦 v20260502.01: 색상별 도금공장 청구일
                   })),
                   total: product.items.reduce((sum, item) => sum + (parseInt(item.qty) || 0), 0)
                 })),
@@ -2422,7 +2460,7 @@ ${list}` }]
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260501.09</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260502.01</div>
                   </div>
                   
                   {/* v10.06: 헬퍼/봇 상태등 */}
@@ -2520,7 +2558,7 @@ ${list}` }]
                         labelPresets,                // ← 라벨 프리셋 (NEW)
                         nameChangeLogs,              // ← 상품명 변경이력 (v10.01)
                         exportDate: new Date().toISOString(),
-                        appVersion: 'v20260501.09'
+                        appVersion: 'v20260502.01'
                       };
                       const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
                       const url = URL.createObjectURL(blob);
@@ -3521,7 +3559,7 @@ ${list}` }]
                   <div className="bg-white border-b border-slate-200 px-4 py-2 sticky top-0 z-40">
                     <div className="flex space-x-1">
                       {[
-                        // v20260501.09: 1-1 색상별 단가 탭 삭제 (9-1 상품 마스터로 통합)
+                        // v20260502.01: 1-1 색상별 단가 탭 삭제 (9-1 상품 마스터로 통합)
                         ['order', '작업 지시서', '1-2'],
                         ['rework', '재도금 요청', '1-3'],
                         ['history', '작업 내역', '1-4'],
@@ -3539,7 +3577,7 @@ ${list}` }]
                 {/* 도금작업지시서 탭 */}
                 {activeMainTab === 'plating' && (
                   <>
-                {/* 1-1 색상별 단가 탭 v20260501.09에서 삭제 (9-1 상품 마스터로 통합) */}
+                {/* 1-1 색상별 단가 탭 v20260502.01에서 삭제 (9-1 상품 마스터로 통합) */}
 
                 {activeTab === 'order' && (
                   <div className="space-y-6">
@@ -4181,7 +4219,7 @@ ${list}` }]
                                           </div>
 
                                           <div className="flex items-center gap-2">
-                                            {/* 🟦 색상별 도금공장 청구일 (v20260501.09) */}
+                                            {/* 🟦 색상별 도금공장 청구일 (v20260502.01) */}
                                             <div className="flex items-center bg-blue-500 border-2 border-blue-300 rounded-lg px-2 py-1 shadow-sm" title="이 색상의 도금공장 청구일">
                                               <span className="text-white text-[10px] font-bold mr-1.5">📅 청구일</span>
                                               <input
@@ -4613,7 +4651,7 @@ ${list}` }]
                 </>
                 )}
 
-                {/* 월별 누적 도금 내역 탭 (v20260501.09) */}
+                {/* 월별 누적 도금 내역 탭 (v20260502.01) */}
                 {activeMainTab === 'cost' && (
                   <div className="space-y-6">
                     <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8">
@@ -4670,7 +4708,7 @@ ${list}` }]
                         };
 
                         // 색상별 도금 단가 조회
-                        // v20260501.09: 작업내역의 공장색상(item.color='대금', item.finish='유광')을
+                        // v20260502.01: 작업내역의 공장색상(item.color='대금', item.finish='유광')을
                         // 9-1 판매색상키('골드(유광)')로 역변환하여 colorPlatingCosts에서 조회
                         const getPlatingCost = (costs, color, finish) => {
                           const { colorPlatingCosts, platingCostsLegacy } = costs;
@@ -9037,7 +9075,7 @@ ${list}` }]
                               <h3 className="text-base font-black text-black tracking-tight">🖨️ 라벨 인쇄 + 디자인 편집기</h3>
                               <span className="bg-black text-white text-[10px] font-black px-2 py-0.5 tracking-widest" style={{borderRadius:'4px'}}>EDITOR</span>
                             </div>
-                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260501.09 · 헬퍼 자동 인쇄 · 한글 100%</div>
+                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260502.01 · 헬퍼 자동 인쇄 · 한글 100%</div>
                           </div>
                           <button onClick={()=>setBarcodePrintPopup(null)} className="text-neutral-400 hover:text-black text-xl font-black">✕</button>
                         </div>
@@ -10072,7 +10110,7 @@ ${list}` }]
                                               {/* 색상 카드 리스트 - 2열 그리드, 무신사 스타일 */}
                                               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                               {(() => {
-                                                // v20260501.09: 좌=유광, 우=반광 짝맞추기 정렬
+                                                // v20260502.01: 좌=유광, 우=반광 짝맞추기 정렬
                                                 // 색상 그룹별 (골드→실버→블랙→다크골드→로즈골드), 유광 다음 반광
                                                 // 단독 색상(14K도금, 은): 마지막에 왼쪽 단독 배치
                                                 const colorOrder = [
@@ -10299,41 +10337,204 @@ ${list}` }]
                                                 <div className="text-center text-xs text-neutral-500 py-3 border border-dashed border-neutral-300" style={{borderRadius:'2px'}}>위의 빠른 선택 또는 + 카드로 색상을 추가하세요</div>
                                               )}
                                             </div>
-                                          ) : form.hasFabricInfo === false ? (
-                                            // 원단 정보 없음 - 직접 입력
-                                            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
-                                              <div className="text-xs text-amber-700 mb-2">📝 색상을 직접 입력해주세요 (쉼표 또는 엔터로 구분)</div>
-                                              <textarea
-                                                value={form._colorsText !== undefined ? form._colorsText : (form.colors||[]).join(', ')}
-                                                onChange={e=>{
-                                                  const text = e.target.value;
-                                                  const colors = text.split(/[,\n]/).map(c=>c.trim()).filter(c=>c);
-                                                  setForm(p=>({...p, _colorsText: text, colors}));
-                                                }}
-                                                placeholder="예: 네이비, 블랙, 화이트&#10;또는 한 줄에 하나씩"
-                                                rows={2}
-                                                className="w-full px-3 py-2 rounded-lg border-2 border-amber-200 focus:border-amber-400 outline-none text-sm bg-white resize-none"/>
-                                              {(form.colors||[]).length > 0 && (
-                                                <div className="mt-2 flex flex-wrap gap-1">
-                                                  <span className="text-[10px] text-amber-600 font-bold">✓ 인식된 색상 {form.colors.length}개:</span>
-                                                  {form.colors.map(c=>(
-                                                    <span key={c} className="bg-white border border-amber-300 text-amber-700 text-xs px-2 py-0.5 rounded-full">{c}</span>
-                                                  ))}
+                                          ) : (
+                                            // 🟦 v20260502.01: 곱창밴드 - 헤어핀처럼 색상 카드 시스템 (원단정보 유무 무관)
+                                            <div className="space-y-2">
+                                              {/* 안내 */}
+                                              {form.hasFabricInfo === false ? (
+                                                <div className="bg-amber-50 border border-amber-200 px-3 py-2 text-[11px] text-amber-800" style={{borderRadius:'2px'}}>
+                                                  📝 <strong>원단 정보 없음</strong> - 색상을 직접 입력하세요. 나중에 "원단 정보 있음"으로 변경하면 거래처 원단과 매칭할 수 있어요.
+                                                </div>
+                                              ) : (
+                                                <div className="bg-pink-50 border border-pink-200 px-3 py-2 text-[11px] text-pink-800" style={{borderRadius:'2px'}}>
+                                                  🎨 <strong>원단 정보 있음</strong> - 색상을 직접 추가하거나, 아래 "원단 연결"에서 거래처 원단의 색상과 매칭할 수 있어요.
                                                 </div>
                                               )}
-                                            </div>
-                                          ) : (
-                                            <div className="bg-neutral-100 border border-neutral-300 p-3 text-xs text-neutral-700" style={{borderRadius:'2px'}}>
-                                              곱창밴드는 <strong className="text-black">"원단 연결"</strong> 섹션 하단의 색상 매칭에서 관리됩니다.<br/>
-                                              원단을 먼저 선택하면 거래처 색상에서 체크 + 우리 색상명을 입력할 수 있어요.
-                                              {(form.colors||[]).length > 0 && (
-                                                <div className="mt-2 pt-2 border-t border-neutral-300">
-                                                  <div className="font-bold text-black">현재 등록된 색상 ({form.colors.length}개):</div>
-                                                  <div className="flex flex-wrap gap-1 mt-1">
-                                                    {form.colors.map(c=>(
-                                                      <span key={c} className="bg-white border border-neutral-400 text-black px-2 py-0.5 text-[10px] font-medium" style={{borderRadius:'2px'}}>{c}</span>
-                                                    ))}
+
+                                              {/* 색상 카드 그리드 */}
+                                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                                {(() => {
+                                                  // 자주 쓰는 색상 순 정렬
+                                                  const freq = getFrequentGocchangColors(masterProducts);
+                                                  const sortedColors = [...(form.colors||[])].sort((a,b) => {
+                                                    const ai = freq.indexOf(a);
+                                                    const bi = freq.indexOf(b);
+                                                    if (ai === -1 && bi === -1) return 0;
+                                                    if (ai === -1) return 1;
+                                                    if (bi === -1) return -1;
+                                                    return ai - bi;
+                                                  });
+                                                  
+                                                  return sortedColors.map(color => {
+                                                    const barcodes = form.barcodes || {};
+                                                    const positions = form.positions || {};
+                                                    const customColorNames = form.customColorNames || {};
+                                                    const metalLabels = form.metalLabels || {};
+                                                    const colorMapping = form._colorMapping || {};
+                                                    const isLocked = !((form.unlockedColors||[]).includes(color));
+                                                    const isFocused = (form._focusedColor === color);
+                                                    const val = barcodes[color] || '';
+                                                    const pos = positions[color] || '';
+                                                    const customName = customColorNames[color] || '';
+                                                    const metalLabel = metalLabels[color] || '';
+                                                    
+                                                    // 매칭된 거래처 색상 + 원단 정보 찾기
+                                                    let matchedSupplierColor = '';
+                                                    Object.entries(colorMapping).forEach(([sup, our]) => {
+                                                      if (our === color) matchedSupplierColor = sup;
+                                                    });
+                                                    
+                                                    const isSelected = (form._selectedColors||[]).includes(color);
+                                                    const cardBg = isFocused ? 'bg-neutral-900 text-white border-neutral-900' : (isSelected ? 'bg-pink-50 border-pink-400' : 'bg-white border-neutral-300');
+                                                    const labelTextColor = isFocused ? 'text-neutral-300' : 'text-neutral-600';
+                                                    const valueTextColor = isFocused ? 'text-white' : 'text-black';
+                                                    const inputBgClass = isFocused ? 'border-neutral-700 bg-neutral-800 text-white placeholder-neutral-500' : 'border-neutral-300 bg-white text-black';
+                                                    
+                                                    return (
+                                                      <div key={color} 
+                                                        onClick={()=>setForm(p=>({...p, _focusedColor: p._focusedColor === color ? null : color}))}
+                                                        className={`border ${cardBg} p-3 cursor-pointer transition-all min-h-[180px]`}
+                                                        style={{borderRadius:'2px'}}>
+                                                        {/* 헤더: 체크박스 + 색상명 + EDIT/X */}
+                                                        <div className="flex items-center gap-1.5 mb-2">
+                                                          <input type="checkbox" checked={isSelected}
+                                                            onClick={(e)=>e.stopPropagation()}
+                                                            onChange={e=>{
+                                                              const checked = e.target.checked;
+                                                              setForm(p=>({
+                                                                ...p,
+                                                                _selectedColors: checked
+                                                                  ? [...(p._selectedColors||[]), color]
+                                                                  : (p._selectedColors||[]).filter(c=>c!==color)
+                                                              }));
+                                                            }}
+                                                            className="w-3.5 h-3.5 accent-pink-500"
+                                                            title="일괄 작업용 선택"/>
+                                                          <span className={`flex-1 text-sm font-bold truncate ${valueTextColor}`}>{color}</span>
+                                                          <button onClick={(e)=>{
+                                                            e.stopPropagation();
+                                                            setForm(p=>({
+                                                              ...p,
+                                                              unlockedColors: isLocked ? [...(p.unlockedColors||[]), color] : (p.unlockedColors||[]).filter(c=>c!==color)
+                                                            }));
+                                                          }} className={`text-[10px] px-2 py-0.5 font-bold ${
+                                                            isLocked ? 'bg-amber-100 text-amber-700 border border-amber-300' : 'bg-green-100 text-green-700 border border-green-400'
+                                                          }`} style={{borderRadius:'2px'}}>
+                                                            {isLocked ? '🔒 EDIT' : '✏️ ON'}
+                                                          </button>
+                                                          <button onClick={(e)=>{
+                                                            e.stopPropagation();
+                                                            if (isLocked) { alert('잠금 상태입니다.\nEDIT으로 잠금 해제 후 제거하세요.'); return; }
+                                                            if (!confirm(`"${color}" 색상을 정말 제거할까요?\n\n바코드, 위치, 라벨명, 금속라벨 정보도 함께 삭제됩니다.`)) return;
+                                                            setForm(p=>{
+                                                              const newColors = (p.colors||[]).filter(c=>c!==color);
+                                                              const newBarcodes = {...(p.barcodes||{})}; delete newBarcodes[color];
+                                                              const newPositions = {...(p.positions||{})}; delete newPositions[color];
+                                                              const newCustom = {...(p.customColorNames||{})}; delete newCustom[color];
+                                                              const newMetal = {...(p.metalLabels||{})}; delete newMetal[color];
+                                                              const newSelected = (p._selectedColors||[]).filter(c=>c!==color);
+                                                              const newUnlocked = (p.unlockedColors||[]).filter(c=>c!==color);
+                                                              // 거래처 매핑에서도 제거
+                                                              const newMapping = {...(p._colorMapping||{})};
+                                                              Object.keys(newMapping).forEach(k => { if (newMapping[k] === color) delete newMapping[k]; });
+                                                              return {...p, colors: newColors, barcodes: newBarcodes, positions: newPositions, customColorNames: newCustom, metalLabels: newMetal, _selectedColors: newSelected, unlockedColors: newUnlocked, _colorMapping: newMapping};
+                                                            });
+                                                          }} className={`text-[11px] w-6 h-6 flex items-center justify-center font-bold ${
+                                                            isLocked ? 'bg-neutral-100 text-neutral-300 cursor-not-allowed' : 'bg-red-100 text-red-700 hover:bg-red-200 border border-red-300'
+                                                          }`} style={{borderRadius:'2px'}} title={isLocked?'잠금 상태 - 삭제 불가':'제거'}>×</button>
+                                                        </div>
+
+                                                        {/* 매칭된 거래처 색상 표시 */}
+                                                        {matchedSupplierColor && (
+                                                          <div className={`text-[10px] mb-1.5 truncate ${labelTextColor}`}>
+                                                            🧵 {form.fabricName || '원단'} <span className={`font-bold ${valueTextColor}`}>({matchedSupplierColor})</span>
+                                                          </div>
+                                                        )}
+
+                                                        {/* 바코드 */}
+                                                        <div className="flex items-center gap-1 mb-1.5 min-w-0">
+                                                          <span className={`text-[10px] w-9 shrink-0 font-medium ${labelTextColor}`}>바코드</span>
+                                                          <input type="text" value={val}
+                                                            disabled={isLocked}
+                                                            onClick={(e)=>e.stopPropagation()}
+                                                            onChange={e=>{
+                                                              const v = e.target.value.replace(/\D/g,'').slice(0,11);
+                                                              setForm(p=>({...p, barcodes: {...(p.barcodes||{}), [color]: v}, _focusedColor: color}));
+                                                            }}
+                                                            placeholder={isLocked?'🔒 잠김':'11자리'}
+                                                            maxLength={11}
+                                                            className={`flex-1 min-w-0 px-2 py-1 border text-xs font-mono outline-none ${inputBgClass}`}
+                                                            style={{borderRadius:'2px'}}/>
+                                                        </div>
+
+                                                        {/* 진열위치 */}
+                                                        <div className="flex items-center gap-1 mb-1.5 min-w-0">
+                                                          <span className={`text-[10px] w-9 shrink-0 font-medium ${labelTextColor}`}>위치</span>
+                                                          <input type="text" value={pos}
+                                                            disabled={isLocked}
+                                                            onClick={(e)=>e.stopPropagation()}
+                                                            onChange={e=>{
+                                                              setForm(p=>({...p, positions: {...(p.positions||{}), [color]: e.target.value.slice(0,8)}, _focusedColor: color}));
+                                                            }}
+                                                            placeholder={isLocked?'🔒':'예: 노1'}
+                                                            maxLength={8}
+                                                            className={`flex-1 min-w-0 px-2 py-1 border text-xs outline-none ${inputBgClass}`}
+                                                            style={{borderRadius:'2px'}}/>
+                                                        </div>
+
+                                                        {/* 라벨명 */}
+                                                        <div className="flex items-center gap-1 mb-1.5 min-w-0">
+                                                          <span className={`text-[10px] w-9 shrink-0 font-medium ${labelTextColor}`}>라벨</span>
+                                                          <input type="text" value={customName}
+                                                            disabled={isLocked}
+                                                            onClick={(e)=>e.stopPropagation()}
+                                                            onChange={e=>{
+                                                              setForm(p=>({...p, customColorNames: {...(p.customColorNames||{}), [color]: e.target.value.slice(0,20)}, _focusedColor: color}));
+                                                            }}
+                                                            placeholder={isLocked?'🔒 잠김':`기본: ${color}`}
+                                                            maxLength={20}
+                                                            className={`flex-1 min-w-0 px-2 py-1 border text-xs outline-none ${inputBgClass}`}
+                                                            style={{borderRadius:'2px'}}/>
+                                                        </div>
+
+                                                        {/* 🟦 v20260502.01: 금속라벨 (선택) */}
+                                                        <div className="flex items-center gap-1 mt-1.5 min-w-0">
+                                                          <span className={`text-[10px] w-9 shrink-0 font-medium ${isFocused?'text-yellow-300':'text-yellow-700'}`}>🏷️금속</span>
+                                                          <input type="text" value={metalLabel}
+                                                            disabled={isLocked}
+                                                            onClick={(e)=>e.stopPropagation()}
+                                                            onChange={e=>{
+                                                              setForm(p=>({...p, metalLabels: {...(p.metalLabels||{}), [color]: e.target.value.slice(0,15)}, _focusedColor: color}));
+                                                            }}
+                                                            placeholder={isLocked?'🔒':'예: 14K금장 (선택)'}
+                                                            maxLength={15}
+                                                            className={`flex-1 min-w-0 px-2 py-1 border text-xs outline-none ${
+                                                              isLocked ? inputBgClass :
+                                                              metalLabel ? (isFocused?'border-yellow-400 bg-neutral-900 text-yellow-300':'border-yellow-400 bg-yellow-50 text-yellow-900') :
+                                                              inputBgClass
+                                                            }`}
+                                                            style={{borderRadius:'2px'}}/>
+                                                        </div>
+                                                      </div>
+                                                    );
+                                                  });
+                                                })()}
+
+                                                {/* + 색상 추가 카드 */}
+                                                <div onClick={()=>setColorAddModal(true)}
+                                                  className="flex items-center justify-center cursor-pointer p-3 border-2 border-dashed border-neutral-400 hover:border-pink-500 hover:bg-pink-50 transition-all min-h-[180px]"
+                                                  style={{borderRadius:'2px'}}>
+                                                  <div className="text-center">
+                                                    <div className="text-2xl text-neutral-400 mb-1">+</div>
+                                                    <div className="text-xs font-bold text-neutral-600 uppercase tracking-wider">색상 추가</div>
+                                                    <div className="text-[10px] text-neutral-500 mt-1">자유 입력 + 자주쓰는 색상</div>
                                                   </div>
+                                                </div>
+                                              </div>
+
+                                              {(form.colors||[]).length === 0 && (
+                                                <div className="text-center text-xs text-neutral-500 py-3 border border-dashed border-neutral-300" style={{borderRadius:'2px'}}>
+                                                  + 색상 추가 카드를 클릭해서 색상을 등록하세요
                                                 </div>
                                               )}
                                             </div>
@@ -10391,7 +10592,7 @@ ${list}` }]
                                                   <div className={`text-[10px] ${form._imgMode==='upload'?'text-neutral-300':'text-neutral-500'}`}>자동 압축</div>
                                                 </div>
                                               </label>
-                                              {/* 🟦 v20260501.09: 외부 URL 옵션 추가 (Google Drive 등) */}
+                                              {/* 🟦 v20260502.01: 외부 URL 옵션 추가 (Google Drive 등) */}
                                               <label className={`flex-1 flex items-center gap-2 p-2 cursor-pointer transition ${
                                                 form._imgMode === 'external' ? 'bg-black text-white' : 'bg-white border border-neutral-300 hover:border-black'
                                               }`} style={{borderRadius:'2px'}}>
@@ -10456,7 +10657,7 @@ ${list}` }]
                                               </label>
                                             )}
 
-                                            {/* 🟦 v20260501.09: 외부 URL 모드 */}
+                                            {/* 🟦 v20260502.01: 외부 URL 모드 */}
                                             {form._imgMode === 'external' && (
                                               <div className="space-y-2">
                                                 <input type="text"
@@ -10510,7 +10711,7 @@ ${list}` }]
                                             {/* v10.03: 색상카드의 도금 단가 요약 (읽기전용) */}
                                             {(() => {
                                               const cpc = form.colorPlatingCosts || {};
-                                              // v20260501.09: 좌=유광 우=반광 짝맞추기 정렬 적용
+                                              // v20260502.01: 좌=유광 우=반광 짝맞추기 정렬 적용
                                               const colorOrder = [
                                                 '골드(유광)','골드(반광)',
                                                 '실버(유광)','실버(반광)',
@@ -10543,7 +10744,7 @@ ${list}` }]
                                                     </div>
                                                   ) : (
                                                     <div className="grid grid-cols-2 gap-1">
-                                                      {/* v20260501.09: 입력/미입력 분리 안 하고 정렬 순서대로 표시 (짝맞춤 유지) */}
+                                                      {/* v20260502.01: 입력/미입력 분리 안 하고 정렬 순서대로 표시 (짝맞춤 유지) */}
                                                       {allColors.map(c => {
                                                         const hasValue = cpc[c] && cpc[c] !== '' && Number(cpc[c]) > 0;
                                                         return hasValue ? (
@@ -10676,89 +10877,192 @@ ${list}` }]
                                               </div>
                                             )}
 
-                                            {/* 🎨 색상 매칭 - 체크 + 우리색 입력 */}
+                                            {/* 🟦 v20260502.01: 색상 매칭 4컬럼 - 거래처색상→LACEROOM색상→금속라벨→바코드 */}
                                             {form.fabricId && (() => {
                                               const sup2 = fabricSuppliersState.find(s=>String(s.id)===String(form.fabricSupplierId));
                                               const fab = sup2?.fabrics?.find(f=>String(f.id)===String(form.fabricId));
                                               const supplierColors = fab?.supplierColors || [];
                                               if (supplierColors.length === 0) {
                                                 return (
-                                                  <div className="bg-amber-50 border border-amber-300 rounded-lg px-3 py-2 text-xs text-amber-700 mt-2">
+                                                  <div className="bg-amber-50 border border-amber-300 px-3 py-2 text-xs text-amber-700 mt-2" style={{borderRadius:'2px'}}>
                                                     ⚠️ 이 원단에 등록된 거래처 색상이 없습니다. 4-1에서 색상을 먼저 등록해주세요.
                                                   </div>
                                                 );
                                               }
                                               const mapping = form._colorMapping || {};
+                                              const existingColors = form.colors || [];
+                                              const frequentLabels = getFrequentMetalLabels(masterProducts);
 
-                                              // 매칭 정보 업데이트 → form.colors도 자동 갱신
+                                              // 매칭 정보 + LACEROOM 색상 동기화
                                               const updateMapping = (newMapping) => {
-                                                // 체크되고 우리 색상명이 입력된 것만 colors에 반영
-                                                const ourColors = Object.values(newMapping)
+                                                // 체크되고 우리 색상명이 입력된 것만 colors에 반영 (기존 colors와 합침)
+                                                const mappedColors = Object.values(newMapping)
                                                   .map(v => (v||'').trim())
                                                   .filter(v => v.length > 0);
-                                                // 중복 제거
-                                                const uniqueColors = [...new Set(ourColors)];
-                                                setForm(p => ({...p, _colorMapping: newMapping, colors: uniqueColors}));
+                                                const allColors = [...new Set([...existingColors, ...mappedColors])];
+                                                setForm(p => ({...p, _colorMapping: newMapping, colors: allColors}));
                                               };
 
                                               return (
-                                                <div className="bg-white border-2 border-pink-200 rounded-xl p-3 mt-2">
+                                                <div className="bg-white border-2 border-pink-300 p-3 mt-2" style={{borderRadius:'2px'}}>
                                                   <div className="text-xs font-bold text-pink-700 mb-2 flex items-center gap-1">
-                                                    🎨 이 상품에 사용할 색상
-                                                    <span className="bg-pink-100 text-pink-600 px-1.5 py-0.5 rounded text-[10px]">거래처 {supplierColors.length}개 중 선택</span>
+                                                    🎨 거래처 원단 색상 매칭
+                                                    <span className="bg-pink-100 text-pink-600 px-1.5 py-0.5 text-[10px]" style={{borderRadius:'2px'}}>거래처 {supplierColors.length}개</span>
                                                   </div>
-                                                  <p className="text-[11px] text-slate-500 mb-2">✅ 체크 후 우리 색상명 입력 → 자동으로 <strong>사용 가능 색상</strong>에 반영</p>
-                                                  <div className="space-y-1.5">
+                                                  <p className="text-[11px] text-slate-600 mb-3">
+                                                    체크 → 우리 색상 선택/추가 → 금속라벨(선택) → 바코드(자동)
+                                                  </p>
+                                                  
+                                                  {/* 헤더 */}
+                                                  <div className="grid grid-cols-12 gap-1 mb-1.5 px-1 text-[10px] font-bold text-pink-700 uppercase tracking-wider">
+                                                    <div className="col-span-3">거래처 색상</div>
+                                                    <div className="col-span-4">LACEROOM 색상</div>
+                                                    <div className="col-span-2">금속라벨</div>
+                                                    <div className="col-span-3">바코드</div>
+                                                  </div>
+                                                  
+                                                  <div className="space-y-1">
                                                     {supplierColors.map(sc => {
                                                       const isChecked = mapping[sc] !== undefined;
                                                       const ourValue = mapping[sc] || '';
+                                                      const matchedBarcode = ourValue ? (form.barcodes?.[ourValue] || '') : '';
+                                                      const matchedMetalLabel = ourValue ? (form.metalLabels?.[ourValue] || '') : '';
+                                                      
                                                       return (
-                                                        <div key={sc} className="flex items-center gap-2">
-                                                          <label className="flex items-center gap-1.5 cursor-pointer shrink-0 w-28">
+                                                        <div key={sc} className={`grid grid-cols-12 gap-1 items-center p-1.5 ${isChecked?'bg-pink-50 border border-pink-200':'bg-neutral-50 border border-neutral-200'}`} style={{borderRadius:'2px'}}>
+                                                          {/* 거래처 색상 + 체크박스 */}
+                                                          <label className="col-span-3 flex items-center gap-1 cursor-pointer min-w-0">
                                                             <input type="checkbox" checked={isChecked}
                                                               onChange={e=>{
                                                                 const newMapping = {...mapping};
                                                                 if (e.target.checked) {
-                                                                  // 체크 시: 거래처명과 동일하게 자동 입력
-                                                                  newMapping[sc] = sc;
+                                                                  // 체크: 거래처명과 같은 LACEROOM 색상이 이미 있으면 매칭, 없으면 비워둠
+                                                                  newMapping[sc] = existingColors.includes(sc) ? sc : sc;
                                                                 } else {
                                                                   delete newMapping[sc];
                                                                 }
                                                                 updateMapping(newMapping);
                                                               }}
-                                                              className="w-4 h-4 accent-pink-500"/>
-                                                            <span className={`text-xs ${isChecked?'font-bold text-slate-800':'text-slate-400'}`}>{sc}</span>
+                                                              className="w-3.5 h-3.5 accent-pink-500 shrink-0"/>
+                                                            <span className={`text-xs truncate ${isChecked?'font-bold text-slate-800':'text-slate-400'}`} title={sc}>{sc}</span>
                                                           </label>
-                                                          <span className="text-slate-400 shrink-0">→</span>
-                                                          {isChecked ? (
-                                                            <input type="text" value={ourValue}
-                                                              onChange={e=>updateMapping({...mapping, [sc]: e.target.value})}
-                                                              placeholder="우리 색상명"
-                                                              className="flex-1 px-2 py-1.5 rounded-lg border border-pink-200 focus:border-pink-400 outline-none text-xs bg-white"/>
-                                                          ) : (
-                                                            <div className="flex-1 px-2 py-1.5 text-xs text-slate-300 italic">(안씀)</div>
-                                                          )}
+                                                          
+                                                          {/* LACEROOM 색상 (드롭다운 + 신규 입력) */}
+                                                          <div className="col-span-4 min-w-0">
+                                                            {isChecked ? (
+                                                              <div className="flex gap-1">
+                                                                <select 
+                                                                  value={existingColors.includes(ourValue) ? ourValue : '__custom__'}
+                                                                  onChange={e=>{
+                                                                    const v = e.target.value;
+                                                                    if (v === '__new__') {
+                                                                      const newColor = prompt(`새 색상명 입력 (LACEROOM 9-1에 자동 추가됩니다):\n\n거래처 색상: ${sc}`, sc);
+                                                                      if (newColor && newColor.trim()) {
+                                                                        const trimmed = newColor.trim();
+                                                                        // colors에 추가
+                                                                        const newColors = existingColors.includes(trimmed) ? existingColors : [...existingColors, trimmed];
+                                                                        const newUnlocked = [...(form.unlockedColors||[]), trimmed];
+                                                                        setForm(p => ({...p, colors: newColors, unlockedColors: newUnlocked, _colorMapping: {...mapping, [sc]: trimmed}}));
+                                                                      }
+                                                                    } else if (v === '__custom__') {
+                                                                      // 자유 입력 모드 (input으로 전환)
+                                                                      updateMapping({...mapping, [sc]: ''});
+                                                                    } else {
+                                                                      updateMapping({...mapping, [sc]: v});
+                                                                    }
+                                                                  }}
+                                                                  className="flex-1 px-1.5 py-1 border border-pink-200 focus:border-pink-400 outline-none text-xs bg-white min-w-0"
+                                                                  style={{borderRadius:'2px'}}>
+                                                                  <option value="__custom__">— 직접 입력 —</option>
+                                                                  {existingColors.map(c => (
+                                                                    <option key={c} value={c}>{c}</option>
+                                                                  ))}
+                                                                  <option value="__new__">+ 새 색상 추가</option>
+                                                                </select>
+                                                                {(!existingColors.includes(ourValue)) && (
+                                                                  <input type="text" value={ourValue}
+                                                                    onChange={e=>updateMapping({...mapping, [sc]: e.target.value})}
+                                                                    placeholder="자유 입력"
+                                                                    className="flex-1 px-1.5 py-1 border border-pink-200 focus:border-pink-400 outline-none text-xs bg-white min-w-0"
+                                                                    style={{borderRadius:'2px'}}/>
+                                                                )}
+                                                              </div>
+                                                            ) : (
+                                                              <div className="px-1.5 py-1 text-xs text-slate-300 italic">(안씀)</div>
+                                                            )}
+                                                          </div>
+                                                          
+                                                          {/* 금속라벨 (선택) */}
+                                                          <div className="col-span-2 min-w-0">
+                                                            {isChecked && ourValue ? (
+                                                              <input type="text" value={matchedMetalLabel}
+                                                                onChange={e=>{
+                                                                  const v = e.target.value.slice(0,15);
+                                                                  setForm(p=>({...p, metalLabels: {...(p.metalLabels||{}), [ourValue]: v}}));
+                                                                }}
+                                                                placeholder="14K금장"
+                                                                maxLength={15}
+                                                                list={`metalLabel_${sc}`}
+                                                                className={`w-full px-1.5 py-1 border text-xs outline-none ${
+                                                                  matchedMetalLabel ? 'border-yellow-400 bg-yellow-50 text-yellow-900' : 'border-pink-200 bg-white'
+                                                                }`}
+                                                                style={{borderRadius:'2px'}}/>
+                                                            ) : (
+                                                              <div className="px-1.5 py-1 text-xs text-slate-300 italic">-</div>
+                                                            )}
+                                                            {/* datalist - 자주 쓰는 금속라벨 자동완성 */}
+                                                            {frequentLabels.length > 0 && (
+                                                              <datalist id={`metalLabel_${sc}`}>
+                                                                {frequentLabels.map(l => <option key={l} value={l}/>)}
+                                                              </datalist>
+                                                            )}
+                                                          </div>
+                                                          
+                                                          {/* 바코드 */}
+                                                          <div className="col-span-3 min-w-0">
+                                                            {isChecked && ourValue ? (
+                                                              <input type="text" value={matchedBarcode}
+                                                                onChange={e=>{
+                                                                  const v = e.target.value.replace(/\D/g,'').slice(0,11);
+                                                                  setForm(p=>({...p, barcodes: {...(p.barcodes||{}), [ourValue]: v}}));
+                                                                }}
+                                                                placeholder="11자리"
+                                                                maxLength={11}
+                                                                className="w-full px-1.5 py-1 border border-pink-200 focus:border-pink-400 outline-none text-xs font-mono bg-white"
+                                                                style={{borderRadius:'2px'}}/>
+                                                            ) : (
+                                                              <div className="px-1.5 py-1 text-xs text-slate-300 italic">-</div>
+                                                            )}
+                                                          </div>
                                                         </div>
                                                       );
                                                     })}
                                                   </div>
+                                                  
                                                   <div className="mt-2 pt-2 border-t border-pink-100 flex items-center justify-between">
                                                     <span className="text-[11px] text-pink-700 font-bold">
-                                                      ✓ 사용 색상: {Object.keys(mapping).length}개
+                                                      ✓ 매칭: {Object.keys(mapping).length}개 / 사용 색상: {existingColors.length}개
                                                     </span>
                                                     <div className="flex gap-1">
                                                       <button onClick={()=>{
-                                                        const newMapping = {};
-                                                        supplierColors.forEach(sc => { newMapping[sc] = sc; });
+                                                        const newMapping = {...mapping};
+                                                        supplierColors.forEach(sc => { 
+                                                          if (!newMapping[sc]) newMapping[sc] = existingColors.includes(sc) ? sc : sc; 
+                                                        });
                                                         updateMapping(newMapping);
-                                                      }} className="text-[10px] bg-pink-100 text-pink-600 hover:bg-pink-200 px-2 py-0.5 rounded font-bold">
+                                                      }} className="text-[10px] bg-pink-100 text-pink-600 hover:bg-pink-200 px-2 py-0.5 font-bold" style={{borderRadius:'2px'}}>
                                                         전체 선택
                                                       </button>
                                                       <button onClick={()=>updateMapping({})}
-                                                        className="text-[10px] bg-slate-100 text-slate-500 hover:bg-slate-200 px-2 py-0.5 rounded font-bold">
-                                                        전체 해제
+                                                        className="text-[10px] bg-slate-100 text-slate-500 hover:bg-slate-200 px-2 py-0.5 font-bold" style={{borderRadius:'2px'}}>
+                                                        매칭 해제
                                                       </button>
                                                     </div>
+                                                  </div>
+                                                  
+                                                  <div className="mt-2 text-[10px] text-pink-600 bg-pink-50 border border-pink-200 px-2 py-1.5" style={{borderRadius:'2px'}}>
+                                                    💡 <strong>팁</strong>: LACEROOM 색상에서 "+ 새 색상 추가" 선택 시 9-1 색상 카드에도 자동 추가됩니다. 
+                                                    색상 카드의 바코드/위치/라벨은 위쪽 "사용 가능 색상" 영역에서도 입력/수정 가능해요.
                                                   </div>
                                                 </div>
                                               );
@@ -11057,7 +11361,7 @@ ${list}` }]
                               if (!currentColors.has(c)) {
                                 setForm(p => {
                                   const newState = {...p, colors: [...(p.colors||[]), c]};
-                                  // 🟦 v20260501.09: 반광 색상 추가 시 자동 ★ 라벨 입력
+                                  // 🟦 v20260502.01: 반광 색상 추가 시 자동 ★ 라벨 입력
                                   // 단, 기존 라벨이 있으면 보존
                                   if (c.includes('(반광)')) {
                                     const existing = (p.customColorNames || {})[c];
@@ -11149,6 +11453,103 @@ ${list}` }]
                             );
                           })()}
 
+                          {/* 🟦 v20260502.01: 곱창밴드 색상 추가 모달 - 자유 입력 + 자주 쓰는 색상 */}
+                          {colorAddModal && masterPopup && masterPopup.type === 'gocchang' && (() => {
+                            const setForm = (updater) => setMasterPopup(prev => typeof updater==='function'?updater(prev):updater);
+                            const currentColors = new Set(masterPopup.colors || []);
+                            const [inputColor, setInputColor] = [masterPopup._newColorInput || '', (v) => setForm(p=>({...p, _newColorInput: v}))];
+                            
+                            const addColor = (c) => {
+                              const trimmed = (c||'').trim();
+                              if (!trimmed) return;
+                              if (currentColors.has(trimmed)) {
+                                alert(`"${trimmed}" 색상은 이미 추가되어 있습니다.`);
+                                return;
+                              }
+                              setForm(p => ({...p, colors: [...(p.colors||[]), trimmed], _newColorInput: '', unlockedColors: [...(p.unlockedColors||[]), trimmed]}));
+                            };
+                            
+                            const frequentColors = getFrequentGocchangColors(masterProducts);
+                            const unusedFrequent = frequentColors.filter(c => !currentColors.has(c));
+                            
+                            return (
+                              <div onClick={()=>setColorAddModal(false)}
+                                className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
+                                <div onClick={e=>e.stopPropagation()}
+                                  className="bg-white max-w-lg w-full p-5 max-h-[85vh] overflow-y-auto" style={{borderRadius:'2px'}}>
+                                  <div className="flex items-center justify-between mb-4 pb-3 border-b border-neutral-200">
+                                    <div>
+                                      <div className="text-base font-black text-black uppercase tracking-tight">🎀 곱창밴드 색상 추가</div>
+                                      <div className="text-[10px] text-neutral-500 mt-0.5">자유 입력 또는 자주 쓰는 색상 선택</div>
+                                    </div>
+                                    <button onClick={()=>setColorAddModal(false)} className="text-neutral-400 hover:text-black text-2xl font-light w-7 h-7 flex items-center justify-center">×</button>
+                                  </div>
+
+                                  {/* 자유 입력 */}
+                                  <div className="mb-4">
+                                    <label className="block text-[11px] font-bold text-black mb-2 uppercase tracking-wider">색상명 직접 입력</label>
+                                    <div className="flex gap-2">
+                                      <input type="text" 
+                                        value={masterPopup._newColorInput || ''}
+                                        onChange={e=>setForm(p=>({...p, _newColorInput: e.target.value.slice(0, 30)}))}
+                                        onKeyDown={e=>{
+                                          if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            addColor(masterPopup._newColorInput);
+                                          }
+                                        }}
+                                        placeholder="예: 베이지, 체크 핑크, 도트 블루..."
+                                        maxLength={30}
+                                        autoFocus
+                                        className="flex-1 px-3 py-2 border border-neutral-300 focus:border-pink-500 outline-none text-sm" 
+                                        style={{borderRadius:'2px'}}/>
+                                      <button onClick={()=>addColor(masterPopup._newColorInput)}
+                                        className="px-4 py-2 bg-pink-500 hover:bg-pink-600 text-white font-black text-sm uppercase tracking-wider"
+                                        style={{borderRadius:'2px'}}>추가</button>
+                                    </div>
+                                    <div className="text-[10px] text-neutral-500 mt-1.5">엔터로 빠르게 추가 가능</div>
+                                  </div>
+
+                                  {/* 자주 쓰는 색상 */}
+                                  {unusedFrequent.length > 0 && (
+                                    <div className="mb-4">
+                                      <label className="block text-[11px] font-bold text-black mb-2 uppercase tracking-wider">⭐ 자주 쓰는 색상 (빈도순)</label>
+                                      <div className="flex flex-wrap gap-1.5 bg-amber-50 border border-amber-200 p-2.5" style={{borderRadius:'2px'}}>
+                                        {unusedFrequent.map(c => (
+                                          <button key={c} onClick={()=>addColor(c)}
+                                            className="text-xs bg-white border border-amber-300 text-amber-900 hover:bg-amber-500 hover:text-white hover:border-amber-500 px-3 py-1.5 font-bold transition"
+                                            style={{borderRadius:'2px'}}>
+                                            + {c}
+                                          </button>
+                                        ))}
+                                      </div>
+                                      <div className="text-[10px] text-neutral-500 mt-1.5">기존에 등록된 색상 빈도순으로 표시 (자동 학습)</div>
+                                    </div>
+                                  )}
+
+                                  {/* 현재 등록된 색상 */}
+                                  {(masterPopup.colors||[]).length > 0 && (
+                                    <div className="mb-4">
+                                      <label className="block text-[11px] font-bold text-black mb-2 uppercase tracking-wider">✓ 현재 등록 ({(masterPopup.colors||[]).length}개)</label>
+                                      <div className="flex flex-wrap gap-1.5 bg-neutral-50 border border-neutral-200 p-2.5" style={{borderRadius:'2px'}}>
+                                        {(masterPopup.colors||[]).map(c => (
+                                          <span key={c} className="text-xs bg-white border border-neutral-400 text-black px-2.5 py-1 font-medium" style={{borderRadius:'2px'}}>
+                                            {c}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  <button onClick={()=>setColorAddModal(false)}
+                                    className="w-full py-2.5 bg-black hover:bg-neutral-800 text-white font-black text-sm uppercase tracking-wider" style={{borderRadius:'2px'}}>
+                                    완료
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })()}
+
                           <div className="flex items-center justify-between flex-wrap gap-2">
                             <div>
                               <span className="font-black text-black text-lg tracking-tight">상품 마스터</span>
@@ -11157,7 +11558,7 @@ ${list}` }]
                             </div>
                             <div className="flex gap-2">
                               <button onClick={() => {
-                                // 📤 봇 동기화 v20260501.09: 가벼운 동기화 (썸네일 제외)
+                                // 📤 봇 동기화 v20260502.01: 가벼운 동기화 (썸네일 제외)
                                 // - 썸네일 제외 → 파일 크기 작아짐 → 보안 차단 우회
                                 // - 부자재 바코드 통합
                                 const bcCount = masterProducts.filter(p => p.barcodes && Object.values(p.barcodes).some(v => v && v.length === 11)).length;
@@ -11171,7 +11572,7 @@ ${list}` }]
                                 const filteredProducts = masterProducts.filter(p => p.barcodes && Object.values(p.barcodes).some(v => v && v.length === 11));
                                 
                                 const botData = {
-                                  version: 'v20260501.09',
+                                  version: 'v20260502.01',
                                   exported_at: new Date().toISOString(),
                                   exported_by: 'LACEROOM 9-1',
                                   product_count: 0,
@@ -13356,7 +13757,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260501.09</p>
+                <p>© 2026 LACEROOM통합관리 v20260502.01</p>
               </footer>
               
               {/* v10.06: 시스템 상태 토스트 (자동 알림) */}
