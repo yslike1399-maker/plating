@@ -117,7 +117,7 @@
 
         const formatDate = (date) => date.toISOString().split('T')[0];
 
-        // 🟦 v20260502.08: 곱창밴드 자주 쓰는 색상/금속라벨 자동 학습 (빈도순)
+        // 🟦 v20260502.09: 곱창밴드 자주 쓰는 색상/금속라벨 자동 학습 (빈도순)
         const getFrequentGocchangColors = (masterProducts) => {
           const counter = {};
           (masterProducts||[]).filter(p => p.type === 'gocchang').forEach(p => {
@@ -495,7 +495,7 @@
                 } catch(e) { console.warn('마이그레이션 실패:', e); }
               }
 
-              // 🟦 v20260502.08: 곱창밴드 metalLabels 필드 추가 마이그레이션
+              // 🟦 v20260502.09: 곱창밴드 metalLabels 필드 추가 마이그레이션
               const gocchangMigrated = localStorage.getItem('gocchang_metalLabels_migrated');
               if (!gocchangMigrated) {
                 try {
@@ -512,7 +512,7 @@
                 } catch(e) { console.warn('곱창밴드 마이그레이션 실패:', e); }
               }
               
-              // 🟦 v20260502.08: 색상명에 금속라벨 통합 마이그레이션 (metalLabels {색상:라벨} → 색상명에 (라벨) 포함)
+              // 🟦 v20260502.09: 색상명에 금속라벨 통합 마이그레이션 (metalLabels {색상:라벨} → 색상명에 (라벨) 포함)
               const colorMetalMerged = localStorage.getItem('gocchang_color_metal_merged');
               if (!colorMetalMerged) {
                 try {
@@ -930,6 +930,131 @@ ${list}` }]
           const [salaryRecords, setSalaryRecords] = useState([]);
           const [salaryPayments, setSalaryPayments] = useState([]);
           
+          // 🟦 v20260502.09: 시간 알리미 위젯
+          const [currentTime, setCurrentTime] = useState(new Date());
+          const [timerPopup, setTimerPopup] = useState(false);
+          const [timerSettings, setTimerSettings] = useState(() => {
+            try {
+              const saved = localStorage.getItem('timer_settings');
+              return saved ? JSON.parse(saved) : {
+                hourlyChimeEnabled: false,
+                hourlyChimeStart: 9,
+                hourlyChimeEnd: 18,
+                hourlyChimeMelody: 'chime',
+                alarms: [],  // [{id, time, label, repeat:'daily'|'once', enabled, melody, lastTriggered}]
+                voiceMemos: [],  // [{id, time, text, repeat:'daily'|'once', enabled, lastTriggered}]
+              };
+            } catch { return { hourlyChimeEnabled: false, hourlyChimeStart: 9, hourlyChimeEnd: 18, hourlyChimeMelody: 'chime', alarms: [], voiceMemos: [] }; }
+          });
+          const saveTimerSettings = (data) => {
+            setTimerSettings(data);
+            try { localStorage.setItem('timer_settings', JSON.stringify(data)); } catch (e) {}
+          };
+          
+          // 🟦 v20260502.09: 멜로디 재생 (Web Audio API)
+          const playMelody = (type = 'chime') => {
+            try {
+              const ctx = new (window.AudioContext || window.webkitAudioContext)();
+              const melodies = {
+                chime: [{ freq: 800, dur: 0.15 }, { freq: 0, dur: 0.05 }, { freq: 1000, dur: 0.3 }],
+                bell: [{ freq: 1320, dur: 0.6 }],
+                game: [{ freq: 660, dur: 0.1 }, { freq: 0, dur: 0.05 }, { freq: 880, dur: 0.1 }, { freq: 0, dur: 0.05 }, { freq: 1320, dur: 0.2 }],
+                quick: [{ freq: 1200, dur: 0.08 }, { freq: 0, dur: 0.04 }, { freq: 1200, dur: 0.08 }],
+                classic: [{ freq: 523, dur: 0.2 }, { freq: 659, dur: 0.2 }, { freq: 784, dur: 0.4 }],
+              };
+              const melody = melodies[type] || melodies.chime;
+              let t = ctx.currentTime;
+              melody.forEach(note => {
+                if (note.freq > 0) {
+                  const osc = ctx.createOscillator();
+                  const gain = ctx.createGain();
+                  osc.type = 'sine';
+                  osc.frequency.value = note.freq;
+                  gain.gain.setValueAtTime(0.3, t);
+                  gain.gain.exponentialRampToValueAtTime(0.01, t + note.dur);
+                  osc.connect(gain);
+                  gain.connect(ctx.destination);
+                  osc.start(t);
+                  osc.stop(t + note.dur);
+                }
+                t += note.dur;
+              });
+              setTimeout(() => ctx.close(), (t - ctx.currentTime + 0.5) * 1000);
+            } catch (e) { console.warn('멜로디 재생 실패:', e); }
+          };
+          
+          // 🟦 v20260502.09: TTS 음성 출력
+          const speakTTS = (text) => {
+            try {
+              if (!window.speechSynthesis || !text) return;
+              window.speechSynthesis.cancel();  // 기존 음성 중지
+              const utterance = new SpeechSynthesisUtterance(text);
+              utterance.lang = 'ko-KR';
+              utterance.rate = 1.0;
+              utterance.pitch = 1.0;
+              utterance.volume = 1.0;
+              window.speechSynthesis.speak(utterance);
+            } catch (e) { console.warn('TTS 실패:', e); }
+          };
+          
+          // 🟦 v20260502.09: 매초 시간 업데이트 + 알림 체크
+          React.useEffect(() => {
+            const tick = () => {
+              const now = new Date();
+              setCurrentTime(now);
+              
+              // 알림 체크 (매분 0초에만)
+              if (now.getSeconds() === 0) {
+                const hour = now.getHours();
+                const minute = now.getMinutes();
+                const today = now.toISOString().split('T')[0];
+                const timeKey = `${String(hour).padStart(2,'0')}:${String(minute).padStart(2,'0')}`;
+                
+                // 1. 정각 알림
+                if (timerSettings.hourlyChimeEnabled && minute === 0 && hour >= timerSettings.hourlyChimeStart && hour <= timerSettings.hourlyChimeEnd) {
+                  playMelody(timerSettings.hourlyChimeMelody);
+                  setTimeout(() => speakTTS(`${hour}시 입니다`), 800);
+                }
+                
+                // 2. 알람 체크
+                let settingsChanged = false;
+                const newAlarms = (timerSettings.alarms || []).map(alarm => {
+                  if (!alarm.enabled) return alarm;
+                  if (alarm.time !== timeKey) return alarm;
+                  // 1회만이고 이미 트리거됨
+                  if (alarm.repeat === 'once' && alarm.lastTriggered) return alarm;
+                  // 같은 분에 이미 트리거됨 (중복 방지)
+                  if (alarm.lastTriggered === `${today}T${timeKey}`) return alarm;
+                  
+                  // 발동!
+                  playMelody(alarm.melody || 'bell');
+                  setTimeout(() => speakTTS(`알람: ${alarm.label || '알람'}`), 800);
+                  settingsChanged = true;
+                  return { ...alarm, lastTriggered: alarm.repeat === 'once' ? `${today}T${timeKey}` : `${today}T${timeKey}`, enabled: alarm.repeat === 'once' ? false : alarm.enabled };
+                });
+                
+                // 3. 음성 메모 체크
+                const newMemos = (timerSettings.voiceMemos || []).map(memo => {
+                  if (!memo.enabled) return memo;
+                  if (memo.time !== timeKey) return memo;
+                  if (memo.repeat === 'once' && memo.lastTriggered) return memo;
+                  if (memo.lastTriggered === `${today}T${timeKey}`) return memo;
+                  
+                  // 발동!
+                  speakTTS(memo.text);
+                  settingsChanged = true;
+                  return { ...memo, lastTriggered: `${today}T${timeKey}`, enabled: memo.repeat === 'once' ? false : memo.enabled };
+                });
+                
+                if (settingsChanged) {
+                  saveTimerSettings({ ...timerSettings, alarms: newAlarms, voiceMemos: newMemos });
+                }
+              }
+            };
+            const interval = setInterval(tick, 1000);
+            return () => clearInterval(interval);
+          }, [timerSettings]);
+          
           const [productForm, setProductForm] = useState({
             name: '', 
             grindRequired: true, 
@@ -950,7 +1075,7 @@ ${list}` }]
           // 수정 모드 (v09.10): 도금작업 수정 중인 ID 저장. null이면 신규 작성 모드
           const [editingPlatingOrderId, setEditingPlatingOrderId] = useState(null);
 
-          // 📊 월별 누적 도금 내역 (v20260502.08) - 2번 탭 전용 state
+          // 📊 월별 누적 도금 내역 (v20260502.09) - 2번 탭 전용 state
           const [billingViewMode, setBillingViewMode] = useState('order'); // 'order' | 'billing'
           const [costStartMonth, setCostStartMonth] = useState(() => {
             const today = new Date();
@@ -1299,7 +1424,7 @@ ${list}` }]
             }
           };
 
-          // 🟦 v20260502.08: 지급일 변경 시 자동으로 해당 월 record로 이동/생성
+          // 🟦 v20260502.09: 지급일 변경 시 자동으로 해당 월 record로 이동/생성
           const updatePaymentDateWithAutoMove = (paymentId, newDate) => {
             if (!newDate) return;
             const payment = salaryPayments.find(p => p.id === paymentId);
@@ -1619,7 +1744,7 @@ ${list}` }]
                         qty: parseInt(item.qty) || 0,
                         received: existingItem?.received || false,
                         receivedDate: existingItem?.receivedDate || '',
-                        billingDate: existingItem?.billingDate || ''  // 🟦 v20260502.08: 색상별 청구일 보존
+                        billingDate: existingItem?.billingDate || ''  // 🟦 v20260502.09: 색상별 청구일 보존
                       };
                     }),
                     total: product.items.reduce((sum, item) => sum + (parseInt(item.qty) || 0), 0)
@@ -1728,7 +1853,7 @@ ${list}` }]
                 id: Date.now(),
                 date: orderForm.date,
                 orderNum,
-                billingDate: '',  // 🟦 도금공장 청구일 (v20260502.08) - 5월부터 철저 입력
+                billingDate: '',  // 🟦 도금공장 청구일 (v20260502.09) - 5월부터 철저 입력
                 products: orderForm.products.map(product => ({
                   productId: product.productId,
                   productName: product.productName,
@@ -1740,7 +1865,7 @@ ${list}` }]
                     qty: parseInt(item.qty) || 0,
                     received: false,
                     receivedDate: '',
-                    billingDate: ''  // 🟦 v20260502.08: 색상별 도금공장 청구일
+                    billingDate: ''  // 🟦 v20260502.09: 색상별 도금공장 청구일
                   })),
                   total: product.items.reduce((sum, item) => sum + (parseInt(item.qty) || 0), 0)
                 })),
@@ -2600,7 +2725,7 @@ ${list}` }]
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260502.08</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260502.09</div>
                   </div>
                   
                   {/* v10.06: 헬퍼/봇 상태등 */}
@@ -2698,7 +2823,7 @@ ${list}` }]
                         labelPresets,                // ← 라벨 프리셋 (NEW)
                         nameChangeLogs,              // ← 상품명 변경이력 (v10.01)
                         exportDate: new Date().toISOString(),
-                        appVersion: 'v20260502.08'
+                        appVersion: 'v20260502.09'
                       };
                       const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
                       const url = URL.createObjectURL(blob);
@@ -3215,8 +3340,63 @@ ${list}` }]
                           <span className="text-[10px] text-neutral-500 font-bold">추가 기능을 위한 확장 공간</span>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                          {/* 🟦 v20260502.09: 시간 알리미 위젯 */}
+                          <div className="bg-gradient-to-br from-neutral-900 to-neutral-700 text-white p-4 col-span-1 md:col-span-2" style={{borderRadius:'2px'}}>
+                            {/* 헤더 */}
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-2">
+                                <span className="text-base">⏰</span>
+                                <span className="text-xs font-black uppercase tracking-widest">시간 알리미</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <button onClick={()=>playMelody(timerSettings.hourlyChimeMelody||'chime')}
+                                  title="멜로디 미리듣기"
+                                  className="text-[10px] bg-white/10 hover:bg-white/20 px-2 py-1 font-bold" style={{borderRadius:'2px'}}>🔊 테스트</button>
+                                <button onClick={()=>setTimerPopup(true)}
+                                  className="text-[10px] bg-white text-black hover:bg-neutral-200 px-2 py-1 font-black uppercase" style={{borderRadius:'2px'}}>설정</button>
+                              </div>
+                            </div>
+                            
+                            {/* 시계 + 정각 알림 토글 */}
+                            <div className="flex items-end justify-between mb-3">
+                              <div>
+                                <div className="text-3xl font-black tracking-tight" style={{fontVariantNumeric:'tabular-nums'}}>
+                                  {String(currentTime.getHours()).padStart(2,'0')}:{String(currentTime.getMinutes()).padStart(2,'0')}
+                                  <span className="text-base text-neutral-400">:{String(currentTime.getSeconds()).padStart(2,'0')}</span>
+                                </div>
+                                <div className="text-[10px] text-neutral-400 mt-0.5">
+                                  {currentTime.toLocaleDateString('ko-KR', {month:'long', day:'numeric', weekday:'short'})}
+                                </div>
+                              </div>
+                              <button onClick={()=>saveTimerSettings({...timerSettings, hourlyChimeEnabled: !timerSettings.hourlyChimeEnabled})}
+                                className={`px-3 py-2 text-[11px] font-black uppercase tracking-wider transition ${
+                                  timerSettings.hourlyChimeEnabled ? 'bg-green-500 text-white' : 'bg-neutral-700 text-neutral-400 hover:bg-neutral-600'
+                                }`} style={{borderRadius:'2px'}}>
+                                <div>{timerSettings.hourlyChimeEnabled ? '🔔 정각알림 ON' : '🔕 정각알림 OFF'}</div>
+                                <div className="text-[9px] mt-0.5 opacity-80">{timerSettings.hourlyChimeStart}~{timerSettings.hourlyChimeEnd}시</div>
+                              </button>
+                            </div>
+                            
+                            {/* 활성 알람/메모 요약 */}
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="bg-white/5 border border-white/10 px-2 py-1.5" style={{borderRadius:'2px'}}>
+                                <div className="text-[9px] text-neutral-400 uppercase tracking-widest font-bold">⏰ 알람</div>
+                                <div className="text-xs font-black text-white">{(timerSettings.alarms||[]).filter(a=>a.enabled).length}개 활성</div>
+                                {(timerSettings.alarms||[]).filter(a=>a.enabled).slice(0,2).map(a => (
+                                  <div key={a.id} className="text-[9px] text-neutral-300 truncate">{a.time} · {a.label||'알람'}</div>
+                                ))}
+                              </div>
+                              <div className="bg-white/5 border border-white/10 px-2 py-1.5" style={{borderRadius:'2px'}}>
+                                <div className="text-[9px] text-neutral-400 uppercase tracking-widest font-bold">📝 음성메모</div>
+                                <div className="text-xs font-black text-white">{(timerSettings.voiceMemos||[]).filter(m=>m.enabled).length}개 활성</div>
+                                {(timerSettings.voiceMemos||[]).filter(m=>m.enabled).slice(0,2).map(m => (
+                                  <div key={m.id} className="text-[9px] text-neutral-300 truncate">{m.time} · {m.text.substring(0,15)}</div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                          
                           {[
-                            {num:1, hint:'예: 진행 중인 도금작업'},
                             {num:2, hint:'예: 중국발주 진행상황'},
                             {num:3, hint:'예: 집중관리상품 재고'},
                             {num:4, hint:'예: 이달 매출 추이'},
@@ -3234,6 +3414,177 @@ ${list}` }]
                           ))}
                         </div>
                       </div>
+
+                      {/* 🟦 v20260502.09: 시간 알리미 설정 팝업 */}
+                      {timerPopup && (
+                        <div onClick={()=>setTimerPopup(false)} className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.7)'}}>
+                          <div onClick={e=>e.stopPropagation()} className="bg-white max-w-2xl w-full p-5 max-h-[90vh] overflow-y-auto" style={{borderRadius:'2px'}}>
+                            <div className="flex items-center justify-between mb-4 pb-3 border-b border-neutral-200">
+                              <div>
+                                <div className="text-base font-black text-black uppercase tracking-tight">⏰ 시간 알리미 설정</div>
+                                <div className="text-[10px] text-neutral-500 mt-0.5">정각알림 · 알람 · 음성메모</div>
+                              </div>
+                              <button onClick={()=>setTimerPopup(false)} className="text-neutral-400 hover:text-black text-2xl font-light w-7 h-7 flex items-center justify-center">×</button>
+                            </div>
+
+                            {/* 1. 정각 알림 설정 */}
+                            <div className="mb-5 bg-neutral-50 border border-neutral-200 p-3" style={{borderRadius:'2px'}}>
+                              <div className="text-[11px] font-black text-black mb-2 uppercase tracking-wider">🔔 정각 알림</div>
+                              <div className="grid grid-cols-12 gap-2 items-center mb-2">
+                                <label className="col-span-2 text-xs text-neutral-600">시작</label>
+                                <select value={timerSettings.hourlyChimeStart||9} 
+                                  onChange={e=>saveTimerSettings({...timerSettings, hourlyChimeStart: parseInt(e.target.value)})}
+                                  className="col-span-3 px-2 py-1.5 border border-neutral-300 text-xs" style={{borderRadius:'2px'}}>
+                                  {Array.from({length:24}, (_,i)=>i).map(h=><option key={h} value={h}>{h}시</option>)}
+                                </select>
+                                <span className="col-span-1 text-center text-xs">~</span>
+                                <select value={timerSettings.hourlyChimeEnd||18} 
+                                  onChange={e=>saveTimerSettings({...timerSettings, hourlyChimeEnd: parseInt(e.target.value)})}
+                                  className="col-span-3 px-2 py-1.5 border border-neutral-300 text-xs" style={{borderRadius:'2px'}}>
+                                  {Array.from({length:24}, (_,i)=>i).map(h=><option key={h} value={h}>{h}시</option>)}
+                                </select>
+                                <span className="col-span-3 text-[10px] text-neutral-500">매시 정각</span>
+                              </div>
+                              <div className="grid grid-cols-12 gap-2 items-center">
+                                <label className="col-span-2 text-xs text-neutral-600">멜로디</label>
+                                <select value={timerSettings.hourlyChimeMelody||'chime'} 
+                                  onChange={e=>saveTimerSettings({...timerSettings, hourlyChimeMelody: e.target.value})}
+                                  className="col-span-7 px-2 py-1.5 border border-neutral-300 text-xs" style={{borderRadius:'2px'}}>
+                                  <option value="chime">차임벨</option>
+                                  <option value="bell">종소리</option>
+                                  <option value="game">게임</option>
+                                  <option value="quick">즉각</option>
+                                  <option value="classic">클래식</option>
+                                </select>
+                                <button onClick={()=>playMelody(timerSettings.hourlyChimeMelody||'chime')}
+                                  className="col-span-3 bg-black text-white text-[10px] font-bold py-1.5 hover:bg-neutral-800" style={{borderRadius:'2px'}}>▶ 미리듣기</button>
+                              </div>
+                            </div>
+
+                            {/* 2. 알람 목록 */}
+                            <div className="mb-5">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="text-[11px] font-black text-black uppercase tracking-wider">⏰ 알람</div>
+                                <button onClick={()=>{
+                                  const newAlarm = { id: Date.now(), time: '14:00', label: '새 알람', repeat: 'daily', enabled: true, melody: 'bell', lastTriggered: '' };
+                                  saveTimerSettings({...timerSettings, alarms: [...(timerSettings.alarms||[]), newAlarm]});
+                                }} className="text-[10px] bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 font-black uppercase" style={{borderRadius:'2px'}}>+ 추가</button>
+                              </div>
+                              <div className="space-y-1.5">
+                                {(timerSettings.alarms||[]).length === 0 && (
+                                  <div className="text-center text-xs text-neutral-400 py-4 border border-dashed border-neutral-300" style={{borderRadius:'2px'}}>
+                                    아직 알람이 없어요. + 추가 버튼을 눌러 등록하세요
+                                  </div>
+                                )}
+                                {(timerSettings.alarms||[]).map(alarm => (
+                                  <div key={alarm.id} className={`grid grid-cols-12 gap-1.5 items-center p-2 border ${alarm.enabled?'bg-blue-50 border-blue-200':'bg-neutral-50 border-neutral-200'}`} style={{borderRadius:'2px'}}>
+                                    <input type="checkbox" checked={alarm.enabled}
+                                      onChange={e=>{
+                                        const newAlarms = timerSettings.alarms.map(a => a.id===alarm.id ? {...a, enabled:e.target.checked, lastTriggered: e.target.checked ? '' : a.lastTriggered} : a);
+                                        saveTimerSettings({...timerSettings, alarms: newAlarms});
+                                      }} className="col-span-1 w-4 h-4 accent-blue-500"/>
+                                    <input type="time" value={alarm.time}
+                                      onChange={e=>{
+                                        const newAlarms = timerSettings.alarms.map(a => a.id===alarm.id ? {...a, time:e.target.value, lastTriggered:''} : a);
+                                        saveTimerSettings({...timerSettings, alarms: newAlarms});
+                                      }} className="col-span-3 px-2 py-1 border border-blue-300 text-xs font-mono" style={{borderRadius:'2px'}}/>
+                                    <input type="text" value={alarm.label} placeholder="알람 이름"
+                                      onChange={e=>{
+                                        const newAlarms = timerSettings.alarms.map(a => a.id===alarm.id ? {...a, label:e.target.value.slice(0,30)} : a);
+                                        saveTimerSettings({...timerSettings, alarms: newAlarms});
+                                      }} maxLength={30}
+                                      className="col-span-4 px-2 py-1 border border-neutral-300 text-xs" style={{borderRadius:'2px'}}/>
+                                    <select value={alarm.repeat} 
+                                      onChange={e=>{
+                                        const newAlarms = timerSettings.alarms.map(a => a.id===alarm.id ? {...a, repeat:e.target.value} : a);
+                                        saveTimerSettings({...timerSettings, alarms: newAlarms});
+                                      }} className="col-span-2 px-1 py-1 border border-neutral-300 text-[10px]" style={{borderRadius:'2px'}}>
+                                      <option value="daily">매일</option>
+                                      <option value="once">1회만</option>
+                                    </select>
+                                    <button onClick={()=>{
+                                      if (confirm('이 알람을 삭제할까요?')) {
+                                        saveTimerSettings({...timerSettings, alarms: timerSettings.alarms.filter(a=>a.id!==alarm.id)});
+                                      }
+                                    }} className="col-span-1 text-xs text-red-500 hover:bg-red-100 font-bold" style={{borderRadius:'2px'}}>×</button>
+                                    <select value={alarm.melody||'bell'}
+                                      onChange={e=>{
+                                        const newAlarms = timerSettings.alarms.map(a => a.id===alarm.id ? {...a, melody:e.target.value} : a);
+                                        saveTimerSettings({...timerSettings, alarms: newAlarms});
+                                      }} className="col-span-12 px-2 py-1 border border-neutral-200 text-[10px] bg-white" style={{borderRadius:'2px'}}>
+                                      <option value="chime">멜로디: 차임벨</option>
+                                      <option value="bell">멜로디: 종소리</option>
+                                      <option value="game">멜로디: 게임</option>
+                                      <option value="quick">멜로디: 즉각</option>
+                                      <option value="classic">멜로디: 클래식</option>
+                                    </select>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* 3. 음성 메모 목록 */}
+                            <div className="mb-3">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="text-[11px] font-black text-black uppercase tracking-wider">📝 음성 메모 (TTS)</div>
+                                <button onClick={()=>{
+                                  const newMemo = { id: Date.now(), time: '13:00', text: '점심 먹자', repeat: 'daily', enabled: true, lastTriggered: '' };
+                                  saveTimerSettings({...timerSettings, voiceMemos: [...(timerSettings.voiceMemos||[]), newMemo]});
+                                }} className="text-[10px] bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 font-black uppercase" style={{borderRadius:'2px'}}>+ 추가</button>
+                              </div>
+                              <div className="space-y-1.5">
+                                {(timerSettings.voiceMemos||[]).length === 0 && (
+                                  <div className="text-center text-xs text-neutral-400 py-4 border border-dashed border-neutral-300" style={{borderRadius:'2px'}}>
+                                    아직 음성 메모가 없어요. + 추가 버튼을 눌러 등록하세요
+                                  </div>
+                                )}
+                                {(timerSettings.voiceMemos||[]).map(memo => (
+                                  <div key={memo.id} className={`grid grid-cols-12 gap-1.5 items-center p-2 border ${memo.enabled?'bg-purple-50 border-purple-200':'bg-neutral-50 border-neutral-200'}`} style={{borderRadius:'2px'}}>
+                                    <input type="checkbox" checked={memo.enabled}
+                                      onChange={e=>{
+                                        const newMemos = timerSettings.voiceMemos.map(m => m.id===memo.id ? {...m, enabled:e.target.checked, lastTriggered: e.target.checked ? '' : m.lastTriggered} : m);
+                                        saveTimerSettings({...timerSettings, voiceMemos: newMemos});
+                                      }} className="col-span-1 w-4 h-4 accent-purple-500"/>
+                                    <input type="time" value={memo.time}
+                                      onChange={e=>{
+                                        const newMemos = timerSettings.voiceMemos.map(m => m.id===memo.id ? {...m, time:e.target.value, lastTriggered:''} : m);
+                                        saveTimerSettings({...timerSettings, voiceMemos: newMemos});
+                                      }} className="col-span-3 px-2 py-1 border border-purple-300 text-xs font-mono" style={{borderRadius:'2px'}}/>
+                                    <input type="text" value={memo.text} placeholder="음성으로 읽을 메시지"
+                                      onChange={e=>{
+                                        const newMemos = timerSettings.voiceMemos.map(m => m.id===memo.id ? {...m, text:e.target.value.slice(0,100)} : m);
+                                        saveTimerSettings({...timerSettings, voiceMemos: newMemos});
+                                      }} maxLength={100}
+                                      className="col-span-4 px-2 py-1 border border-neutral-300 text-xs" style={{borderRadius:'2px'}}/>
+                                    <select value={memo.repeat}
+                                      onChange={e=>{
+                                        const newMemos = timerSettings.voiceMemos.map(m => m.id===memo.id ? {...m, repeat:e.target.value} : m);
+                                        saveTimerSettings({...timerSettings, voiceMemos: newMemos});
+                                      }} className="col-span-2 px-1 py-1 border border-neutral-300 text-[10px]" style={{borderRadius:'2px'}}>
+                                      <option value="daily">매일</option>
+                                      <option value="once">1회만</option>
+                                    </select>
+                                    <button onClick={()=>speakTTS(memo.text)} title="미리듣기"
+                                      className="col-span-1 bg-purple-500 hover:bg-purple-600 text-white text-[10px] py-1 font-bold" style={{borderRadius:'2px'}}>▶</button>
+                                    <button onClick={()=>{
+                                      if (confirm('이 음성 메모를 삭제할까요?')) {
+                                        saveTimerSettings({...timerSettings, voiceMemos: timerSettings.voiceMemos.filter(m=>m.id!==memo.id)});
+                                      }
+                                    }} className="col-span-1 text-xs text-red-500 hover:bg-red-100 font-bold" style={{borderRadius:'2px'}}>×</button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                            
+                            <div className="text-[10px] text-neutral-500 mt-2 bg-neutral-50 border border-neutral-200 p-2" style={{borderRadius:'2px'}}>
+                              💡 <strong>안내</strong>: 알림은 LACEROOM 앱이 열려있을 때만 작동합니다. PC에서 사용 권장. 처음 한 번 화면 클릭 후 작동합니다 (브라우저 정책)
+                            </div>
+
+                            <button onClick={()=>setTimerPopup(false)}
+                              className="w-full mt-3 py-2.5 bg-black hover:bg-neutral-800 text-white font-black text-sm uppercase tracking-wider" style={{borderRadius:'2px'}}>완료</button>
+                          </div>
+                        </div>
+                      )}
 
                       {/* 링크 추가 팝업 */}
                       {linkAddPopup && (
@@ -3699,7 +4050,7 @@ ${list}` }]
                   <div className="bg-white border-b border-slate-200 px-4 py-2 sticky top-0 z-40">
                     <div className="flex space-x-1">
                       {[
-                        // v20260502.08: 1-1 색상별 단가 탭 삭제 (9-1 상품 마스터로 통합)
+                        // v20260502.09: 1-1 색상별 단가 탭 삭제 (9-1 상품 마스터로 통합)
                         ['order', '작업 지시서', '1-2'],
                         ['rework', '재도금 요청', '1-3'],
                         ['history', '작업 내역', '1-4'],
@@ -3717,7 +4068,7 @@ ${list}` }]
                 {/* 도금작업지시서 탭 */}
                 {activeMainTab === 'plating' && (
                   <>
-                {/* 1-1 색상별 단가 탭 v20260502.08에서 삭제 (9-1 상품 마스터로 통합) */}
+                {/* 1-1 색상별 단가 탭 v20260502.09에서 삭제 (9-1 상품 마스터로 통합) */}
 
                 {activeTab === 'order' && (
                   <div className="space-y-6">
@@ -4359,7 +4710,7 @@ ${list}` }]
                                           </div>
 
                                           <div className="flex items-center gap-2">
-                                            {/* 🟦 색상별 도금공장 청구일 (v20260502.08) */}
+                                            {/* 🟦 색상별 도금공장 청구일 (v20260502.09) */}
                                             <div className="flex items-center bg-blue-500 border-2 border-blue-300 rounded-lg px-2 py-1 shadow-sm" title="이 색상의 도금공장 청구일">
                                               <span className="text-white text-[10px] font-bold mr-1.5">📅 청구일</span>
                                               <input
@@ -4791,7 +5142,7 @@ ${list}` }]
                 </>
                 )}
 
-                {/* 월별 누적 도금 내역 탭 (v20260502.08) */}
+                {/* 월별 누적 도금 내역 탭 (v20260502.09) */}
                 {activeMainTab === 'cost' && (
                   <div className="space-y-6">
                     <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8">
@@ -4848,7 +5199,7 @@ ${list}` }]
                         };
 
                         // 색상별 도금 단가 조회
-                        // v20260502.08: 작업내역의 공장색상(item.color='대금', item.finish='유광')을
+                        // v20260502.09: 작업내역의 공장색상(item.color='대금', item.finish='유광')을
                         // 9-1 판매색상키('골드(유광)')로 역변환하여 colorPlatingCosts에서 조회
                         const getPlatingCost = (costs, color, finish) => {
                           const { colorPlatingCosts, platingCostsLegacy } = costs;
@@ -4891,14 +5242,14 @@ ${list}` }]
                         };
 
                         // 데이터 집계: 제품_색상_마감 단위로 월별 누적
-                        // 🟦 v20260502.08: productId 기준 그룹핑 (같은 제품 다른 이름 통합) + 9-1 마스터 이름 우선 표시
+                        // 🟦 v20260502.09: productId 기준 그룹핑 (같은 제품 다른 이름 통합) + 9-1 마스터 이름 우선 표시
                         // pivot[key] = { productName, color, finish, platingCost, grindCost, grindRequired, byMonth: {...}, unset: 0 }
                         const pivot = {};
                         history.filter(o => !o.type || o.type === 'work').forEach(order => {
                           order.products.forEach(product => {
                             const costs = getMasterCosts(product.productId, product.productName);
                             
-                            // 🟦 v20260502.08: 9-1 마스터 매칭 → 통일된 productKey + 표시 이름 결정
+                            // 🟦 v20260502.09: 9-1 마스터 매칭 → 통일된 productKey + 표시 이름 결정
                             const matchedMp = masterProducts.find(mp =>
                               String(mp.id) === String(product.productId) ||
                               String(mp.legacyProductId) === String(product.productId) ||
@@ -4915,7 +5266,7 @@ ${list}` }]
                               
                               if (!pivot[key]) {
                                 pivot[key] = {
-                                  productName: displayName,  // 🟦 v20260502.08: 9-1 마스터 이름 우선
+                                  productName: displayName,  // 🟦 v20260502.09: 9-1 마스터 이름 우선
                                   productId: matchedMp ? matchedMp.id : product.productId,
                                   color: item.color,
                                   finish: finish,
@@ -8545,7 +8896,7 @@ ${list}` }]
                                                   if(amount<=0) return alert('지급액을 입력하세요');
                                                   if(amount>remaining) return alert('미지급액을 초과할 수 없습니다');
                                                   
-                                                  // 🟦 v20260502.08: 지급일이 다른 월이면 해당 월 record로 자동 이동/생성
+                                                  // 🟦 v20260502.09: 지급일이 다른 월이면 해당 월 record로 자동 이동/생성
                                                   const payMonth = payDate.substring(0, 7);
                                                   let targetRecordId = record.id;
                                                   let targetPaymentOrder = payments.length + 1;
@@ -8678,7 +9029,7 @@ ${list}` }]
                                                         <tr key={payment.id} className="border-b border-slate-200">
                                                           <td className="py-2 px-3 font-bold text-blue-600">{payment.paymentOrder}차</td>
                                                           <td className="py-2 px-3">
-                                                            {/* 🟦 v20260502.08: 지급일 변경 시 자동으로 해당 월 record로 이동/생성 */}
+                                                            {/* 🟦 v20260502.09: 지급일 변경 시 자동으로 해당 월 record로 이동/생성 */}
                                                             <input type="date" value={payment.payDate||''} 
                                                               onChange={e=>{
                                                                 const newDate = e.target.value;
@@ -9277,7 +9628,7 @@ ${list}` }]
                               <h3 className="text-base font-black text-black tracking-tight">🖨️ 라벨 인쇄 + 디자인 편집기</h3>
                               <span className="bg-black text-white text-[10px] font-black px-2 py-0.5 tracking-widest" style={{borderRadius:'4px'}}>EDITOR</span>
                             </div>
-                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260502.08 · 헬퍼 자동 인쇄 · 한글 100%</div>
+                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260502.09 · 헬퍼 자동 인쇄 · 한글 100%</div>
                           </div>
                           <button onClick={()=>setBarcodePrintPopup(null)} className="text-neutral-400 hover:text-black text-xl font-black">✕</button>
                         </div>
@@ -10191,7 +10542,7 @@ ${list}` }]
                                             💡 텔레그램 봇에서 검색할 키워드를 쉼표(,)로 구분
                                           </div>
                                         </div>
-                                        {/* 🟦 v20260502.08: 도금거래처 상품명 - 헤어핀만 (곱창밴드는 도금 안 함) */}
+                                        {/* 🟦 v20260502.09: 도금거래처 상품명 - 헤어핀만 (곱창밴드는 도금 안 함) */}
                                         {form.type === 'hairpin' && (
                                           <div>
                                             <label className="block text-[11px] font-bold text-black mb-2 uppercase tracking-wider">도금거래처 상품명 <span className="text-neutral-400 font-normal normal-case tracking-normal">(선택)</span></label>
@@ -10315,7 +10666,7 @@ ${list}` }]
                                               {/* 색상 카드 리스트 - 2열 그리드, 무신사 스타일 */}
                                               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                               {(() => {
-                                                // v20260502.08: 좌=유광, 우=반광 짝맞추기 정렬
+                                                // v20260502.09: 좌=유광, 우=반광 짝맞추기 정렬
                                                 // 색상 그룹별 (골드→실버→블랙→다크골드→로즈골드), 유광 다음 반광
                                                 // 단독 색상(14K도금, 은): 마지막에 왼쪽 단독 배치
                                                 const colorOrder = [
@@ -10543,7 +10894,7 @@ ${list}` }]
                                               )}
                                             </div>
                                           ) : (
-                                            // 🟦 v20260502.08: 곱창밴드 - 헤어핀처럼 색상 카드 시스템 (원단정보 유무 무관)
+                                            // 🟦 v20260502.09: 곱창밴드 - 헤어핀처럼 색상 카드 시스템 (원단정보 유무 무관)
                                             <div className="space-y-2">
                                               {/* 안내 */}
                                               {form.hasFabricInfo === false ? (
@@ -10582,7 +10933,7 @@ ${list}` }]
                                                     const pos = positions[color] || '';
                                                     const customName = customColorNames[color] || '';
                                                     
-                                                    // 🟦 v20260502.08: 색상 키에서 색상명/금속라벨 분리 (예: "블랙(금도금)" → name="블랙", metal="금도금")
+                                                    // 🟦 v20260502.09: 색상 키에서 색상명/금속라벨 분리 (예: "블랙(금도금)" → name="블랙", metal="금도금")
                                                     const colorKeyMatch = color.match(/^(.+?)\(([^)]+)\)$/);
                                                     const baseColorName = colorKeyMatch ? colorKeyMatch[1].trim() : color;
                                                     const metalLabel = colorKeyMatch ? colorKeyMatch[2].trim() : (metalLabels[color] || '');
@@ -10706,7 +11057,7 @@ ${list}` }]
                                                             style={{borderRadius:'2px'}}/>
                                                         </div>
 
-                                                        {/* 🟦 v20260502.08: 금속라벨 변경 시 색상 키 자체 변경 (예: 블랙(금도금) → 블랙(은도금)) */}
+                                                        {/* 🟦 v20260502.09: 금속라벨 변경 시 색상 키 자체 변경 (예: 블랙(금도금) → 블랙(은도금)) */}
                                                         <div className="flex items-center gap-1 mt-1.5 min-w-0">
                                                           <span className={`text-[10px] w-9 shrink-0 font-medium ${isFocused?'text-yellow-300':'text-yellow-700'}`}>🏷️금속</span>
                                                           <input type="text" value={metalLabel}
@@ -10848,7 +11199,7 @@ ${list}` }]
                                                   <div className={`text-[10px] ${form._imgMode==='upload'?'text-neutral-300':'text-neutral-500'}`}>자동 압축</div>
                                                 </div>
                                               </label>
-                                              {/* 🟦 v20260502.08: 외부 URL 옵션 추가 (Google Drive 등) */}
+                                              {/* 🟦 v20260502.09: 외부 URL 옵션 추가 (Google Drive 등) */}
                                               <label className={`flex-1 flex items-center gap-2 p-2 cursor-pointer transition ${
                                                 form._imgMode === 'external' ? 'bg-black text-white' : 'bg-white border border-neutral-300 hover:border-black'
                                               }`} style={{borderRadius:'2px'}}>
@@ -10913,7 +11264,7 @@ ${list}` }]
                                               </label>
                                             )}
 
-                                            {/* 🟦 v20260502.08: 외부 URL 모드 */}
+                                            {/* 🟦 v20260502.09: 외부 URL 모드 */}
                                             {form._imgMode === 'external' && (
                                               <div className="space-y-2">
                                                 <input type="text"
@@ -10967,7 +11318,7 @@ ${list}` }]
                                             {/* v10.03: 색상카드의 도금 단가 요약 (읽기전용) */}
                                             {(() => {
                                               const cpc = form.colorPlatingCosts || {};
-                                              // v20260502.08: 좌=유광 우=반광 짝맞추기 정렬 적용
+                                              // v20260502.09: 좌=유광 우=반광 짝맞추기 정렬 적용
                                               const colorOrder = [
                                                 '골드(유광)','골드(반광)',
                                                 '실버(유광)','실버(반광)',
@@ -11000,7 +11351,7 @@ ${list}` }]
                                                     </div>
                                                   ) : (
                                                     <div className="grid grid-cols-2 gap-1">
-                                                      {/* v20260502.08: 입력/미입력 분리 안 하고 정렬 순서대로 표시 (짝맞춤 유지) */}
+                                                      {/* v20260502.09: 입력/미입력 분리 안 하고 정렬 순서대로 표시 (짝맞춤 유지) */}
                                                       {allColors.map(c => {
                                                         const hasValue = cpc[c] && cpc[c] !== '' && Number(cpc[c]) > 0;
                                                         return hasValue ? (
@@ -11133,7 +11484,7 @@ ${list}` }]
                                               </div>
                                             )}
 
-                                            {/* 🟦 v20260502.08: 색상 매칭 4컬럼 - 거래처색상→LACEROOM색상→금속라벨→바코드 */}
+                                            {/* 🟦 v20260502.09: 색상 매칭 4컬럼 - 거래처색상→LACEROOM색상→금속라벨→바코드 */}
                                             {form.fabricId && (() => {
                                               const sup2 = fabricSuppliersState.find(s=>String(s.id)===String(form.fabricSupplierId));
                                               const fab = sup2?.fabrics?.find(f=>String(f.id)===String(form.fabricId));
@@ -11238,7 +11589,7 @@ ${list}` }]
                                                                 {(!existingColors.includes(ourValue)) && (
                                                                   <input type="text" value={ourValue}
                                                                     onChange={e=>{
-                                                                      // 🟦 v20260502.08: 입력 중에는 mapping만 업데이트 (colors 동기화 X → 포커스 유지)
+                                                                      // 🟦 v20260502.09: 입력 중에는 mapping만 업데이트 (colors 동기화 X → 포커스 유지)
                                                                       const v = e.target.value;
                                                                       setForm(p => ({...p, _colorMapping: {...(p._colorMapping||{}), [sc]: v}}));
                                                                     }}
@@ -11398,7 +11749,7 @@ ${list}` }]
                                         barcodes: form.barcodes || {},
                                         positions: form.positions || {},
                                         customColorNames: form.customColorNames || {},
-                                        metalLabels: form.metalLabels || {},  // 🟦 v20260502.08: 곱창밴드 금속라벨 저장 누락 버그 수정
+                                        metalLabels: form.metalLabels || {},  // 🟦 v20260502.09: 곱창밴드 금속라벨 저장 누락 버그 수정
                                         unlockedColors: form.unlockedColors || [],
                                         botTags: form.botTags || '',  // v10.08: 봇 검색 태그
                                         legacyProductId: form.legacyProductId||null,
@@ -11473,7 +11824,7 @@ ${list}` }]
                                         }
                                       }
 
-                                      // 🟦 v20260502.08: 색상 삭제 시 잔존 soldoutItems/todayOffItems 자동 정리
+                                      // 🟦 v20260502.09: 색상 삭제 시 잔존 soldoutItems/todayOffItems 자동 정리
                                       // (9-1에서 색상이 제거되었으면 그 색상의 품절/오늘불가 데이터도 같이 삭제)
                                       const finalColorSet = new Set(item.colors || []);
                                       const cleanedSoldout = soldoutItems.filter(s => 
@@ -11657,7 +12008,7 @@ ${list}` }]
                               if (!currentColors.has(c)) {
                                 setForm(p => {
                                   const newState = {...p, colors: [...(p.colors||[]), c]};
-                                  // 🟦 v20260502.08: 반광 색상 추가 시 자동 ★ 라벨 입력
+                                  // 🟦 v20260502.09: 반광 색상 추가 시 자동 ★ 라벨 입력
                                   // 단, 기존 라벨이 있으면 보존
                                   if (c.includes('(반광)')) {
                                     const existing = (p.customColorNames || {})[c];
@@ -11749,12 +12100,12 @@ ${list}` }]
                             );
                           })()}
 
-                          {/* 🟦 v20260502.08: 곱창밴드 색상 추가 모달 - 자유 입력 + 자주 쓰는 색상 */}
+                          {/* 🟦 v20260502.09: 곱창밴드 색상 추가 모달 - 자유 입력 + 자주 쓰는 색상 */}
                           {colorAddModal && masterPopup && masterPopup.type === 'gocchang' && (() => {
                             const setForm = (updater) => setMasterPopup(prev => typeof updater==='function'?updater(prev):updater);
                             const currentColors = new Set(masterPopup.colors || []);
                             
-                            // 🟦 v20260502.08: 색상명+금속라벨 조합 키 (예: "블랙(금도금)")
+                            // 🟦 v20260502.09: 색상명+금속라벨 조합 키 (예: "블랙(금도금)")
                             const buildColorKey = (name, metal) => {
                               const n = (name||'').trim();
                               const m = (metal||'').trim();
@@ -11900,7 +12251,7 @@ ${list}` }]
                             </div>
                             <div className="flex gap-2">
                               <button onClick={() => {
-                                // 📤 봇 동기화 v20260502.08: 가벼운 동기화 (썸네일 제외)
+                                // 📤 봇 동기화 v20260502.09: 가벼운 동기화 (썸네일 제외)
                                 // - 썸네일 제외 → 파일 크기 작아짐 → 보안 차단 우회
                                 // - 부자재 바코드 통합
                                 const bcCount = masterProducts.filter(p => p.barcodes && Object.values(p.barcodes).some(v => v && v.length === 11)).length;
@@ -11914,7 +12265,7 @@ ${list}` }]
                                 const filteredProducts = masterProducts.filter(p => p.barcodes && Object.values(p.barcodes).some(v => v && v.length === 11));
                                 
                                 const botData = {
-                                  version: 'v20260502.08',
+                                  version: 'v20260502.09',
                                   exported_at: new Date().toISOString(),
                                   exported_by: 'LACEROOM 9-1',
                                   product_count: 0,
@@ -12107,7 +12458,7 @@ ${list}` }]
                                     </div>
                                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 p-4">
                                       {featuredItems.sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||'')).map(p=>{
-                                        // 🟦 v20260502.08: 현재 colors에 있는 것만 카운트 (삭제된 색상 잔존 데이터 무시)
+                                        // 🟦 v20260502.09: 현재 colors에 있는 것만 카운트 (삭제된 색상 잔존 데이터 무시)
                                         const currentColorSet = new Set(p.colors || []);
                                         const soldoutColors = soldoutItems.filter(i=>i.name===p.name && currentColorSet.has(i.color)).map(i=>i.color);
                                         const soldoutCount = soldoutColors.length;
@@ -12155,7 +12506,7 @@ ${list}` }]
                                               {/* 색상 리스트 (유광/반광 좌우 + 단일 별도 / 무신사 스타일) */}
                                               {p.colors && p.colors.length > 0 && (() => {
                                                 const colorOrderBase = ['골드','실버','블랙','로즈골드','다크골드'];
-                                                // 🟦 v20260502.08: 곱창밴드는 헤어핀 그룹 분류 X (전부 otherColors로)
+                                                // 🟦 v20260502.09: 곱창밴드는 헤어핀 그룹 분류 X (전부 otherColors로)
                                                 const glossColors = p.type === 'hairpin' ? colorOrderBase.map(b=>`${b}(유광)`).filter(c=>p.colors.includes(c)) : [];
                                                 const matteColors = p.type === 'hairpin' ? colorOrderBase.map(b=>`${b}(반광)`).filter(c=>p.colors.includes(c)) : [];
                                                 const singleColors = p.type === 'hairpin' ? ['14K도금','은','흑무광'].filter(c=>p.colors.includes(c)) : [];
@@ -12172,7 +12523,7 @@ ${list}` }]
                                                   const isColorSoldout = soldoutColors.includes(c);
                                                   const isColorOff = todayOffItems.some(i => i.name===p.name && i.color===c);
                                                   const borderStyle = finishStyle === 'gloss' ? 'border-solid border-2' : finishStyle === 'matte' ? 'border-dashed border-2' : 'border';
-                                                  // 🟦 v20260502.08: 곱창밴드는 색상 키에 이미 라벨이 포함됨 (예: "블랙(금도금)") → 그대로 표시
+                                                  // 🟦 v20260502.09: 곱창밴드는 색상 키에 이미 라벨이 포함됨 (예: "블랙(금도금)") → 그대로 표시
                                                   // 헤어핀 색상은 (유광)/(반광) 제거
                                                   const isHairpinColor = c.includes('(유광)') || c.includes('(반광)');
                                                   let displayName = isHairpinColor ? c.replace(/\(.*\)/, '').trim() : c;
@@ -12229,7 +12580,7 @@ ${list}` }]
                                                         </div>
                                                       </div>
                                                     )}
-                                                    {/* 🟦 v20260502.08: 곱창밴드 색상칩 (자동 줄바꿈) */}
+                                                    {/* 🟦 v20260502.09: 곱창밴드 색상칩 (자동 줄바꿈) */}
                                                     {otherColors.length > 0 && (
                                                       <div className="border border-neutral-300 p-1.5" style={{borderRadius:'2px'}}>
                                                         {p.type === 'gocchang' && (
@@ -12313,7 +12664,7 @@ ${list}` }]
                                     </div>
                                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 p-4">
                                       {items.sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||'')).map(p=>{
-                                        // 🟦 v20260502.08: 현재 colors에 있는 것만 카운트 (삭제된 색상 잔존 데이터 무시)
+                                        // 🟦 v20260502.09: 현재 colors에 있는 것만 카운트 (삭제된 색상 잔존 데이터 무시)
                                         const currentColorSet = new Set(p.colors || []);
                                         const soldoutColors = soldoutItems.filter(i=>i.name===p.name && currentColorSet.has(i.color)).map(i=>i.color);
                                         const soldoutCount = soldoutColors.length;
@@ -12402,7 +12753,7 @@ ${list}` }]
                                               {/* 색상 리스트 (유광/반광 좌우 + 단일 별도 / 무신사 스타일) */}
                                               {p.colors && p.colors.length > 0 && (() => {
                                                 const colorOrderBase = ['골드','실버','블랙','로즈골드','다크골드'];
-                                                // 🟦 v20260502.08: 곱창밴드는 헤어핀 그룹 분류 X (전부 otherColors로)
+                                                // 🟦 v20260502.09: 곱창밴드는 헤어핀 그룹 분류 X (전부 otherColors로)
                                                 const glossColors = p.type === 'hairpin' ? colorOrderBase.map(b=>`${b}(유광)`).filter(c=>p.colors.includes(c)) : [];
                                                 const matteColors = p.type === 'hairpin' ? colorOrderBase.map(b=>`${b}(반광)`).filter(c=>p.colors.includes(c)) : [];
                                                 const singleColors = p.type === 'hairpin' ? ['14K도금','은','흑무광'].filter(c=>p.colors.includes(c)) : [];
@@ -12420,7 +12771,7 @@ ${list}` }]
                                                   const isColorOff = todayOffItems.some(i => i.name===p.name && i.color===c);
                                                   // 유광=실선 굵게, 반광=점선 굵게, 단일=얇은 실선
                                                   const borderStyle = finishStyle === 'gloss' ? 'border-solid border-2' : finishStyle === 'matte' ? 'border-dashed border-2' : 'border';
-                                                  // 🟦 v20260502.08: 곱창밴드는 색상 키에 라벨 포함 → 그대로 표시
+                                                  // 🟦 v20260502.09: 곱창밴드는 색상 키에 라벨 포함 → 그대로 표시
                                                   const isHairpinColor = c.includes('(유광)') || c.includes('(반광)');
                                                   let displayName = isHairpinColor ? c.replace(/\(.*\)/, '').trim() : c;
                                                   return (
@@ -12477,7 +12828,7 @@ ${list}` }]
                                                         </div>
                                                       </div>
                                                     )}
-                                                    {/* 🟦 v20260502.08: 곱창밴드 색상칩 (자동 줄바꿈) */}
+                                                    {/* 🟦 v20260502.09: 곱창밴드 색상칩 (자동 줄바꿈) */}
                                                     {otherColors.length > 0 && (
                                                       <div className="border border-neutral-300 p-1.5" style={{borderRadius:'2px'}}>
                                                         {p.type === 'gocchang' && (
@@ -14138,7 +14489,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260502.08</p>
+                <p>© 2026 LACEROOM통합관리 v20260502.09</p>
               </footer>
               
               {/* v10.06: 시스템 상태 토스트 (자동 알림) */}
