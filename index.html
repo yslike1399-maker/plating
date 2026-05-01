@@ -117,7 +117,7 @@
 
         const formatDate = (date) => date.toISOString().split('T')[0];
 
-        // 🟦 v20260502.10: 곱창밴드 자주 쓰는 색상/금속라벨 자동 학습 (빈도순)
+        // 🟦 v20260502.11: 곱창밴드 자주 쓰는 색상/금속라벨 자동 학습 (빈도순)
         const getFrequentGocchangColors = (masterProducts) => {
           const counter = {};
           (masterProducts||[]).filter(p => p.type === 'gocchang').forEach(p => {
@@ -391,7 +391,14 @@
             return [{ id: 'github', name: 'GitHub', url: 'https://github.com/yslike1399-maker/plating', icon: '🐙', image: null, color: 'border-slate-300' }];
           });
           const [linkAddPopup, setLinkAddPopup] = useState(false);
-          const [linkForm, setLinkForm] = useState({ name:'', url:'', icon:'🌐', image: null, iconType:'emoji' });
+          const [linkForm, setLinkForm] = useState({ 
+            name:'', url:'', icon:'🌐', image: null, iconType:'emoji',
+            // 🟦 v20260502.11: 카드 커스터마이징
+            text1: '', text2: '',
+            text1Size: 16, text2Size: 12,
+            text1Color: '#000000', text2Color: '#666666',
+            bgColor: '#ffffff'
+          });
           const [linkEditPopup, setLinkEditPopup] = useState(null); // 수정할 링크 객체
 
           // 메모 상태
@@ -495,7 +502,7 @@
                 } catch(e) { console.warn('마이그레이션 실패:', e); }
               }
 
-              // 🟦 v20260502.10: 곱창밴드 metalLabels 필드 추가 마이그레이션
+              // 🟦 v20260502.11: 곱창밴드 metalLabels 필드 추가 마이그레이션
               const gocchangMigrated = localStorage.getItem('gocchang_metalLabels_migrated');
               if (!gocchangMigrated) {
                 try {
@@ -512,7 +519,7 @@
                 } catch(e) { console.warn('곱창밴드 마이그레이션 실패:', e); }
               }
               
-              // 🟦 v20260502.10: 색상명에 금속라벨 통합 마이그레이션 (metalLabels {색상:라벨} → 색상명에 (라벨) 포함)
+              // 🟦 v20260502.11: 색상명에 금속라벨 통합 마이그레이션 (metalLabels {색상:라벨} → 색상명에 (라벨) 포함)
               const colorMetalMerged = localStorage.getItem('gocchang_color_metal_merged');
               if (!colorMetalMerged) {
                 try {
@@ -930,7 +937,7 @@ ${list}` }]
           const [salaryRecords, setSalaryRecords] = useState([]);
           const [salaryPayments, setSalaryPayments] = useState([]);
           
-          // 🟦 v20260502.10: 시간 알리미 위젯
+          // 🟦 v20260502.11: 시간 알리미 위젯
           const [currentTime, setCurrentTime] = useState(new Date());
           const [timerPopup, setTimerPopup] = useState(false);
           const [timerSettings, setTimerSettings] = useState(() => {
@@ -951,7 +958,7 @@ ${list}` }]
             try { localStorage.setItem('timer_settings', JSON.stringify(data)); } catch (e) {}
           };
           
-          // 🟦 v20260502.10: 멜로디 재생 (Web Audio API)
+          // 🟦 v20260502.11: 멜로디 재생 (Web Audio API)
           const playMelody = (type = 'chime') => {
             try {
               const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -983,7 +990,7 @@ ${list}` }]
             } catch (e) { console.warn('멜로디 재생 실패:', e); }
           };
           
-          // 🟦 v20260502.10: TTS 음성 출력
+          // 🟦 v20260502.11: TTS 음성 출력
           const speakTTS = (text) => {
             try {
               if (!window.speechSynthesis || !text) return;
@@ -997,7 +1004,7 @@ ${list}` }]
             } catch (e) { console.warn('TTS 실패:', e); }
           };
           
-          // 🟦 v20260502.10: 매초 시간 업데이트 + 알림 체크
+          // 🟦 v20260502.11: 매초 시간 업데이트 + 알림 체크
           React.useEffect(() => {
             const tick = () => {
               const now = new Date();
@@ -1076,7 +1083,7 @@ ${list}` }]
           // 수정 모드 (v09.10): 도금작업 수정 중인 ID 저장. null이면 신규 작성 모드
           const [editingPlatingOrderId, setEditingPlatingOrderId] = useState(null);
 
-          // 📊 월별 누적 도금 내역 (v20260502.10) - 2번 탭 전용 state
+          // 📊 월별 누적 도금 내역 (v20260502.11) - 2번 탭 전용 state
           const [billingViewMode, setBillingViewMode] = useState('order'); // 'order' | 'billing'
           const [costStartMonth, setCostStartMonth] = useState(() => {
             const today = new Date();
@@ -1425,7 +1432,7 @@ ${list}` }]
             }
           };
 
-          // 🟦 v20260502.10: 지급일 변경 시 자동으로 해당 월 record로 이동/생성
+          // 🟦 v20260502.11: 지급일 변경 시 자동으로 해당 월 record로 이동/생성
           const updatePaymentDateWithAutoMove = (paymentId, newDate) => {
             if (!newDate) return;
             const payment = salaryPayments.find(p => p.id === paymentId);
@@ -1745,7 +1752,7 @@ ${list}` }]
                         qty: parseInt(item.qty) || 0,
                         received: existingItem?.received || false,
                         receivedDate: existingItem?.receivedDate || '',
-                        billingDate: existingItem?.billingDate || ''  // 🟦 v20260502.10: 색상별 청구일 보존
+                        billingDate: existingItem?.billingDate || ''  // 🟦 v20260502.11: 색상별 청구일 보존
                       };
                     }),
                     total: product.items.reduce((sum, item) => sum + (parseInt(item.qty) || 0), 0)
@@ -1854,7 +1861,7 @@ ${list}` }]
                 id: Date.now(),
                 date: orderForm.date,
                 orderNum,
-                billingDate: '',  // 🟦 도금공장 청구일 (v20260502.10) - 5월부터 철저 입력
+                billingDate: '',  // 🟦 도금공장 청구일 (v20260502.11) - 5월부터 철저 입력
                 products: orderForm.products.map(product => ({
                   productId: product.productId,
                   productName: product.productName,
@@ -1866,7 +1873,7 @@ ${list}` }]
                     qty: parseInt(item.qty) || 0,
                     received: false,
                     receivedDate: '',
-                    billingDate: ''  // 🟦 v20260502.10: 색상별 도금공장 청구일
+                    billingDate: ''  // 🟦 v20260502.11: 색상별 도금공장 청구일
                   })),
                   total: product.items.reduce((sum, item) => sum + (parseInt(item.qty) || 0), 0)
                 })),
@@ -2726,7 +2733,7 @@ ${list}` }]
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260502.10</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260502.11</div>
                   </div>
                   
                   {/* v10.06: 헬퍼/봇 상태등 */}
@@ -2824,7 +2831,7 @@ ${list}` }]
                         labelPresets,                // ← 라벨 프리셋 (NEW)
                         nameChangeLogs,              // ← 상품명 변경이력 (v10.01)
                         exportDate: new Date().toISOString(),
-                        appVersion: 'v20260502.10'
+                        appVersion: 'v20260502.11'
                       };
                       const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
                       const url = URL.createObjectURL(blob);
@@ -3106,7 +3113,7 @@ ${list}` }]
                         };
 
                         return (
-                          <div className="bg-white border-2 border-black p-4" style={{borderRadius:'2px'}}>
+                          <div className="bg-white border-2 border-black p-4" style={{borderRadius:'8px'}}>
                             {/* 헤더 */}
                             <div className="flex items-center justify-between mb-3 pb-2 border-b-2 border-black flex-wrap gap-2">
                               <div className="flex items-center gap-2">
@@ -3181,7 +3188,7 @@ ${list}` }]
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
 
                           {/* 이번달 도금 작업 */}
-                          <div onClick={() => setActiveMainTab('plating')} className="bg-white border-2 border-black p-3 cursor-pointer hover:bg-black hover:text-white group transition-all" style={{borderRadius:'2px'}}>
+                          <div onClick={() => setActiveMainTab('plating')} className="bg-white border-2 border-black p-3 cursor-pointer hover:bg-black hover:text-white group transition-all" style={{borderRadius:'8px'}}>
                             <div className="flex items-center gap-1.5 mb-2 pb-1.5 border-b-2 border-black group-hover:border-white">
                               <span className="text-base">🔧</span>
                               <span className="text-[10px] font-black text-neutral-500 group-hover:text-neutral-300 uppercase tracking-widest">PLATING</span>
@@ -3193,7 +3200,7 @@ ${list}` }]
                           </div>
 
                           {/* 거래처 미지급 */}
-                          <div onClick={() => setActiveMainTab('receivable')} className="bg-white border-2 border-black p-3 cursor-pointer hover:bg-black hover:text-white group transition-all" style={{borderRadius:'2px'}}>
+                          <div onClick={() => setActiveMainTab('receivable')} className="bg-white border-2 border-black p-3 cursor-pointer hover:bg-black hover:text-white group transition-all" style={{borderRadius:'8px'}}>
                             <div className="flex items-center gap-1.5 mb-2 pb-1.5 border-b-2 border-black group-hover:border-white">
                               <span className="text-base">🏢</span>
                               <span className="text-[10px] font-black text-neutral-500 group-hover:text-neutral-300 uppercase tracking-widest">VENDOR</span>
@@ -3229,7 +3236,7 @@ ${list}` }]
                           </div>
 
                           {/* 프리랜서 미지급 */}
-                          <div onClick={() => setActiveMainTab('labor')} className="bg-white border-2 border-black p-3 cursor-pointer hover:bg-black hover:text-white group transition-all" style={{borderRadius:'2px'}}>
+                          <div onClick={() => setActiveMainTab('labor')} className="bg-white border-2 border-black p-3 cursor-pointer hover:bg-black hover:text-white group transition-all" style={{borderRadius:'8px'}}>
                             <div className="flex items-center gap-1.5 mb-2 pb-1.5 border-b-2 border-black group-hover:border-white">
                               <span className="text-base">👷</span>
                               <span className="text-[10px] font-black text-neutral-500 group-hover:text-neutral-300 uppercase tracking-widest">LABOR</span>
@@ -3256,7 +3263,7 @@ ${list}` }]
                           </div>
 
                           {/* 미신고 상여금 */}
-                          <div onClick={() => setActiveMainTab('salary')} className="bg-white border-2 border-black p-3 cursor-pointer hover:bg-black hover:text-white group transition-all" style={{borderRadius:'2px'}}>
+                          <div onClick={() => setActiveMainTab('salary')} className="bg-white border-2 border-black p-3 cursor-pointer hover:bg-black hover:text-white group transition-all" style={{borderRadius:'8px'}}>
                             <div className="flex items-center gap-1.5 mb-2 pb-1.5 border-b-2 border-black group-hover:border-white">
                               <span className="text-base">🎁</span>
                               <span className="text-[10px] font-black text-neutral-500 group-hover:text-neutral-300 uppercase tracking-widest">BONUS</span>
@@ -3297,7 +3304,7 @@ ${list}` }]
                             const upcoming = [...upcomingLife, ...upcomingBiz];
                             if (upcoming.length === 0) {
                               return (
-                                <div onClick={() => setActiveMainTab('fixedExpense')} className="bg-white border-2 border-black p-3 cursor-pointer hover:bg-black hover:text-white group transition-all" style={{borderRadius:'2px'}}>
+                                <div onClick={() => setActiveMainTab('fixedExpense')} className="bg-white border-2 border-black p-3 cursor-pointer hover:bg-black hover:text-white group transition-all" style={{borderRadius:'8px'}}>
                                   <div className="flex items-center gap-1.5 mb-2 pb-1.5 border-b-2 border-black group-hover:border-white">
                                     <span className="text-base">💳</span>
                                     <span className="text-[10px] font-black text-neutral-500 group-hover:text-neutral-300 uppercase tracking-widest">FIXED</span>
@@ -3310,7 +3317,7 @@ ${list}` }]
                             }
                             const totalAmt = upcoming.reduce((s,e) => s+e.amount, 0);
                             return (
-                              <div onClick={() => setActiveMainTab('fixedExpense')} className="bg-red-50 border-2 border-red-600 p-3 cursor-pointer hover:bg-red-600 hover:text-white group transition-all" style={{borderRadius:'2px'}}>
+                              <div onClick={() => setActiveMainTab('fixedExpense')} className="bg-red-50 border-2 border-red-600 p-3 cursor-pointer hover:bg-red-600 hover:text-white group transition-all" style={{borderRadius:'8px'}}>
                                 <div className="flex items-center gap-1.5 mb-2 pb-1.5 border-b-2 border-red-600 group-hover:border-white">
                                   <span className="text-base">💳</span>
                                   <span className="text-[10px] font-black text-red-700 group-hover:text-red-100 uppercase tracking-widest">FIXED</span>
@@ -3341,8 +3348,8 @@ ${list}` }]
                           <span className="text-[10px] text-neutral-500 font-bold">추가 기능을 위한 확장 공간</span>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                          {/* 🟦 v20260502.10: 시간 알리미 위젯 */}
-                          <div className="bg-gradient-to-br from-neutral-900 to-neutral-700 text-white p-4 col-span-1 md:col-span-2" style={{borderRadius:'2px'}}>
+                          {/* 🟦 v20260502.11: 시간 알리미 위젯 */}
+                          <div className="bg-gradient-to-br from-neutral-900 to-neutral-700 text-white p-4 col-span-1 md:col-span-2" style={{borderRadius:'8px'}}>
                             {/* 헤더 */}
                             <div className="flex items-center justify-between mb-3">
                               <div className="flex items-center gap-2">
@@ -3357,9 +3364,9 @@ ${list}` }]
                                   speakTTS(`${period} ${dh}시 정각 입니다`);
                                 }}
                                   title="음성 미리듣기"
-                                  className="text-[10px] bg-white/10 hover:bg-white/20 px-2 py-1 font-bold" style={{borderRadius:'2px'}}>🔊 미리듣기</button>
+                                  className="text-[10px] bg-white/10 hover:bg-white/20 px-2 py-1 font-bold" style={{borderRadius:'8px'}}>🔊 미리듣기</button>
                                 <button onClick={()=>setTimerPopup(true)}
-                                  className="text-[10px] bg-white text-black hover:bg-neutral-200 px-2 py-1 font-black uppercase" style={{borderRadius:'2px'}}>설정</button>
+                                  className="text-[10px] bg-white text-black hover:bg-neutral-200 px-2 py-1 font-black uppercase" style={{borderRadius:'8px'}}>설정</button>
                               </div>
                             </div>
                             
@@ -3377,7 +3384,7 @@ ${list}` }]
                               <button onClick={()=>saveTimerSettings({...timerSettings, hourlyChimeEnabled: !timerSettings.hourlyChimeEnabled})}
                                 className={`px-3 py-2 text-[11px] font-black uppercase tracking-wider transition ${
                                   timerSettings.hourlyChimeEnabled ? 'bg-green-500 text-white' : 'bg-neutral-700 text-neutral-400 hover:bg-neutral-600'
-                                }`} style={{borderRadius:'2px'}}>
+                                }`} style={{borderRadius:'8px'}}>
                                 <div>{timerSettings.hourlyChimeEnabled ? '🔔 정각알림 ON' : '🔕 정각알림 OFF'}</div>
                                 <div className="text-[9px] mt-0.5 opacity-80">{timerSettings.hourlyChimeStart}~{timerSettings.hourlyChimeEnd}시</div>
                               </button>
@@ -3385,14 +3392,14 @@ ${list}` }]
                             
                             {/* 활성 알람/메모 요약 */}
                             <div className="grid grid-cols-2 gap-2">
-                              <div className="bg-white/5 border border-white/10 px-2 py-1.5" style={{borderRadius:'2px'}}>
+                              <div className="bg-white/5 border border-white/10 px-2 py-1.5" style={{borderRadius:'8px'}}>
                                 <div className="text-[9px] text-neutral-400 uppercase tracking-widest font-bold">⏰ 알람</div>
                                 <div className="text-xs font-black text-white">{(timerSettings.alarms||[]).filter(a=>a.enabled).length}개 활성</div>
                                 {(timerSettings.alarms||[]).filter(a=>a.enabled).slice(0,2).map(a => (
                                   <div key={a.id} className="text-[9px] text-neutral-300 truncate">{a.time} · {a.label||'알람'}</div>
                                 ))}
                               </div>
-                              <div className="bg-white/5 border border-white/10 px-2 py-1.5" style={{borderRadius:'2px'}}>
+                              <div className="bg-white/5 border border-white/10 px-2 py-1.5" style={{borderRadius:'8px'}}>
                                 <div className="text-[9px] text-neutral-400 uppercase tracking-widest font-bold">📝 음성메모</div>
                                 <div className="text-xs font-black text-white">{(timerSettings.voiceMemos||[]).filter(m=>m.enabled).length}개 활성</div>
                                 {(timerSettings.voiceMemos||[]).filter(m=>m.enabled).slice(0,2).map(m => (
@@ -3412,7 +3419,7 @@ ${list}` }]
                             <div key={w.num}
                               onClick={() => alert(`위젯 ${w.num}\n\n이 영역은 추후 추가될 예정입니다.\n${w.hint}`)}
                               className="bg-neutral-50 border-2 border-dashed border-neutral-300 hover:border-black hover:bg-white p-4 cursor-pointer transition-all min-h-[100px] flex flex-col items-center justify-center group"
-                              style={{borderRadius:'2px'}}>
+                              style={{borderRadius:'8px'}}>
                               <div className="text-2xl text-neutral-300 group-hover:text-black font-black mb-1">+</div>
                               <div className="text-[10px] font-black text-neutral-400 group-hover:text-black uppercase tracking-widest">위젯 {w.num}</div>
                               <div className="text-[9px] text-neutral-400 group-hover:text-neutral-600 mt-1 text-center">{w.hint}</div>
@@ -3421,10 +3428,10 @@ ${list}` }]
                         </div>
                       </div>
 
-                      {/* 🟦 v20260502.10: 시간 알리미 설정 팝업 */}
+                      {/* 🟦 v20260502.11: 시간 알리미 설정 팝업 */}
                       {timerPopup && (
                         <div onClick={()=>setTimerPopup(false)} className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.7)'}}>
-                          <div onClick={e=>e.stopPropagation()} className="bg-white max-w-2xl w-full p-5 max-h-[90vh] overflow-y-auto" style={{borderRadius:'2px'}}>
+                          <div onClick={e=>e.stopPropagation()} className="bg-white max-w-2xl w-full p-5 max-h-[90vh] overflow-y-auto" style={{borderRadius:'8px'}}>
                             <div className="flex items-center justify-between mb-4 pb-3 border-b border-neutral-200">
                               <div>
                                 <div className="text-base font-black text-black uppercase tracking-tight">⏰ 시간 알리미 설정</div>
@@ -3434,26 +3441,26 @@ ${list}` }]
                             </div>
 
                             {/* 1. 정각 알림 설정 */}
-                            <div className="mb-5 bg-neutral-50 border border-neutral-200 p-3" style={{borderRadius:'2px'}}>
+                            <div className="mb-5 bg-neutral-50 border border-neutral-200 p-3" style={{borderRadius:'8px'}}>
                               <div className="text-[11px] font-black text-black mb-2 uppercase tracking-wider">🔔 정각 알림</div>
                               <div className="grid grid-cols-12 gap-2 items-center mb-2">
                                 <label className="col-span-2 text-xs text-neutral-600">시작</label>
                                 <select value={timerSettings.hourlyChimeStart||9} 
                                   onChange={e=>saveTimerSettings({...timerSettings, hourlyChimeStart: parseInt(e.target.value)})}
-                                  className="col-span-3 px-2 py-1.5 border border-neutral-300 text-xs" style={{borderRadius:'2px'}}>
+                                  className="col-span-3 px-2 py-1.5 border border-neutral-300 text-xs" style={{borderRadius:'8px'}}>
                                   {Array.from({length:24}, (_,i)=>i).map(h=><option key={h} value={h}>{h}시</option>)}
                                 </select>
                                 <span className="col-span-1 text-center text-xs">~</span>
                                 <select value={timerSettings.hourlyChimeEnd||18} 
                                   onChange={e=>saveTimerSettings({...timerSettings, hourlyChimeEnd: parseInt(e.target.value)})}
-                                  className="col-span-3 px-2 py-1.5 border border-neutral-300 text-xs" style={{borderRadius:'2px'}}>
+                                  className="col-span-3 px-2 py-1.5 border border-neutral-300 text-xs" style={{borderRadius:'8px'}}>
                                   {Array.from({length:24}, (_,i)=>i).map(h=><option key={h} value={h}>{h}시</option>)}
                                 </select>
                                 <span className="col-span-3 text-[10px] text-neutral-500">매시 정각</span>
                               </div>
                               <div className="grid grid-cols-12 gap-2 items-center">
                                 <label className="col-span-2 text-xs text-neutral-600">알림</label>
-                                <div className="col-span-7 px-2 py-1.5 bg-white border border-neutral-200 text-xs text-neutral-700" style={{borderRadius:'2px'}}>
+                                <div className="col-span-7 px-2 py-1.5 bg-white border border-neutral-200 text-xs text-neutral-700" style={{borderRadius:'8px'}}>
                                   🔊 음성: "오전/오후 X시 정각 입니다"
                                 </div>
                                 <button onClick={()=>{
@@ -3461,7 +3468,7 @@ ${list}` }]
                                   const dh = h === 0 ? 12 : (h > 12 ? h - 12 : h);
                                   const period = h < 12 ? '오전' : '오후';
                                   speakTTS(`${period} ${dh}시 정각 입니다`);
-                                }} className="col-span-3 bg-black text-white text-[10px] font-bold py-1.5 hover:bg-neutral-800" style={{borderRadius:'2px'}}>▶ 미리듣기</button>
+                                }} className="col-span-3 bg-black text-white text-[10px] font-bold py-1.5 hover:bg-neutral-800" style={{borderRadius:'8px'}}>▶ 미리듣기</button>
                               </div>
                             </div>
 
@@ -3472,11 +3479,11 @@ ${list}` }]
                                 <button onClick={()=>{
                                   const newAlarm = { id: Date.now(), time: '14:00', label: '새 알람', repeat: 'daily', enabled: true, melody: 'bell', lastTriggered: '' };
                                   saveTimerSettings({...timerSettings, alarms: [...(timerSettings.alarms||[]), newAlarm]});
-                                }} className="text-[10px] bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 font-black uppercase" style={{borderRadius:'2px'}}>+ 추가</button>
+                                }} className="text-[10px] bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 font-black uppercase" style={{borderRadius:'8px'}}>+ 추가</button>
                               </div>
                               <div className="space-y-1.5">
                                 {(timerSettings.alarms||[]).length === 0 && (
-                                  <div className="text-center text-xs text-neutral-400 py-4 border border-dashed border-neutral-300" style={{borderRadius:'2px'}}>
+                                  <div className="text-center text-xs text-neutral-400 py-4 border border-dashed border-neutral-300" style={{borderRadius:'8px'}}>
                                     아직 알람이 없어요. + 추가 버튼을 눌러 등록하세요
                                   </div>
                                 )}
@@ -3590,62 +3597,137 @@ ${list}` }]
                         </div>
                       )}
 
-                      {/* 링크 추가 팝업 */}
+                      {/* 🟦 v20260502.11: 링크 추가 팝업 - 텍스트1/2 + 색상/크기 추가 */}
                       {linkAddPopup && (
                         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{background:'rgba(0,0,0,0.5)'}}>
-                          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md mx-4 p-8">
-                            <div className="flex items-center justify-between mb-6">
+                          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl mx-4 p-6 max-h-[90vh] overflow-y-auto">
+                            <div className="flex items-center justify-between mb-4">
                               <h3 className="text-lg font-bold text-slate-900">🔗 링크 추가</h3>
-                              <button onClick={() => { setLinkAddPopup(false); setLinkForm({name:'',url:'',icon:'🌐',image:null,iconType:'emoji'}); }} className="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
+                              <button onClick={() => { setLinkAddPopup(false); setLinkForm({name:'',url:'',icon:'🌐',image:null,iconType:'emoji',text1:'',text2:'',text1Size:16,text2Size:12,text1Color:'#000000',text2Color:'#666666',bgColor:'#ffffff'}); }} className="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
                             </div>
-                            <div className="space-y-4">
-                              <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1">링크 이름 *</label>
-                                <input type="text" value={linkForm.name} onChange={e=>setLinkForm({...linkForm,name:e.target.value})}
-                                  placeholder="예: 네이버 스마트스토어" className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm"/>
+                            
+                            {/* 미리보기 카드 */}
+                            <div className="mb-4 p-3 bg-slate-100" style={{borderRadius:'8px'}}>
+                              <div className="text-[10px] font-bold text-slate-500 mb-2 uppercase">미리보기</div>
+                              <div className="flex items-center gap-3 p-3 hover:shadow-md transition-all" 
+                                style={{borderRadius:'8px', backgroundColor: linkForm.bgColor||'#ffffff', minHeight: '90px'}}>
+                                {linkForm.iconType === 'emoji' ? (
+                                  <div className="flex items-center justify-center text-4xl bg-white shrink-0" 
+                                    style={{width:'80px', height:'80px', borderRadius:'8px'}}>
+                                    {linkForm.icon || '🌐'}
+                                  </div>
+                                ) : linkForm.image ? (
+                                  <img src={linkForm.image} alt="" className="object-cover shrink-0" 
+                                    style={{width:'80px', height:'80px', borderRadius:'8px'}}/>
+                                ) : (
+                                  <div className="flex items-center justify-center bg-slate-200 text-slate-400 shrink-0" 
+                                    style={{width:'80px', height:'80px', borderRadius:'8px'}}>
+                                    이미지
+                                  </div>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-bold truncate" style={{fontSize:`${linkForm.text1Size||16}px`, color: linkForm.text1Color||'#000000', lineHeight: 1.2}}>
+                                    {linkForm.text1 || linkForm.name || '텍스트1'}
+                                  </div>
+                                  {(linkForm.text2 || '') && (
+                                    <div className="truncate mt-1" style={{fontSize:`${linkForm.text2Size||12}px`, color: linkForm.text2Color||'#666666', lineHeight: 1.2}}>
+                                      {linkForm.text2}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                              <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1">URL *</label>
-                                <input type="text" value={linkForm.url} onChange={e=>setLinkForm({...linkForm,url:e.target.value})}
-                                  placeholder="https://..." className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm"/>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                              {/* 좌측: 기본 정보 */}
+                              <div className="space-y-3">
+                                <div>
+                                  <label className="block text-xs font-semibold text-slate-600 mb-1">링크 이름 *</label>
+                                  <input type="text" value={linkForm.name} onChange={e=>setLinkForm({...linkForm,name:e.target.value})}
+                                    placeholder="예: 네이버 스마트스토어" className="w-full px-3 py-2 border-2 border-slate-200 focus:border-blue-500 outline-none text-sm" style={{borderRadius:'8px'}}/>
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-semibold text-slate-600 mb-1">URL *</label>
+                                  <input type="text" value={linkForm.url} onChange={e=>setLinkForm({...linkForm,url:e.target.value})}
+                                    placeholder="https://..." className="w-full px-3 py-2 border-2 border-slate-200 focus:border-blue-500 outline-none text-sm" style={{borderRadius:'8px'}}/>
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-semibold text-slate-600 mb-1">텍스트1 (큰 글씨)</label>
+                                  <input type="text" value={linkForm.text1} onChange={e=>setLinkForm({...linkForm,text1:e.target.value})}
+                                    placeholder={linkForm.name || "(비우면 링크 이름 사용)"} 
+                                    className="w-full px-3 py-2 border-2 border-slate-200 focus:border-blue-500 outline-none text-sm mb-1" style={{borderRadius:'8px'}}/>
+                                  <div className="flex items-center gap-2">
+                                    <input type="number" value={linkForm.text1Size} onChange={e=>setLinkForm({...linkForm,text1Size:parseInt(e.target.value)||16})}
+                                      min="10" max="40" className="w-16 px-2 py-1 border border-slate-200 text-xs" style={{borderRadius:'4px'}}/>
+                                    <span className="text-[10px] text-slate-500">px</span>
+                                    <input type="color" value={linkForm.text1Color} onChange={e=>setLinkForm({...linkForm,text1Color:e.target.value})}
+                                      className="w-8 h-8 cursor-pointer" style={{borderRadius:'4px'}}/>
+                                    <input type="text" value={linkForm.text1Color} onChange={e=>setLinkForm({...linkForm,text1Color:e.target.value})}
+                                      className="flex-1 px-2 py-1 border border-slate-200 text-xs font-mono" style={{borderRadius:'4px'}}/>
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-semibold text-slate-600 mb-1">텍스트2 (작은 글씨, 선택)</label>
+                                  <input type="text" value={linkForm.text2} onChange={e=>setLinkForm({...linkForm,text2:e.target.value})}
+                                    placeholder="예: 관리자 페이지" 
+                                    className="w-full px-3 py-2 border-2 border-slate-200 focus:border-blue-500 outline-none text-sm mb-1" style={{borderRadius:'8px'}}/>
+                                  <div className="flex items-center gap-2">
+                                    <input type="number" value={linkForm.text2Size} onChange={e=>setLinkForm({...linkForm,text2Size:parseInt(e.target.value)||12})}
+                                      min="8" max="30" className="w-16 px-2 py-1 border border-slate-200 text-xs" style={{borderRadius:'4px'}}/>
+                                    <span className="text-[10px] text-slate-500">px</span>
+                                    <input type="color" value={linkForm.text2Color} onChange={e=>setLinkForm({...linkForm,text2Color:e.target.value})}
+                                      className="w-8 h-8 cursor-pointer" style={{borderRadius:'4px'}}/>
+                                    <input type="text" value={linkForm.text2Color} onChange={e=>setLinkForm({...linkForm,text2Color:e.target.value})}
+                                      className="flex-1 px-2 py-1 border border-slate-200 text-xs font-mono" style={{borderRadius:'4px'}}/>
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-semibold text-slate-600 mb-1">배경색</label>
+                                  <div className="flex items-center gap-2">
+                                    <input type="color" value={linkForm.bgColor} onChange={e=>setLinkForm({...linkForm,bgColor:e.target.value})}
+                                      className="w-10 h-10 cursor-pointer" style={{borderRadius:'4px'}}/>
+                                    <input type="text" value={linkForm.bgColor} onChange={e=>setLinkForm({...linkForm,bgColor:e.target.value})}
+                                      className="flex-1 px-3 py-2 border border-slate-200 text-sm font-mono" style={{borderRadius:'8px'}}/>
+                                  </div>
+                                </div>
                               </div>
+
+                              {/* 우측: 아이콘/이미지 */}
                               <div>
                                 <label className="block text-xs font-semibold text-slate-600 mb-2">아이콘 유형</label>
                                 <div className="flex gap-2 mb-3">
                                   <button onClick={()=>setLinkForm({...linkForm,iconType:'emoji',image:null})}
-                                    className={`flex-1 py-2 rounded-xl text-sm font-semibold border-2 transition-all ${linkForm.iconType==='emoji'?'border-blue-500 bg-blue-50 text-blue-700':'border-slate-200 text-slate-500'}`}>
+                                    className={`flex-1 py-2 text-sm font-semibold border-2 transition-all ${linkForm.iconType==='emoji'?'border-blue-500 bg-blue-50 text-blue-700':'border-slate-200 text-slate-500'}`} style={{borderRadius:'8px'}}>
                                     😊 이모지
                                   </button>
                                   <button onClick={()=>setLinkForm({...linkForm,iconType:'image'})}
-                                    className={`flex-1 py-2 rounded-xl text-sm font-semibold border-2 transition-all ${linkForm.iconType==='image'?'border-blue-500 bg-blue-50 text-blue-700':'border-slate-200 text-slate-500'}`}>
+                                    className={`flex-1 py-2 text-sm font-semibold border-2 transition-all ${linkForm.iconType==='image'?'border-blue-500 bg-blue-50 text-blue-700':'border-slate-200 text-slate-500'}`} style={{borderRadius:'8px'}}>
                                     🖼️ 이미지
                                   </button>
                                 </div>
 
-                                {/* 이모지 선택 */}
                                 {linkForm.iconType === 'emoji' && (
                                   <div>
-                                    <div className="grid grid-cols-8 gap-1 mb-2 bg-slate-50 rounded-xl p-2">
-                                      {['🌐','🛒','📊','📦','💰','🏪','🔧','📋','🏦','📱','💳','🚚','📈','🔍','⭐','🎯','🏷️','📌','🔗','💼','🏢','📝','✅','🔔'].map(e => (
+                                    <div className="grid grid-cols-6 gap-1 mb-2 bg-slate-50 p-2 max-h-[200px] overflow-y-auto" style={{borderRadius:'8px'}}>
+                                      {['🌐','🛒','📊','📦','💰','🏪','🔧','📋','🏦','📱','💳','🚚','📈','🔍','⭐','🎯','🏷️','📌','🔗','💼','🏢','📝','✅','🔔','🎀','💡','📞','✉️','📅','🗂️','💎','🛍️'].map(e => (
                                         <button key={e} onClick={()=>setLinkForm({...linkForm,icon:e})}
-                                          className={`text-xl p-1 rounded-lg hover:bg-white transition-all ${linkForm.icon===e?'bg-white shadow ring-2 ring-blue-400':''}`}>{e}</button>
+                                          className={`text-xl p-1 hover:bg-white transition-all ${linkForm.icon===e?'bg-white shadow ring-2 ring-blue-400':''}`} style={{borderRadius:'4px'}}>{e}</button>
                                       ))}
                                     </div>
                                     <input type="text" value={linkForm.icon} onChange={e=>setLinkForm({...linkForm,icon:e.target.value})}
-                                      placeholder="직접 입력" className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm text-center"/>
+                                      placeholder="직접 입력" className="w-full px-3 py-2 border-2 border-slate-200 focus:border-blue-500 outline-none text-sm text-center" style={{borderRadius:'8px'}}/>
                                   </div>
                                 )}
 
-                                {/* 이미지 업로드 */}
                                 {linkForm.iconType === 'image' && (
                                   <label className="cursor-pointer block">
-                                    <div className={`border-2 border-dashed rounded-xl overflow-hidden transition-all hover:border-blue-400 ${linkForm.image ? 'border-blue-300' : 'border-slate-300'}`}
-                                      style={{height: 100}}>
+                                    <div className={`border-2 border-dashed overflow-hidden transition-all hover:border-blue-400 ${linkForm.image ? 'border-blue-300' : 'border-slate-300'}`}
+                                      style={{height: 200, borderRadius:'8px'}}>
                                       {linkForm.image ? (
                                         <img src={linkForm.image} alt="미리보기" className="w-full h-full object-cover"/>
                                       ) : (
                                         <div className="flex flex-col items-center justify-center h-full text-slate-400">
-                                          <div className="text-2xl mb-1">📁</div>
+                                          <div className="text-3xl mb-2">📁</div>
                                           <p className="text-xs">이미지 선택</p>
                                         </div>
                                       )}
@@ -3661,77 +3743,162 @@ ${list}` }]
                                 )}
                               </div>
                             </div>
+
                             <div className="flex gap-3 mt-6">
-                              <button onClick={() => { setLinkAddPopup(false); setLinkForm({name:'',url:'',icon:'🌐',image:null,iconType:'emoji'}); }}
-                                className="flex-1 py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold text-sm">취소</button>
+                              <button onClick={() => { setLinkAddPopup(false); setLinkForm({name:'',url:'',icon:'🌐',image:null,iconType:'emoji',text1:'',text2:'',text1Size:16,text2Size:12,text1Color:'#000000',text2Color:'#666666',bgColor:'#ffffff'}); }}
+                                className="flex-1 py-3 border-2 border-slate-200 text-slate-600 font-semibold text-sm" style={{borderRadius:'8px'}}>취소</button>
                               <button onClick={() => {
                                 if (!linkForm.name.trim()) return alert('링크 이름을 입력하세요');
                                 if (!linkForm.url.trim()) return alert('URL을 입력하세요');
-                                const newLink = { id: Date.now(), name: linkForm.name.trim(), url: linkForm.url.trim(), icon: linkForm.icon, image: linkForm.image || null };
+                                const newLink = { 
+                                  id: Date.now(), 
+                                  name: linkForm.name.trim(), 
+                                  url: linkForm.url.trim(), 
+                                  icon: linkForm.icon, 
+                                  image: linkForm.image || null,
+                                  iconType: linkForm.iconType,
+                                  text1: linkForm.text1.trim(),
+                                  text2: linkForm.text2.trim(),
+                                  text1Size: linkForm.text1Size,
+                                  text2Size: linkForm.text2Size,
+                                  text1Color: linkForm.text1Color,
+                                  text2Color: linkForm.text2Color,
+                                  bgColor: linkForm.bgColor
+                                };
                                 const newLinks = [...dashboardLinks, newLink];
                                 setDashboardLinks(newLinks);
                                 localStorage.setItem('dashboard_links', JSON.stringify(newLinks));
                                 setLinkAddPopup(false);
-                                setLinkForm({name:'',url:'',icon:'🌐',image:null,iconType:'emoji'});
-                              }} className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm">추가</button>
+                                setLinkForm({name:'',url:'',icon:'🌐',image:null,iconType:'emoji',text1:'',text2:'',text1Size:16,text2Size:12,text1Color:'#000000',text2Color:'#666666',bgColor:'#ffffff'});
+                              }} className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm" style={{borderRadius:'8px'}}>추가</button>
                             </div>
                           </div>
                         </div>
                       )}
 
-                      {/* 링크 수정 팝업 */}
+                      {/* 🟦 v20260502.11: 링크 수정 팝업 */}
                       {linkEditPopup && (
                         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{background:'rgba(0,0,0,0.5)'}}>
-                          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md mx-4 p-8">
-                            <div className="flex items-center justify-between mb-6">
+                          <div className="bg-white shadow-2xl w-full max-w-2xl mx-4 p-6 max-h-[90vh] overflow-y-auto" style={{borderRadius:'8px'}}>
+                            <div className="flex items-center justify-between mb-4">
                               <h3 className="text-lg font-bold text-slate-900">✎ 링크 수정</h3>
                               <button onClick={() => setLinkEditPopup(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
                             </div>
-                            <div className="space-y-4">
-                              <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1">링크 이름 *</label>
-                                <input type="text" value={linkEditPopup.name} onChange={e=>setLinkEditPopup({...linkEditPopup,name:e.target.value})}
-                                  className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm"/>
+                            
+                            {/* 미리보기 */}
+                            <div className="mb-4 p-3 bg-slate-100" style={{borderRadius:'8px'}}>
+                              <div className="text-[10px] font-bold text-slate-500 mb-2 uppercase">미리보기</div>
+                              <div className="flex items-center gap-3 p-3 hover:shadow-md transition-all" 
+                                style={{borderRadius:'8px', backgroundColor: linkEditPopup.bgColor||'#ffffff', minHeight: '90px'}}>
+                                {linkEditPopup.iconType === 'image' && linkEditPopup.image ? (
+                                  <img src={linkEditPopup.image} alt="" className="object-cover shrink-0" 
+                                    style={{width:'80px', height:'80px', borderRadius:'8px'}}/>
+                                ) : (
+                                  <div className="flex items-center justify-center text-4xl bg-white shrink-0" 
+                                    style={{width:'80px', height:'80px', borderRadius:'8px'}}>
+                                    {linkEditPopup.icon || '🌐'}
+                                  </div>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-bold truncate" style={{fontSize:`${linkEditPopup.text1Size||16}px`, color: linkEditPopup.text1Color||'#000000', lineHeight: 1.2}}>
+                                    {linkEditPopup.text1 || linkEditPopup.name || '텍스트1'}
+                                  </div>
+                                  {(linkEditPopup.text2 || '') && (
+                                    <div className="truncate mt-1" style={{fontSize:`${linkEditPopup.text2Size||12}px`, color: linkEditPopup.text2Color||'#666666', lineHeight: 1.2}}>
+                                      {linkEditPopup.text2}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                              <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1">URL *</label>
-                                <input type="text" value={linkEditPopup.url} onChange={e=>setLinkEditPopup({...linkEditPopup,url:e.target.value})}
-                                  className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm"/>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="space-y-3">
+                                <div>
+                                  <label className="block text-xs font-semibold text-slate-600 mb-1">링크 이름 *</label>
+                                  <input type="text" value={linkEditPopup.name} onChange={e=>setLinkEditPopup({...linkEditPopup,name:e.target.value})}
+                                    className="w-full px-3 py-2 border-2 border-slate-200 focus:border-blue-500 outline-none text-sm" style={{borderRadius:'8px'}}/>
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-semibold text-slate-600 mb-1">URL *</label>
+                                  <input type="text" value={linkEditPopup.url} onChange={e=>setLinkEditPopup({...linkEditPopup,url:e.target.value})}
+                                    className="w-full px-3 py-2 border-2 border-slate-200 focus:border-blue-500 outline-none text-sm" style={{borderRadius:'8px'}}/>
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-semibold text-slate-600 mb-1">텍스트1 (큰 글씨)</label>
+                                  <input type="text" value={linkEditPopup.text1||''} onChange={e=>setLinkEditPopup({...linkEditPopup,text1:e.target.value})}
+                                    placeholder={linkEditPopup.name || "(비우면 링크 이름)"}
+                                    className="w-full px-3 py-2 border-2 border-slate-200 focus:border-blue-500 outline-none text-sm mb-1" style={{borderRadius:'8px'}}/>
+                                  <div className="flex items-center gap-2">
+                                    <input type="number" value={linkEditPopup.text1Size||16} onChange={e=>setLinkEditPopup({...linkEditPopup,text1Size:parseInt(e.target.value)||16})}
+                                      min="10" max="40" className="w-16 px-2 py-1 border border-slate-200 text-xs" style={{borderRadius:'4px'}}/>
+                                    <span className="text-[10px] text-slate-500">px</span>
+                                    <input type="color" value={linkEditPopup.text1Color||'#000000'} onChange={e=>setLinkEditPopup({...linkEditPopup,text1Color:e.target.value})}
+                                      className="w-8 h-8 cursor-pointer" style={{borderRadius:'4px'}}/>
+                                    <input type="text" value={linkEditPopup.text1Color||'#000000'} onChange={e=>setLinkEditPopup({...linkEditPopup,text1Color:e.target.value})}
+                                      className="flex-1 px-2 py-1 border border-slate-200 text-xs font-mono" style={{borderRadius:'4px'}}/>
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-semibold text-slate-600 mb-1">텍스트2 (작은 글씨, 선택)</label>
+                                  <input type="text" value={linkEditPopup.text2||''} onChange={e=>setLinkEditPopup({...linkEditPopup,text2:e.target.value})}
+                                    placeholder="예: 관리자 페이지"
+                                    className="w-full px-3 py-2 border-2 border-slate-200 focus:border-blue-500 outline-none text-sm mb-1" style={{borderRadius:'8px'}}/>
+                                  <div className="flex items-center gap-2">
+                                    <input type="number" value={linkEditPopup.text2Size||12} onChange={e=>setLinkEditPopup({...linkEditPopup,text2Size:parseInt(e.target.value)||12})}
+                                      min="8" max="30" className="w-16 px-2 py-1 border border-slate-200 text-xs" style={{borderRadius:'4px'}}/>
+                                    <span className="text-[10px] text-slate-500">px</span>
+                                    <input type="color" value={linkEditPopup.text2Color||'#666666'} onChange={e=>setLinkEditPopup({...linkEditPopup,text2Color:e.target.value})}
+                                      className="w-8 h-8 cursor-pointer" style={{borderRadius:'4px'}}/>
+                                    <input type="text" value={linkEditPopup.text2Color||'#666666'} onChange={e=>setLinkEditPopup({...linkEditPopup,text2Color:e.target.value})}
+                                      className="flex-1 px-2 py-1 border border-slate-200 text-xs font-mono" style={{borderRadius:'4px'}}/>
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-semibold text-slate-600 mb-1">배경색</label>
+                                  <div className="flex items-center gap-2">
+                                    <input type="color" value={linkEditPopup.bgColor||'#ffffff'} onChange={e=>setLinkEditPopup({...linkEditPopup,bgColor:e.target.value})}
+                                      className="w-10 h-10 cursor-pointer" style={{borderRadius:'4px'}}/>
+                                    <input type="text" value={linkEditPopup.bgColor||'#ffffff'} onChange={e=>setLinkEditPopup({...linkEditPopup,bgColor:e.target.value})}
+                                      className="flex-1 px-3 py-2 border border-slate-200 text-sm font-mono" style={{borderRadius:'8px'}}/>
+                                  </div>
+                                </div>
                               </div>
+
                               <div>
                                 <label className="block text-xs font-semibold text-slate-600 mb-2">아이콘 유형</label>
                                 <div className="flex gap-2 mb-3">
                                   <button onClick={()=>setLinkEditPopup({...linkEditPopup,iconType:'emoji',image:null})}
-                                    className={`flex-1 py-2 rounded-xl text-sm font-semibold border-2 transition-all ${linkEditPopup.iconType==='emoji'?'border-blue-500 bg-blue-50 text-blue-700':'border-slate-200 text-slate-500'}`}>
+                                    className={`flex-1 py-2 text-sm font-semibold border-2 transition-all ${linkEditPopup.iconType==='emoji'||!linkEditPopup.iconType?'border-blue-500 bg-blue-50 text-blue-700':'border-slate-200 text-slate-500'}`} style={{borderRadius:'8px'}}>
                                     😊 이모지
                                   </button>
                                   <button onClick={()=>setLinkEditPopup({...linkEditPopup,iconType:'image'})}
-                                    className={`flex-1 py-2 rounded-xl text-sm font-semibold border-2 transition-all ${linkEditPopup.iconType==='image'?'border-blue-500 bg-blue-50 text-blue-700':'border-slate-200 text-slate-500'}`}>
+                                    className={`flex-1 py-2 text-sm font-semibold border-2 transition-all ${linkEditPopup.iconType==='image'?'border-blue-500 bg-blue-50 text-blue-700':'border-slate-200 text-slate-500'}`} style={{borderRadius:'8px'}}>
                                     🖼️ 이미지
                                   </button>
                                 </div>
 
-                                {linkEditPopup.iconType === 'emoji' && (
+                                {(linkEditPopup.iconType === 'emoji' || !linkEditPopup.iconType) && (
                                   <div>
-                                    <div className="grid grid-cols-8 gap-1 mb-2 bg-slate-50 rounded-xl p-2">
-                                      {['🌐','🛒','📊','📦','💰','🏪','🔧','📋','🏦','📱','💳','🚚','📈','🔍','⭐','🎯','🏷️','📌','🔗','💼','🏢','📝','✅','🔔'].map(e => (
+                                    <div className="grid grid-cols-6 gap-1 mb-2 bg-slate-50 p-2 max-h-[200px] overflow-y-auto" style={{borderRadius:'8px'}}>
+                                      {['🌐','🛒','📊','📦','💰','🏪','🔧','📋','🏦','📱','💳','🚚','📈','🔍','⭐','🎯','🏷️','📌','🔗','💼','🏢','📝','✅','🔔','🎀','💡','📞','✉️','📅','🗂️','💎','🛍️'].map(e => (
                                         <button key={e} onClick={()=>setLinkEditPopup({...linkEditPopup,icon:e})}
-                                          className={`text-xl p-1 rounded-lg hover:bg-white transition-all ${linkEditPopup.icon===e?'bg-white shadow ring-2 ring-blue-400':''}`}>{e}</button>
+                                          className={`text-xl p-1 hover:bg-white transition-all ${linkEditPopup.icon===e?'bg-white shadow ring-2 ring-blue-400':''}`} style={{borderRadius:'4px'}}>{e}</button>
                                       ))}
                                     </div>
                                     <input type="text" value={linkEditPopup.icon||''} onChange={e=>setLinkEditPopup({...linkEditPopup,icon:e.target.value})}
-                                      placeholder="직접 입력" className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm text-center"/>
+                                      placeholder="직접 입력" className="w-full px-3 py-2 border-2 border-slate-200 focus:border-blue-500 outline-none text-sm text-center" style={{borderRadius:'8px'}}/>
                                   </div>
                                 )}
 
                                 {linkEditPopup.iconType === 'image' && (
                                   <label className="cursor-pointer block">
-                                    <div className={`border-2 border-dashed rounded-xl overflow-hidden transition-all hover:border-blue-400 ${linkEditPopup.image?'border-blue-300':'border-slate-300'}`} style={{height:100}}>
+                                    <div className={`border-2 border-dashed overflow-hidden transition-all hover:border-blue-400 ${linkEditPopup.image?'border-blue-300':'border-slate-300'}`} style={{height:200, borderRadius:'8px'}}>
                                       {linkEditPopup.image ? (
                                         <img src={linkEditPopup.image} alt="미리보기" style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}/>
                                       ) : (
                                         <div className="flex flex-col items-center justify-center h-full text-slate-400">
-                                          <div className="text-2xl mb-1">📁</div>
+                                          <div className="text-3xl mb-2">📁</div>
                                           <p className="text-xs">이미지 선택</p>
                                         </div>
                                       )}
@@ -3751,9 +3918,10 @@ ${list}` }]
                                 )}
                               </div>
                             </div>
+                            
                             <div className="flex gap-3 mt-6">
                               <button onClick={() => setLinkEditPopup(null)}
-                                className="flex-1 py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold text-sm">취소</button>
+                                className="flex-1 py-3 border-2 border-slate-200 text-slate-600 font-semibold text-sm" style={{borderRadius:'8px'}}>취소</button>
                               <button onClick={() => {
                                 if (!linkEditPopup.name.trim()) return alert('링크 이름을 입력하세요');
                                 if (!linkEditPopup.url.trim()) return alert('URL을 입력하세요');
@@ -3762,12 +3930,20 @@ ${list}` }]
                                   name: linkEditPopup.name.trim(),
                                   url: linkEditPopup.url.trim(),
                                   icon: linkEditPopup.icon,
-                                  image: linkEditPopup.iconType === 'image' ? linkEditPopup.image : null
+                                  image: linkEditPopup.iconType === 'image' ? linkEditPopup.image : null,
+                                  iconType: linkEditPopup.iconType,
+                                  text1: (linkEditPopup.text1||'').trim(),
+                                  text2: (linkEditPopup.text2||'').trim(),
+                                  text1Size: linkEditPopup.text1Size||16,
+                                  text2Size: linkEditPopup.text2Size||12,
+                                  text1Color: linkEditPopup.text1Color||'#000000',
+                                  text2Color: linkEditPopup.text2Color||'#666666',
+                                  bgColor: linkEditPopup.bgColor||'#ffffff'
                                 } : l);
                                 setDashboardLinks(newLinks);
                                 localStorage.setItem('dashboard_links', JSON.stringify(newLinks));
                                 setLinkEditPopup(null);
-                              }} className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm">저장</button>
+                              }} className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm" style={{borderRadius:'8px'}}>저장</button>
                             </div>
                           </div>
                         </div>
@@ -3780,7 +3956,7 @@ ${list}` }]
                           <button onClick={() => setLinkAddPopup(true)}
                             className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700">+ 추가</button>
                         </div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                           {dashboardLinks.map((link, idx) => (
                             <div key={link.id} className="relative group"
                               draggable
@@ -3802,22 +3978,47 @@ ${list}` }]
                               }}
                             >
                               <a href={link.url} target="_blank" rel="noopener noreferrer"
-                                className="block rounded-2xl overflow-hidden border-2 border-slate-200 hover:border-blue-400 hover:shadow-md transition-all bg-white cursor-grab active:cursor-grabbing"
-                                style={{height:90, position:'relative', display:'block'}}
+                                className="block overflow-hidden border-2 border-slate-200 hover:border-blue-400 hover:shadow-md transition-all cursor-grab active:cursor-grabbing flex items-center gap-3 p-3"
+                                style={{
+                                  borderRadius: '8px',
+                                  minHeight: '90px',
+                                  backgroundColor: link.bgColor || '#ffffff'
+                                }}
                                 onClick={e => { if(e.defaultPrevented) e.preventDefault(); }}>
+                                {/* 🟦 v20260502.11: 좌측 정사각형 80x80 이미지/이모지 */}
                                 {link.image ? (
-                                  <>
-                                    <img src={link.image} alt={link.name} style={{position:'absolute',top:0,left:0,width:'100%',height:'100%',objectFit:'cover',objectPosition:'center',display:'block'}}/>
-                                    <div style={{position:'absolute',bottom:0,left:0,right:0,background:'rgba(0,0,0,0.6)',padding:'4px 8px'}}>
-                                      <span style={{color:'white',fontSize:'11px',fontWeight:600,display:'block',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{link.name}</span>
-                                    </div>
-                                  </>
+                                  <img src={link.image} alt={link.name} 
+                                    className="object-cover shrink-0"
+                                    style={{width:'80px', height:'80px', borderRadius:'8px'}}/>
                                 ) : (
-                                  <div className="flex flex-col items-center justify-center gap-1.5 h-full p-2">
-                                    <span className="text-3xl">{link.icon || '🌐'}</span>
-                                    <span className="text-xs font-semibold text-slate-700 text-center leading-tight">{link.name}</span>
+                                  <div className="flex items-center justify-center shrink-0 text-4xl"
+                                    style={{
+                                      width:'80px', height:'80px', 
+                                      borderRadius:'8px',
+                                      backgroundColor: link.bgColor && link.bgColor !== '#ffffff' ? 'rgba(255,255,255,0.6)' : '#f1f5f9'
+                                    }}>
+                                    {link.icon || '🌐'}
                                   </div>
                                 )}
+                                {/* 우측 텍스트1/2 */}
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-bold truncate" style={{
+                                    fontSize: `${link.text1Size || 16}px`,
+                                    color: link.text1Color || '#000000',
+                                    lineHeight: 1.2
+                                  }}>
+                                    {link.text1 || link.name}
+                                  </div>
+                                  {link.text2 && (
+                                    <div className="truncate mt-1" style={{
+                                      fontSize: `${link.text2Size || 12}px`,
+                                      color: link.text2Color || '#666666',
+                                      lineHeight: 1.2
+                                    }}>
+                                      {link.text2}
+                                    </div>
+                                  )}
+                                </div>
                               </a>
                               <button onClick={() => {
                                 if (confirm(`${link.name} 삭제?`)) {
@@ -4054,7 +4255,7 @@ ${list}` }]
                   <div className="bg-white border-b border-slate-200 px-4 py-2 sticky top-0 z-40">
                     <div className="flex space-x-1">
                       {[
-                        // v20260502.10: 1-1 색상별 단가 탭 삭제 (9-1 상품 마스터로 통합)
+                        // v20260502.11: 1-1 색상별 단가 탭 삭제 (9-1 상품 마스터로 통합)
                         ['order', '작업 지시서', '1-2'],
                         ['rework', '재도금 요청', '1-3'],
                         ['history', '작업 내역', '1-4'],
@@ -4072,7 +4273,7 @@ ${list}` }]
                 {/* 도금작업지시서 탭 */}
                 {activeMainTab === 'plating' && (
                   <>
-                {/* 1-1 색상별 단가 탭 v20260502.10에서 삭제 (9-1 상품 마스터로 통합) */}
+                {/* 1-1 색상별 단가 탭 v20260502.11에서 삭제 (9-1 상품 마스터로 통합) */}
 
                 {activeTab === 'order' && (
                   <div className="space-y-6">
@@ -4714,7 +4915,7 @@ ${list}` }]
                                           </div>
 
                                           <div className="flex items-center gap-2">
-                                            {/* 🟦 색상별 도금공장 청구일 (v20260502.10) */}
+                                            {/* 🟦 색상별 도금공장 청구일 (v20260502.11) */}
                                             <div className="flex items-center bg-blue-500 border-2 border-blue-300 rounded-lg px-2 py-1 shadow-sm" title="이 색상의 도금공장 청구일">
                                               <span className="text-white text-[10px] font-bold mr-1.5">📅 청구일</span>
                                               <input
@@ -5146,7 +5347,7 @@ ${list}` }]
                 </>
                 )}
 
-                {/* 월별 누적 도금 내역 탭 (v20260502.10) */}
+                {/* 월별 누적 도금 내역 탭 (v20260502.11) */}
                 {activeMainTab === 'cost' && (
                   <div className="space-y-6">
                     <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8">
@@ -5203,7 +5404,7 @@ ${list}` }]
                         };
 
                         // 색상별 도금 단가 조회
-                        // v20260502.10: 작업내역의 공장색상(item.color='대금', item.finish='유광')을
+                        // v20260502.11: 작업내역의 공장색상(item.color='대금', item.finish='유광')을
                         // 9-1 판매색상키('골드(유광)')로 역변환하여 colorPlatingCosts에서 조회
                         const getPlatingCost = (costs, color, finish) => {
                           const { colorPlatingCosts, platingCostsLegacy } = costs;
@@ -5246,14 +5447,14 @@ ${list}` }]
                         };
 
                         // 데이터 집계: 제품_색상_마감 단위로 월별 누적
-                        // 🟦 v20260502.10: productId 기준 그룹핑 (같은 제품 다른 이름 통합) + 9-1 마스터 이름 우선 표시
+                        // 🟦 v20260502.11: productId 기준 그룹핑 (같은 제품 다른 이름 통합) + 9-1 마스터 이름 우선 표시
                         // pivot[key] = { productName, color, finish, platingCost, grindCost, grindRequired, byMonth: {...}, unset: 0 }
                         const pivot = {};
                         history.filter(o => !o.type || o.type === 'work').forEach(order => {
                           order.products.forEach(product => {
                             const costs = getMasterCosts(product.productId, product.productName);
                             
-                            // 🟦 v20260502.10: 9-1 마스터 매칭 → 통일된 productKey + 표시 이름 결정
+                            // 🟦 v20260502.11: 9-1 마스터 매칭 → 통일된 productKey + 표시 이름 결정
                             const matchedMp = masterProducts.find(mp =>
                               String(mp.id) === String(product.productId) ||
                               String(mp.legacyProductId) === String(product.productId) ||
@@ -5270,7 +5471,7 @@ ${list}` }]
                               
                               if (!pivot[key]) {
                                 pivot[key] = {
-                                  productName: displayName,  // 🟦 v20260502.10: 9-1 마스터 이름 우선
+                                  productName: displayName,  // 🟦 v20260502.11: 9-1 마스터 이름 우선
                                   productId: matchedMp ? matchedMp.id : product.productId,
                                   color: item.color,
                                   finish: finish,
@@ -8900,7 +9101,7 @@ ${list}` }]
                                                   if(amount<=0) return alert('지급액을 입력하세요');
                                                   if(amount>remaining) return alert('미지급액을 초과할 수 없습니다');
                                                   
-                                                  // 🟦 v20260502.10: 지급일이 다른 월이면 해당 월 record로 자동 이동/생성
+                                                  // 🟦 v20260502.11: 지급일이 다른 월이면 해당 월 record로 자동 이동/생성
                                                   const payMonth = payDate.substring(0, 7);
                                                   let targetRecordId = record.id;
                                                   let targetPaymentOrder = payments.length + 1;
@@ -9033,7 +9234,7 @@ ${list}` }]
                                                         <tr key={payment.id} className="border-b border-slate-200">
                                                           <td className="py-2 px-3 font-bold text-blue-600">{payment.paymentOrder}차</td>
                                                           <td className="py-2 px-3">
-                                                            {/* 🟦 v20260502.10: 지급일 변경 시 자동으로 해당 월 record로 이동/생성 */}
+                                                            {/* 🟦 v20260502.11: 지급일 변경 시 자동으로 해당 월 record로 이동/생성 */}
                                                             <input type="date" value={payment.payDate||''} 
                                                               onChange={e=>{
                                                                 const newDate = e.target.value;
@@ -9632,7 +9833,7 @@ ${list}` }]
                               <h3 className="text-base font-black text-black tracking-tight">🖨️ 라벨 인쇄 + 디자인 편집기</h3>
                               <span className="bg-black text-white text-[10px] font-black px-2 py-0.5 tracking-widest" style={{borderRadius:'4px'}}>EDITOR</span>
                             </div>
-                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260502.10 · 헬퍼 자동 인쇄 · 한글 100%</div>
+                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260502.11 · 헬퍼 자동 인쇄 · 한글 100%</div>
                           </div>
                           <button onClick={()=>setBarcodePrintPopup(null)} className="text-neutral-400 hover:text-black text-xl font-black">✕</button>
                         </div>
@@ -10546,7 +10747,7 @@ ${list}` }]
                                             💡 텔레그램 봇에서 검색할 키워드를 쉼표(,)로 구분
                                           </div>
                                         </div>
-                                        {/* 🟦 v20260502.10: 도금거래처 상품명 - 헤어핀만 (곱창밴드는 도금 안 함) */}
+                                        {/* 🟦 v20260502.11: 도금거래처 상품명 - 헤어핀만 (곱창밴드는 도금 안 함) */}
                                         {form.type === 'hairpin' && (
                                           <div>
                                             <label className="block text-[11px] font-bold text-black mb-2 uppercase tracking-wider">도금거래처 상품명 <span className="text-neutral-400 font-normal normal-case tracking-normal">(선택)</span></label>
@@ -10670,7 +10871,7 @@ ${list}` }]
                                               {/* 색상 카드 리스트 - 2열 그리드, 무신사 스타일 */}
                                               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                               {(() => {
-                                                // v20260502.10: 좌=유광, 우=반광 짝맞추기 정렬
+                                                // v20260502.11: 좌=유광, 우=반광 짝맞추기 정렬
                                                 // 색상 그룹별 (골드→실버→블랙→다크골드→로즈골드), 유광 다음 반광
                                                 // 단독 색상(14K도금, 은): 마지막에 왼쪽 단독 배치
                                                 const colorOrder = [
@@ -10898,7 +11099,7 @@ ${list}` }]
                                               )}
                                             </div>
                                           ) : (
-                                            // 🟦 v20260502.10: 곱창밴드 - 헤어핀처럼 색상 카드 시스템 (원단정보 유무 무관)
+                                            // 🟦 v20260502.11: 곱창밴드 - 헤어핀처럼 색상 카드 시스템 (원단정보 유무 무관)
                                             <div className="space-y-2">
                                               {/* 안내 */}
                                               {form.hasFabricInfo === false ? (
@@ -10937,7 +11138,7 @@ ${list}` }]
                                                     const pos = positions[color] || '';
                                                     const customName = customColorNames[color] || '';
                                                     
-                                                    // 🟦 v20260502.10: 색상 키에서 색상명/금속라벨 분리 (예: "블랙(금도금)" → name="블랙", metal="금도금")
+                                                    // 🟦 v20260502.11: 색상 키에서 색상명/금속라벨 분리 (예: "블랙(금도금)" → name="블랙", metal="금도금")
                                                     const colorKeyMatch = color.match(/^(.+?)\(([^)]+)\)$/);
                                                     const baseColorName = colorKeyMatch ? colorKeyMatch[1].trim() : color;
                                                     const metalLabel = colorKeyMatch ? colorKeyMatch[2].trim() : (metalLabels[color] || '');
@@ -11061,7 +11262,7 @@ ${list}` }]
                                                             style={{borderRadius:'2px'}}/>
                                                         </div>
 
-                                                        {/* 🟦 v20260502.10: 금속라벨 변경 시 색상 키 자체 변경 (예: 블랙(금도금) → 블랙(은도금)) */}
+                                                        {/* 🟦 v20260502.11: 금속라벨 변경 시 색상 키 자체 변경 (예: 블랙(금도금) → 블랙(은도금)) */}
                                                         <div className="flex items-center gap-1 mt-1.5 min-w-0">
                                                           <span className={`text-[10px] w-9 shrink-0 font-medium ${isFocused?'text-yellow-300':'text-yellow-700'}`}>🏷️금속</span>
                                                           <input type="text" value={metalLabel}
@@ -11203,7 +11404,7 @@ ${list}` }]
                                                   <div className={`text-[10px] ${form._imgMode==='upload'?'text-neutral-300':'text-neutral-500'}`}>자동 압축</div>
                                                 </div>
                                               </label>
-                                              {/* 🟦 v20260502.10: 외부 URL 옵션 추가 (Google Drive 등) */}
+                                              {/* 🟦 v20260502.11: 외부 URL 옵션 추가 (Google Drive 등) */}
                                               <label className={`flex-1 flex items-center gap-2 p-2 cursor-pointer transition ${
                                                 form._imgMode === 'external' ? 'bg-black text-white' : 'bg-white border border-neutral-300 hover:border-black'
                                               }`} style={{borderRadius:'2px'}}>
@@ -11268,7 +11469,7 @@ ${list}` }]
                                               </label>
                                             )}
 
-                                            {/* 🟦 v20260502.10: 외부 URL 모드 */}
+                                            {/* 🟦 v20260502.11: 외부 URL 모드 */}
                                             {form._imgMode === 'external' && (
                                               <div className="space-y-2">
                                                 <input type="text"
@@ -11322,7 +11523,7 @@ ${list}` }]
                                             {/* v10.03: 색상카드의 도금 단가 요약 (읽기전용) */}
                                             {(() => {
                                               const cpc = form.colorPlatingCosts || {};
-                                              // v20260502.10: 좌=유광 우=반광 짝맞추기 정렬 적용
+                                              // v20260502.11: 좌=유광 우=반광 짝맞추기 정렬 적용
                                               const colorOrder = [
                                                 '골드(유광)','골드(반광)',
                                                 '실버(유광)','실버(반광)',
@@ -11355,7 +11556,7 @@ ${list}` }]
                                                     </div>
                                                   ) : (
                                                     <div className="grid grid-cols-2 gap-1">
-                                                      {/* v20260502.10: 입력/미입력 분리 안 하고 정렬 순서대로 표시 (짝맞춤 유지) */}
+                                                      {/* v20260502.11: 입력/미입력 분리 안 하고 정렬 순서대로 표시 (짝맞춤 유지) */}
                                                       {allColors.map(c => {
                                                         const hasValue = cpc[c] && cpc[c] !== '' && Number(cpc[c]) > 0;
                                                         return hasValue ? (
@@ -11488,7 +11689,7 @@ ${list}` }]
                                               </div>
                                             )}
 
-                                            {/* 🟦 v20260502.10: 색상 매칭 4컬럼 - 거래처색상→LACEROOM색상→금속라벨→바코드 */}
+                                            {/* 🟦 v20260502.11: 색상 매칭 4컬럼 - 거래처색상→LACEROOM색상→금속라벨→바코드 */}
                                             {form.fabricId && (() => {
                                               const sup2 = fabricSuppliersState.find(s=>String(s.id)===String(form.fabricSupplierId));
                                               const fab = sup2?.fabrics?.find(f=>String(f.id)===String(form.fabricId));
@@ -11593,7 +11794,7 @@ ${list}` }]
                                                                 {(!existingColors.includes(ourValue)) && (
                                                                   <input type="text" value={ourValue}
                                                                     onChange={e=>{
-                                                                      // 🟦 v20260502.10: 입력 중에는 mapping만 업데이트 (colors 동기화 X → 포커스 유지)
+                                                                      // 🟦 v20260502.11: 입력 중에는 mapping만 업데이트 (colors 동기화 X → 포커스 유지)
                                                                       const v = e.target.value;
                                                                       setForm(p => ({...p, _colorMapping: {...(p._colorMapping||{}), [sc]: v}}));
                                                                     }}
@@ -11753,7 +11954,7 @@ ${list}` }]
                                         barcodes: form.barcodes || {},
                                         positions: form.positions || {},
                                         customColorNames: form.customColorNames || {},
-                                        metalLabels: form.metalLabels || {},  // 🟦 v20260502.10: 곱창밴드 금속라벨 저장 누락 버그 수정
+                                        metalLabels: form.metalLabels || {},  // 🟦 v20260502.11: 곱창밴드 금속라벨 저장 누락 버그 수정
                                         unlockedColors: form.unlockedColors || [],
                                         botTags: form.botTags || '',  // v10.08: 봇 검색 태그
                                         legacyProductId: form.legacyProductId||null,
@@ -11828,7 +12029,7 @@ ${list}` }]
                                         }
                                       }
 
-                                      // 🟦 v20260502.10: 색상 삭제 시 잔존 soldoutItems/todayOffItems 자동 정리
+                                      // 🟦 v20260502.11: 색상 삭제 시 잔존 soldoutItems/todayOffItems 자동 정리
                                       // (9-1에서 색상이 제거되었으면 그 색상의 품절/오늘불가 데이터도 같이 삭제)
                                       const finalColorSet = new Set(item.colors || []);
                                       const cleanedSoldout = soldoutItems.filter(s => 
@@ -12012,7 +12213,7 @@ ${list}` }]
                               if (!currentColors.has(c)) {
                                 setForm(p => {
                                   const newState = {...p, colors: [...(p.colors||[]), c]};
-                                  // 🟦 v20260502.10: 반광 색상 추가 시 자동 ★ 라벨 입력
+                                  // 🟦 v20260502.11: 반광 색상 추가 시 자동 ★ 라벨 입력
                                   // 단, 기존 라벨이 있으면 보존
                                   if (c.includes('(반광)')) {
                                     const existing = (p.customColorNames || {})[c];
@@ -12104,12 +12305,12 @@ ${list}` }]
                             );
                           })()}
 
-                          {/* 🟦 v20260502.10: 곱창밴드 색상 추가 모달 - 자유 입력 + 자주 쓰는 색상 */}
+                          {/* 🟦 v20260502.11: 곱창밴드 색상 추가 모달 - 자유 입력 + 자주 쓰는 색상 */}
                           {colorAddModal && masterPopup && masterPopup.type === 'gocchang' && (() => {
                             const setForm = (updater) => setMasterPopup(prev => typeof updater==='function'?updater(prev):updater);
                             const currentColors = new Set(masterPopup.colors || []);
                             
-                            // 🟦 v20260502.10: 색상명+금속라벨 조합 키 (예: "블랙(금도금)")
+                            // 🟦 v20260502.11: 색상명+금속라벨 조합 키 (예: "블랙(금도금)")
                             const buildColorKey = (name, metal) => {
                               const n = (name||'').trim();
                               const m = (metal||'').trim();
@@ -12255,7 +12456,7 @@ ${list}` }]
                             </div>
                             <div className="flex gap-2">
                               <button onClick={() => {
-                                // 📤 봇 동기화 v20260502.10: 가벼운 동기화 (썸네일 제외)
+                                // 📤 봇 동기화 v20260502.11: 가벼운 동기화 (썸네일 제외)
                                 // - 썸네일 제외 → 파일 크기 작아짐 → 보안 차단 우회
                                 // - 부자재 바코드 통합
                                 const bcCount = masterProducts.filter(p => p.barcodes && Object.values(p.barcodes).some(v => v && v.length === 11)).length;
@@ -12269,7 +12470,7 @@ ${list}` }]
                                 const filteredProducts = masterProducts.filter(p => p.barcodes && Object.values(p.barcodes).some(v => v && v.length === 11));
                                 
                                 const botData = {
-                                  version: 'v20260502.10',
+                                  version: 'v20260502.11',
                                   exported_at: new Date().toISOString(),
                                   exported_by: 'LACEROOM 9-1',
                                   product_count: 0,
@@ -12462,7 +12663,7 @@ ${list}` }]
                                     </div>
                                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 p-4">
                                       {featuredItems.sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||'')).map(p=>{
-                                        // 🟦 v20260502.10: 현재 colors에 있는 것만 카운트 (삭제된 색상 잔존 데이터 무시)
+                                        // 🟦 v20260502.11: 현재 colors에 있는 것만 카운트 (삭제된 색상 잔존 데이터 무시)
                                         const currentColorSet = new Set(p.colors || []);
                                         const soldoutColors = soldoutItems.filter(i=>i.name===p.name && currentColorSet.has(i.color)).map(i=>i.color);
                                         const soldoutCount = soldoutColors.length;
@@ -12510,7 +12711,7 @@ ${list}` }]
                                               {/* 색상 리스트 (유광/반광 좌우 + 단일 별도 / 무신사 스타일) */}
                                               {p.colors && p.colors.length > 0 && (() => {
                                                 const colorOrderBase = ['골드','실버','블랙','로즈골드','다크골드'];
-                                                // 🟦 v20260502.10: 곱창밴드는 헤어핀 그룹 분류 X (전부 otherColors로)
+                                                // 🟦 v20260502.11: 곱창밴드는 헤어핀 그룹 분류 X (전부 otherColors로)
                                                 const glossColors = p.type === 'hairpin' ? colorOrderBase.map(b=>`${b}(유광)`).filter(c=>p.colors.includes(c)) : [];
                                                 const matteColors = p.type === 'hairpin' ? colorOrderBase.map(b=>`${b}(반광)`).filter(c=>p.colors.includes(c)) : [];
                                                 const singleColors = p.type === 'hairpin' ? ['14K도금','은','흑무광'].filter(c=>p.colors.includes(c)) : [];
@@ -12527,7 +12728,7 @@ ${list}` }]
                                                   const isColorSoldout = soldoutColors.includes(c);
                                                   const isColorOff = todayOffItems.some(i => i.name===p.name && i.color===c);
                                                   const borderStyle = finishStyle === 'gloss' ? 'border-solid border-2' : finishStyle === 'matte' ? 'border-dashed border-2' : 'border';
-                                                  // 🟦 v20260502.10: 곱창밴드는 색상 키에 이미 라벨이 포함됨 (예: "블랙(금도금)") → 그대로 표시
+                                                  // 🟦 v20260502.11: 곱창밴드는 색상 키에 이미 라벨이 포함됨 (예: "블랙(금도금)") → 그대로 표시
                                                   // 헤어핀 색상은 (유광)/(반광) 제거
                                                   const isHairpinColor = c.includes('(유광)') || c.includes('(반광)');
                                                   let displayName = isHairpinColor ? c.replace(/\(.*\)/, '').trim() : c;
@@ -12584,7 +12785,7 @@ ${list}` }]
                                                         </div>
                                                       </div>
                                                     )}
-                                                    {/* 🟦 v20260502.10: 곱창밴드 색상칩 (자동 줄바꿈) */}
+                                                    {/* 🟦 v20260502.11: 곱창밴드 색상칩 (자동 줄바꿈) */}
                                                     {otherColors.length > 0 && (
                                                       <div className="border border-neutral-300 p-1.5" style={{borderRadius:'2px'}}>
                                                         {p.type === 'gocchang' && (
@@ -12668,7 +12869,7 @@ ${list}` }]
                                     </div>
                                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 p-4">
                                       {items.sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||'')).map(p=>{
-                                        // 🟦 v20260502.10: 현재 colors에 있는 것만 카운트 (삭제된 색상 잔존 데이터 무시)
+                                        // 🟦 v20260502.11: 현재 colors에 있는 것만 카운트 (삭제된 색상 잔존 데이터 무시)
                                         const currentColorSet = new Set(p.colors || []);
                                         const soldoutColors = soldoutItems.filter(i=>i.name===p.name && currentColorSet.has(i.color)).map(i=>i.color);
                                         const soldoutCount = soldoutColors.length;
@@ -12757,7 +12958,7 @@ ${list}` }]
                                               {/* 색상 리스트 (유광/반광 좌우 + 단일 별도 / 무신사 스타일) */}
                                               {p.colors && p.colors.length > 0 && (() => {
                                                 const colorOrderBase = ['골드','실버','블랙','로즈골드','다크골드'];
-                                                // 🟦 v20260502.10: 곱창밴드는 헤어핀 그룹 분류 X (전부 otherColors로)
+                                                // 🟦 v20260502.11: 곱창밴드는 헤어핀 그룹 분류 X (전부 otherColors로)
                                                 const glossColors = p.type === 'hairpin' ? colorOrderBase.map(b=>`${b}(유광)`).filter(c=>p.colors.includes(c)) : [];
                                                 const matteColors = p.type === 'hairpin' ? colorOrderBase.map(b=>`${b}(반광)`).filter(c=>p.colors.includes(c)) : [];
                                                 const singleColors = p.type === 'hairpin' ? ['14K도금','은','흑무광'].filter(c=>p.colors.includes(c)) : [];
@@ -12775,7 +12976,7 @@ ${list}` }]
                                                   const isColorOff = todayOffItems.some(i => i.name===p.name && i.color===c);
                                                   // 유광=실선 굵게, 반광=점선 굵게, 단일=얇은 실선
                                                   const borderStyle = finishStyle === 'gloss' ? 'border-solid border-2' : finishStyle === 'matte' ? 'border-dashed border-2' : 'border';
-                                                  // 🟦 v20260502.10: 곱창밴드는 색상 키에 라벨 포함 → 그대로 표시
+                                                  // 🟦 v20260502.11: 곱창밴드는 색상 키에 라벨 포함 → 그대로 표시
                                                   const isHairpinColor = c.includes('(유광)') || c.includes('(반광)');
                                                   let displayName = isHairpinColor ? c.replace(/\(.*\)/, '').trim() : c;
                                                   return (
@@ -12832,7 +13033,7 @@ ${list}` }]
                                                         </div>
                                                       </div>
                                                     )}
-                                                    {/* 🟦 v20260502.10: 곱창밴드 색상칩 (자동 줄바꿈) */}
+                                                    {/* 🟦 v20260502.11: 곱창밴드 색상칩 (자동 줄바꿈) */}
                                                     {otherColors.length > 0 && (
                                                       <div className="border border-neutral-300 p-1.5" style={{borderRadius:'2px'}}>
                                                         {p.type === 'gocchang' && (
@@ -14493,7 +14694,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260502.10</p>
+                <p>© 2026 LACEROOM통합관리 v20260502.11</p>
               </footer>
               
               {/* v10.06: 시스템 상태 토스트 (자동 알림) */}
