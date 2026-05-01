@@ -117,7 +117,7 @@
 
         const formatDate = (date) => date.toISOString().split('T')[0];
 
-        // 🟦 v20260502.03: 곱창밴드 자주 쓰는 색상/금속라벨 자동 학습 (빈도순)
+        // 🟦 v20260502.04: 곱창밴드 자주 쓰는 색상/금속라벨 자동 학습 (빈도순)
         const getFrequentGocchangColors = (masterProducts) => {
           const counter = {};
           (masterProducts||[]).filter(p => p.type === 'gocchang').forEach(p => {
@@ -495,7 +495,7 @@
                 } catch(e) { console.warn('마이그레이션 실패:', e); }
               }
 
-              // 🟦 v20260502.03: 곱창밴드 metalLabels 필드 추가 마이그레이션
+              // 🟦 v20260502.04: 곱창밴드 metalLabels 필드 추가 마이그레이션
               const gocchangMigrated = localStorage.getItem('gocchang_metalLabels_migrated');
               if (!gocchangMigrated) {
                 try {
@@ -894,7 +894,7 @@ ${list}` }]
           // 수정 모드 (v09.10): 도금작업 수정 중인 ID 저장. null이면 신규 작성 모드
           const [editingPlatingOrderId, setEditingPlatingOrderId] = useState(null);
 
-          // 📊 월별 누적 도금 내역 (v20260502.03) - 2번 탭 전용 state
+          // 📊 월별 누적 도금 내역 (v20260502.04) - 2번 탭 전용 state
           const [billingViewMode, setBillingViewMode] = useState('order'); // 'order' | 'billing'
           const [costStartMonth, setCostStartMonth] = useState(() => {
             const today = new Date();
@@ -1243,6 +1243,90 @@ ${list}` }]
             }
           };
 
+          // 🟦 v20260502.04: 지급일 변경 시 자동으로 해당 월 record로 이동/생성
+          const updatePaymentDateWithAutoMove = (paymentId, newDate) => {
+            if (!newDate) return;
+            const payment = salaryPayments.find(p => p.id === paymentId);
+            if (!payment) return;
+            
+            // 새 지급일의 월 (예: "2026-04-30" → "2026-04")
+            const newMonth = newDate.substring(0, 7);
+            
+            // 현재 record 찾기
+            const currentRecord = salaryRecords.find(r => r.id === payment.salaryRecordId);
+            if (!currentRecord) {
+              // record 없음 → 그냥 날짜만 변경
+              setSalaryPayments(prev => {
+                const next = prev.map(p => p.id === paymentId ? {...p, payDate: newDate} : p);
+                try { localStorage.setItem('salary_payments', JSON.stringify(next)); } catch(e) {}
+                return next;
+              });
+              return;
+            }
+            
+            // 같은 월이면 그냥 날짜만 변경
+            if (currentRecord.month === newMonth) {
+              setSalaryPayments(prev => {
+                const next = prev.map(p => p.id === paymentId ? {...p, payDate: newDate} : p);
+                try { localStorage.setItem('salary_payments', JSON.stringify(next)); } catch(e) {}
+                return next;
+              });
+              return;
+            }
+            
+            // 다른 월 → 해당 월 record 찾기/생성 후 이동
+            const employeeId = currentRecord.employeeId;
+            const employee = employees.find(e => e.id === employeeId);
+            if (!employee) {
+              alert('직원 정보를 찾을 수 없습니다.');
+              return;
+            }
+            
+            // 새 월의 record 찾기
+            let targetRecord = salaryRecords.find(r => r.employeeId === employeeId && r.month === newMonth);
+            
+            if (!targetRecord) {
+              // 자동 생성
+              targetRecord = {
+                id: Date.now(),
+                employeeId: employeeId,
+                month: newMonth,
+                totalAmount: employee.monthlySalary || 0,
+                breakdown: { 
+                  basicAmount: employee.monthlySalary || 0, 
+                  insurance: 0, bonus: 0, deduction: 0, 
+                  totalAmount: employee.monthlySalary || 0, 
+                  note: '🤖 지급일 자동 이동으로 생성' 
+                },
+                createdAt: new Date().toISOString(),
+                autoCreated: true  // 자동 생성 표시
+              };
+              const newRecords = [...salaryRecords, targetRecord];
+              setSalaryRecords(newRecords);
+              try { localStorage.setItem('salary_records', JSON.stringify(newRecords)); } catch(e) {}
+            }
+            
+            // payment를 새 record로 이동 + 날짜 변경
+            // paymentOrder도 새 record 기준으로 재계산
+            const targetPayments = salaryPayments.filter(p => p.salaryRecordId === targetRecord.id);
+            const newPaymentOrder = targetPayments.length + 1;
+            
+            const newPayments = salaryPayments.map(p => 
+              p.id === paymentId 
+                ? {...p, payDate: newDate, salaryRecordId: targetRecord.id, paymentOrder: newPaymentOrder}
+                : p
+            );
+            setSalaryPayments(newPayments);
+            try { localStorage.setItem('salary_payments', JSON.stringify(newPayments)); } catch(e) {}
+            
+            // 알림
+            const fromMonth = currentRecord.month;
+            const wasCreated = targetRecord.autoCreated && !salaryRecords.find(r => r.id === targetRecord.id);
+            setTimeout(() => {
+              alert(`✅ ${fromMonth} → ${newMonth} 으로 자동 이동되었습니다.${wasCreated ? `\n\n(${newMonth} 카드가 자동 생성됨)` : ''}`);
+            }, 100);
+          };
+
           const handleImageUpload = (e) => {
             const file = e.target.files[0];
             if (file) {
@@ -1479,7 +1563,7 @@ ${list}` }]
                         qty: parseInt(item.qty) || 0,
                         received: existingItem?.received || false,
                         receivedDate: existingItem?.receivedDate || '',
-                        billingDate: existingItem?.billingDate || ''  // 🟦 v20260502.03: 색상별 청구일 보존
+                        billingDate: existingItem?.billingDate || ''  // 🟦 v20260502.04: 색상별 청구일 보존
                       };
                     }),
                     total: product.items.reduce((sum, item) => sum + (parseInt(item.qty) || 0), 0)
@@ -1588,7 +1672,7 @@ ${list}` }]
                 id: Date.now(),
                 date: orderForm.date,
                 orderNum,
-                billingDate: '',  // 🟦 도금공장 청구일 (v20260502.03) - 5월부터 철저 입력
+                billingDate: '',  // 🟦 도금공장 청구일 (v20260502.04) - 5월부터 철저 입력
                 products: orderForm.products.map(product => ({
                   productId: product.productId,
                   productName: product.productName,
@@ -1600,7 +1684,7 @@ ${list}` }]
                     qty: parseInt(item.qty) || 0,
                     received: false,
                     receivedDate: '',
-                    billingDate: ''  // 🟦 v20260502.03: 색상별 도금공장 청구일
+                    billingDate: ''  // 🟦 v20260502.04: 색상별 도금공장 청구일
                   })),
                   total: product.items.reduce((sum, item) => sum + (parseInt(item.qty) || 0), 0)
                 })),
@@ -2460,7 +2544,7 @@ ${list}` }]
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260502.03</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260502.04</div>
                   </div>
                   
                   {/* v10.06: 헬퍼/봇 상태등 */}
@@ -2558,7 +2642,7 @@ ${list}` }]
                         labelPresets,                // ← 라벨 프리셋 (NEW)
                         nameChangeLogs,              // ← 상품명 변경이력 (v10.01)
                         exportDate: new Date().toISOString(),
-                        appVersion: 'v20260502.03'
+                        appVersion: 'v20260502.04'
                       };
                       const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
                       const url = URL.createObjectURL(blob);
@@ -3559,7 +3643,7 @@ ${list}` }]
                   <div className="bg-white border-b border-slate-200 px-4 py-2 sticky top-0 z-40">
                     <div className="flex space-x-1">
                       {[
-                        // v20260502.03: 1-1 색상별 단가 탭 삭제 (9-1 상품 마스터로 통합)
+                        // v20260502.04: 1-1 색상별 단가 탭 삭제 (9-1 상품 마스터로 통합)
                         ['order', '작업 지시서', '1-2'],
                         ['rework', '재도금 요청', '1-3'],
                         ['history', '작업 내역', '1-4'],
@@ -3577,7 +3661,7 @@ ${list}` }]
                 {/* 도금작업지시서 탭 */}
                 {activeMainTab === 'plating' && (
                   <>
-                {/* 1-1 색상별 단가 탭 v20260502.03에서 삭제 (9-1 상품 마스터로 통합) */}
+                {/* 1-1 색상별 단가 탭 v20260502.04에서 삭제 (9-1 상품 마스터로 통합) */}
 
                 {activeTab === 'order' && (
                   <div className="space-y-6">
@@ -4219,7 +4303,7 @@ ${list}` }]
                                           </div>
 
                                           <div className="flex items-center gap-2">
-                                            {/* 🟦 색상별 도금공장 청구일 (v20260502.03) */}
+                                            {/* 🟦 색상별 도금공장 청구일 (v20260502.04) */}
                                             <div className="flex items-center bg-blue-500 border-2 border-blue-300 rounded-lg px-2 py-1 shadow-sm" title="이 색상의 도금공장 청구일">
                                               <span className="text-white text-[10px] font-bold mr-1.5">📅 청구일</span>
                                               <input
@@ -4651,7 +4735,7 @@ ${list}` }]
                 </>
                 )}
 
-                {/* 월별 누적 도금 내역 탭 (v20260502.03) */}
+                {/* 월별 누적 도금 내역 탭 (v20260502.04) */}
                 {activeMainTab === 'cost' && (
                   <div className="space-y-6">
                     <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8">
@@ -4708,7 +4792,7 @@ ${list}` }]
                         };
 
                         // 색상별 도금 단가 조회
-                        // v20260502.03: 작업내역의 공장색상(item.color='대금', item.finish='유광')을
+                        // v20260502.04: 작업내역의 공장색상(item.color='대금', item.finish='유광')을
                         // 9-1 판매색상키('골드(유광)')로 역변환하여 colorPlatingCosts에서 조회
                         const getPlatingCost = (costs, color, finish) => {
                           const { colorPlatingCosts, platingCostsLegacy } = costs;
@@ -8392,9 +8476,47 @@ ${list}` }]
                                                   if(!payDate) return alert('지급일을 선택하세요');
                                                   if(amount<=0) return alert('지급액을 입력하세요');
                                                   if(amount>remaining) return alert('미지급액을 초과할 수 없습니다');
-                                                  saveSalaryPayments([...salaryPayments, {id:Date.now(), salaryRecordId:record.id, amount, payDate, paymentOrder:payments.length+1, note:'', createdAt:new Date().toISOString()}]);
+                                                  
+                                                  // 🟦 v20260502.04: 지급일이 다른 월이면 해당 월 record로 자동 이동/생성
+                                                  const payMonth = payDate.substring(0, 7);
+                                                  let targetRecordId = record.id;
+                                                  let targetPaymentOrder = payments.length + 1;
+                                                  let movedMessage = '';
+                                                  
+                                                  if (payMonth !== record.month) {
+                                                    // 다른 월 → 해당 월 record 찾기/생성
+                                                    let targetRecord = salaryRecords.find(r => r.employeeId === emp.id && r.month === payMonth);
+                                                    let wasCreated = false;
+                                                    
+                                                    if (!targetRecord) {
+                                                      // 자동 생성
+                                                      targetRecord = {
+                                                        id: Date.now(),
+                                                        employeeId: emp.id,
+                                                        month: payMonth,
+                                                        totalAmount: emp.monthlySalary || 0,
+                                                        breakdown: { 
+                                                          basicAmount: emp.monthlySalary || 0, 
+                                                          insurance: 0, bonus: 0, deduction: 0, 
+                                                          totalAmount: emp.monthlySalary || 0, 
+                                                          note: '🤖 지급일 자동 이동으로 생성' 
+                                                        },
+                                                        createdAt: new Date().toISOString(),
+                                                        autoCreated: true
+                                                      };
+                                                      saveSalaryRecords([...salaryRecords, targetRecord]);
+                                                      wasCreated = true;
+                                                    }
+                                                    
+                                                    targetRecordId = targetRecord.id;
+                                                    const targetPayments = salaryPayments.filter(p => p.salaryRecordId === targetRecord.id);
+                                                    targetPaymentOrder = targetPayments.length + 1;
+                                                    movedMessage = `\n\n📅 지급일이 ${payMonth}이라 ${record.month} → ${payMonth}로 자동 이동되었습니다.${wasCreated ? `\n(${payMonth} 카드가 자동 생성됨)` : ''}`;
+                                                  }
+                                                  
+                                                  saveSalaryPayments([...salaryPayments, {id:Date.now()+1, salaryRecordId:targetRecordId, amount, payDate, paymentOrder:targetPaymentOrder, note:'', createdAt:new Date().toISOString()}]);
                                                   document.getElementById(`pay_${record.id}`).value='';
-                                                  alert(`${amount.toLocaleString()}원 지급 (${payments.length+1}차)`);
+                                                  alert(`${amount.toLocaleString()}원 지급 (${targetPaymentOrder}차)${movedMessage}`);
                                                 }} className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-bold text-sm">지급</button>
                                               </div>
                                             )}
@@ -8470,7 +8592,7 @@ ${list}` }]
                                               <div className="bg-slate-50 rounded-xl p-4 mt-4">
                                                 <h4 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
                                                   <span>지급 상세 ({payments.length}차)</span>
-                                                  <span className="text-[10px] font-normal text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">💡 지급일/비고 클릭으로 직접 수정 가능</span>
+                                                  <span className="text-[10px] font-normal text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">💡 지급일 변경 시 해당 월 카드로 자동 이동</span>
                                                 </h4>
                                                 <div className="overflow-x-auto">
                                                   <table className="w-full text-sm">
@@ -8488,12 +8610,12 @@ ${list}` }]
                                                         <tr key={payment.id} className="border-b border-slate-200">
                                                           <td className="py-2 px-3 font-bold text-blue-600">{payment.paymentOrder}차</td>
                                                           <td className="py-2 px-3">
-                                                            {/* 🟦 v20260502.03: 지급일 인라인 수정 가능 */}
+                                                            {/* 🟦 v20260502.04: 지급일 변경 시 자동으로 해당 월 record로 이동/생성 */}
                                                             <input type="date" value={payment.payDate||''} 
                                                               onChange={e=>{
                                                                 const newDate = e.target.value;
                                                                 if (!newDate) return;
-                                                                saveSalaryPayments(salaryPayments.map(p=>p.id===payment.id?{...p,payDate:newDate}:p));
+                                                                updatePaymentDateWithAutoMove(payment.id, newDate);
                                                               }}
                                                               className="px-2 py-1 text-xs rounded border border-slate-200 hover:border-blue-400 focus:border-blue-500 outline-none cursor-pointer"/>
                                                           </td>
@@ -9087,7 +9209,7 @@ ${list}` }]
                               <h3 className="text-base font-black text-black tracking-tight">🖨️ 라벨 인쇄 + 디자인 편집기</h3>
                               <span className="bg-black text-white text-[10px] font-black px-2 py-0.5 tracking-widest" style={{borderRadius:'4px'}}>EDITOR</span>
                             </div>
-                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260502.03 · 헬퍼 자동 인쇄 · 한글 100%</div>
+                            <div className="text-[10px] text-neutral-500 mt-0.5 font-bold">v20260502.04 · 헬퍼 자동 인쇄 · 한글 100%</div>
                           </div>
                           <button onClick={()=>setBarcodePrintPopup(null)} className="text-neutral-400 hover:text-black text-xl font-black">✕</button>
                         </div>
@@ -10001,7 +10123,7 @@ ${list}` }]
                                             💡 텔레그램 봇에서 검색할 키워드를 쉼표(,)로 구분
                                           </div>
                                         </div>
-                                        {/* 🟦 v20260502.03: 도금거래처 상품명 - 헤어핀만 (곱창밴드는 도금 안 함) */}
+                                        {/* 🟦 v20260502.04: 도금거래처 상품명 - 헤어핀만 (곱창밴드는 도금 안 함) */}
                                         {form.type === 'hairpin' && (
                                           <div>
                                             <label className="block text-[11px] font-bold text-black mb-2 uppercase tracking-wider">도금거래처 상품명 <span className="text-neutral-400 font-normal normal-case tracking-normal">(선택)</span></label>
@@ -10125,7 +10247,7 @@ ${list}` }]
                                               {/* 색상 카드 리스트 - 2열 그리드, 무신사 스타일 */}
                                               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                               {(() => {
-                                                // v20260502.03: 좌=유광, 우=반광 짝맞추기 정렬
+                                                // v20260502.04: 좌=유광, 우=반광 짝맞추기 정렬
                                                 // 색상 그룹별 (골드→실버→블랙→다크골드→로즈골드), 유광 다음 반광
                                                 // 단독 색상(14K도금, 은): 마지막에 왼쪽 단독 배치
                                                 const colorOrder = [
@@ -10353,7 +10475,7 @@ ${list}` }]
                                               )}
                                             </div>
                                           ) : (
-                                            // 🟦 v20260502.03: 곱창밴드 - 헤어핀처럼 색상 카드 시스템 (원단정보 유무 무관)
+                                            // 🟦 v20260502.04: 곱창밴드 - 헤어핀처럼 색상 카드 시스템 (원단정보 유무 무관)
                                             <div className="space-y-2">
                                               {/* 안내 */}
                                               {form.hasFabricInfo === false ? (
@@ -10512,7 +10634,7 @@ ${list}` }]
                                                             style={{borderRadius:'2px'}}/>
                                                         </div>
 
-                                                        {/* 🟦 v20260502.03: 금속라벨 (선택) */}
+                                                        {/* 🟦 v20260502.04: 금속라벨 (선택) */}
                                                         <div className="flex items-center gap-1 mt-1.5 min-w-0">
                                                           <span className={`text-[10px] w-9 shrink-0 font-medium ${isFocused?'text-yellow-300':'text-yellow-700'}`}>🏷️금속</span>
                                                           <input type="text" value={metalLabel}
@@ -10607,7 +10729,7 @@ ${list}` }]
                                                   <div className={`text-[10px] ${form._imgMode==='upload'?'text-neutral-300':'text-neutral-500'}`}>자동 압축</div>
                                                 </div>
                                               </label>
-                                              {/* 🟦 v20260502.03: 외부 URL 옵션 추가 (Google Drive 등) */}
+                                              {/* 🟦 v20260502.04: 외부 URL 옵션 추가 (Google Drive 등) */}
                                               <label className={`flex-1 flex items-center gap-2 p-2 cursor-pointer transition ${
                                                 form._imgMode === 'external' ? 'bg-black text-white' : 'bg-white border border-neutral-300 hover:border-black'
                                               }`} style={{borderRadius:'2px'}}>
@@ -10672,7 +10794,7 @@ ${list}` }]
                                               </label>
                                             )}
 
-                                            {/* 🟦 v20260502.03: 외부 URL 모드 */}
+                                            {/* 🟦 v20260502.04: 외부 URL 모드 */}
                                             {form._imgMode === 'external' && (
                                               <div className="space-y-2">
                                                 <input type="text"
@@ -10726,7 +10848,7 @@ ${list}` }]
                                             {/* v10.03: 색상카드의 도금 단가 요약 (읽기전용) */}
                                             {(() => {
                                               const cpc = form.colorPlatingCosts || {};
-                                              // v20260502.03: 좌=유광 우=반광 짝맞추기 정렬 적용
+                                              // v20260502.04: 좌=유광 우=반광 짝맞추기 정렬 적용
                                               const colorOrder = [
                                                 '골드(유광)','골드(반광)',
                                                 '실버(유광)','실버(반광)',
@@ -10759,7 +10881,7 @@ ${list}` }]
                                                     </div>
                                                   ) : (
                                                     <div className="grid grid-cols-2 gap-1">
-                                                      {/* v20260502.03: 입력/미입력 분리 안 하고 정렬 순서대로 표시 (짝맞춤 유지) */}
+                                                      {/* v20260502.04: 입력/미입력 분리 안 하고 정렬 순서대로 표시 (짝맞춤 유지) */}
                                                       {allColors.map(c => {
                                                         const hasValue = cpc[c] && cpc[c] !== '' && Number(cpc[c]) > 0;
                                                         return hasValue ? (
@@ -10892,7 +11014,7 @@ ${list}` }]
                                               </div>
                                             )}
 
-                                            {/* 🟦 v20260502.03: 색상 매칭 4컬럼 - 거래처색상→LACEROOM색상→금속라벨→바코드 */}
+                                            {/* 🟦 v20260502.04: 색상 매칭 4컬럼 - 거래처색상→LACEROOM색상→금속라벨→바코드 */}
                                             {form.fabricId && (() => {
                                               const sup2 = fabricSuppliersState.find(s=>String(s.id)===String(form.fabricSupplierId));
                                               const fab = sup2?.fabrics?.find(f=>String(f.id)===String(form.fabricId));
@@ -11376,7 +11498,7 @@ ${list}` }]
                               if (!currentColors.has(c)) {
                                 setForm(p => {
                                   const newState = {...p, colors: [...(p.colors||[]), c]};
-                                  // 🟦 v20260502.03: 반광 색상 추가 시 자동 ★ 라벨 입력
+                                  // 🟦 v20260502.04: 반광 색상 추가 시 자동 ★ 라벨 입력
                                   // 단, 기존 라벨이 있으면 보존
                                   if (c.includes('(반광)')) {
                                     const existing = (p.customColorNames || {})[c];
@@ -11468,7 +11590,7 @@ ${list}` }]
                             );
                           })()}
 
-                          {/* 🟦 v20260502.03: 곱창밴드 색상 추가 모달 - 자유 입력 + 자주 쓰는 색상 */}
+                          {/* 🟦 v20260502.04: 곱창밴드 색상 추가 모달 - 자유 입력 + 자주 쓰는 색상 */}
                           {colorAddModal && masterPopup && masterPopup.type === 'gocchang' && (() => {
                             const setForm = (updater) => setMasterPopup(prev => typeof updater==='function'?updater(prev):updater);
                             const currentColors = new Set(masterPopup.colors || []);
@@ -11573,7 +11695,7 @@ ${list}` }]
                             </div>
                             <div className="flex gap-2">
                               <button onClick={() => {
-                                // 📤 봇 동기화 v20260502.03: 가벼운 동기화 (썸네일 제외)
+                                // 📤 봇 동기화 v20260502.04: 가벼운 동기화 (썸네일 제외)
                                 // - 썸네일 제외 → 파일 크기 작아짐 → 보안 차단 우회
                                 // - 부자재 바코드 통합
                                 const bcCount = masterProducts.filter(p => p.barcodes && Object.values(p.barcodes).some(v => v && v.length === 11)).length;
@@ -11587,7 +11709,7 @@ ${list}` }]
                                 const filteredProducts = masterProducts.filter(p => p.barcodes && Object.values(p.barcodes).some(v => v && v.length === 11));
                                 
                                 const botData = {
-                                  version: 'v20260502.03',
+                                  version: 'v20260502.04',
                                   exported_at: new Date().toISOString(),
                                   exported_by: 'LACEROOM 9-1',
                                   product_count: 0,
@@ -11826,7 +11948,7 @@ ${list}` }]
                                               {/* 색상 리스트 (유광/반광 좌우 + 단일 별도 / 무신사 스타일) */}
                                               {p.colors && p.colors.length > 0 && (() => {
                                                 const colorOrderBase = ['골드','실버','블랙','로즈골드','다크골드'];
-                                                // 🟦 v20260502.03: 곱창밴드는 헤어핀 그룹 분류 X (전부 otherColors로)
+                                                // 🟦 v20260502.04: 곱창밴드는 헤어핀 그룹 분류 X (전부 otherColors로)
                                                 const glossColors = p.type === 'hairpin' ? colorOrderBase.map(b=>`${b}(유광)`).filter(c=>p.colors.includes(c)) : [];
                                                 const matteColors = p.type === 'hairpin' ? colorOrderBase.map(b=>`${b}(반광)`).filter(c=>p.colors.includes(c)) : [];
                                                 const singleColors = p.type === 'hairpin' ? ['14K도금','은','흑무광'].filter(c=>p.colors.includes(c)) : [];
@@ -11843,7 +11965,7 @@ ${list}` }]
                                                   const isColorSoldout = soldoutColors.includes(c);
                                                   const isColorOff = todayOffItems.some(i => i.name===p.name && i.color===c);
                                                   const borderStyle = finishStyle === 'gloss' ? 'border-solid border-2' : finishStyle === 'matte' ? 'border-dashed border-2' : 'border';
-                                                  // 🟦 v20260502.03: 곱창밴드는 금속라벨 같이 표시 (베이지 → 베이지(14K금장))
+                                                  // 🟦 v20260502.04: 곱창밴드는 금속라벨 같이 표시 (베이지 → 베이지(14K금장))
                                                   const metalLabel = (p.type === 'gocchang' && p.metalLabels) ? p.metalLabels[c] : '';
                                                   // 헤어핀 색상은 (유광)/(반광) 제거, 곱창밴드는 그대로 표시
                                                   const isHairpinColor = c.includes('(유광)') || c.includes('(반광)');
@@ -11902,7 +12024,7 @@ ${list}` }]
                                                         </div>
                                                       </div>
                                                     )}
-                                                    {/* 🟦 v20260502.03: 곱창밴드 색상칩 (자동 줄바꿈) */}
+                                                    {/* 🟦 v20260502.04: 곱창밴드 색상칩 (자동 줄바꿈) */}
                                                     {otherColors.length > 0 && (
                                                       <div className="border border-neutral-300 p-1.5" style={{borderRadius:'2px'}}>
                                                         {p.type === 'gocchang' && (
@@ -12073,7 +12195,7 @@ ${list}` }]
                                               {/* 색상 리스트 (유광/반광 좌우 + 단일 별도 / 무신사 스타일) */}
                                               {p.colors && p.colors.length > 0 && (() => {
                                                 const colorOrderBase = ['골드','실버','블랙','로즈골드','다크골드'];
-                                                // 🟦 v20260502.03: 곱창밴드는 헤어핀 그룹 분류 X (전부 otherColors로)
+                                                // 🟦 v20260502.04: 곱창밴드는 헤어핀 그룹 분류 X (전부 otherColors로)
                                                 const glossColors = p.type === 'hairpin' ? colorOrderBase.map(b=>`${b}(유광)`).filter(c=>p.colors.includes(c)) : [];
                                                 const matteColors = p.type === 'hairpin' ? colorOrderBase.map(b=>`${b}(반광)`).filter(c=>p.colors.includes(c)) : [];
                                                 const singleColors = p.type === 'hairpin' ? ['14K도금','은','흑무광'].filter(c=>p.colors.includes(c)) : [];
@@ -12091,7 +12213,7 @@ ${list}` }]
                                                   const isColorOff = todayOffItems.some(i => i.name===p.name && i.color===c);
                                                   // 유광=실선 굵게, 반광=점선 굵게, 단일=얇은 실선
                                                   const borderStyle = finishStyle === 'gloss' ? 'border-solid border-2' : finishStyle === 'matte' ? 'border-dashed border-2' : 'border';
-                                                  // 🟦 v20260502.03: 곱창밴드는 금속라벨 같이 표시
+                                                  // 🟦 v20260502.04: 곱창밴드는 금속라벨 같이 표시
                                                   const metalLabel = (p.type === 'gocchang' && p.metalLabels) ? p.metalLabels[c] : '';
                                                   const isHairpinColor = c.includes('(유광)') || c.includes('(반광)');
                                                   let displayName = isHairpinColor ? c.replace(/\(.*\)/, '').trim() : c;
@@ -12150,7 +12272,7 @@ ${list}` }]
                                                         </div>
                                                       </div>
                                                     )}
-                                                    {/* 🟦 v20260502.03: 곱창밴드 색상칩 (자동 줄바꿈) */}
+                                                    {/* 🟦 v20260502.04: 곱창밴드 색상칩 (자동 줄바꿈) */}
                                                     {otherColors.length > 0 && (
                                                       <div className="border border-neutral-300 p-1.5" style={{borderRadius:'2px'}}>
                                                         {p.type === 'gocchang' && (
@@ -13811,7 +13933,7 @@ ${list}` }]
                 )}
 
               <footer className="pb-6 text-center text-xs text-slate-400">
-                <p>© 2026 LACEROOM통합관리 v20260502.03</p>
+                <p>© 2026 LACEROOM통합관리 v20260502.04</p>
               </footer>
               
               {/* v10.06: 시스템 상태 토스트 (자동 알림) */}
