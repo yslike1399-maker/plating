@@ -1405,6 +1405,15 @@ ${list}` }]
             }
           };
 
+          const saveVendorPayments = (data) => {
+            setVendorPayments(data);
+            try {
+              localStorage.setItem('vendor_payments', JSON.stringify(data));
+            } catch (e) {
+              console.error('저장 오류:', e);
+            }
+          };
+
           const saveFabricSuppliers = (data) => {
             setFabricSuppliersState(data);
             try {
@@ -2988,7 +2997,7 @@ ${list}` }]
                             if (data.salaryPayments) saveSalaryPayments(data.salaryPayments);
                             if (data.vendors) { saveVendors(data.vendors); if(data.vendors.length>0) setActiveVendorTab(data.vendors[0].id); }
                             if (data.vendorBills) saveVendorBills(data.vendorBills);
-                            if (data.vendorPayments) { setVendorPayments(data.vendorPayments); localStorage.setItem('vendor_payments', JSON.stringify(data.vendorPayments)); }
+                            if (data.vendorPayments) saveVendorPayments(data.vendorPayments);
                             if (data.vendorItems) { setVendorItems(data.vendorItems); localStorage.setItem('vendor_items', JSON.stringify(data.vendorItems)); }
                             if (data.dashboardLinks) { setDashboardLinks(data.dashboardLinks); localStorage.setItem('dashboard_links', JSON.stringify(data.dashboardLinks)); }
                             if (data.memos) saveMemos(data.memos);
@@ -5948,8 +5957,7 @@ ${list}` }]
                               if (amount <= 0) return alert('금액을 입력하세요');
                               const newPay = { id: Date.now(), vendorId: payPopup.vendorId, billId: payPopup.billId, payDate, amount, memo, createdAt: new Date().toISOString() };
                               const updated = [...vendorPayments, newPay];
-                              setVendorPayments(updated);
-                              localStorage.setItem('vendor_payments', JSON.stringify(updated));
+                              saveVendorPayments(updated);
                               setPayPopup(null);
                               alert('지급 등록 완료!');
                             }} className="flex-1 py-3 rounded-xl bg-green-600 text-white font-bold text-sm">등록</button>
@@ -6281,7 +6289,7 @@ ${list}` }]
                                                 <span className="text-slate-500 font-medium">{idx+1}차 · {p.payDate}</span>
                                                 <span className="font-bold text-green-700">{p.amount.toLocaleString()}원</span>
                                                 {p.memo && <span className="text-slate-400">{p.memo}</span>}
-                                                <button onClick={() => { if(confirm('삭제?')){ const u=vendorPayments.filter(x=>x.id!==p.id); setVendorPayments(u); localStorage.setItem('vendor_payments',JSON.stringify(u)); }}} className="text-red-400 hover:text-red-600 ml-2">✕</button>
+                                                <button onClick={() => { if(confirm('삭제?')){ const u=vendorPayments.filter(x=>x.id!==p.id); saveVendorPayments(u); }}} className="text-red-400 hover:text-red-600 ml-2">✕</button>
                                               </div>
                                             ))}
                                           </div>
