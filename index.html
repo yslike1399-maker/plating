@@ -1387,6 +1387,15 @@ ${list}` }]
             }
           };
 
+          const saveVendors = (data) => {
+            setVendors(data);
+            try {
+              localStorage.setItem('vendors', JSON.stringify(data));
+            } catch (e) {
+              console.error('저장 오류:', e);
+            }
+          };
+
           const saveFabricSuppliers = (data) => {
             setFabricSuppliersState(data);
             try {
@@ -2968,7 +2977,7 @@ ${list}` }]
                             if (data.employees) saveEmployees(data.employees);
                             if (data.salaryRecords) saveSalaryRecords(data.salaryRecords);
                             if (data.salaryPayments) saveSalaryPayments(data.salaryPayments);
-                            if (data.vendors) { setVendors(data.vendors); localStorage.setItem('vendors', JSON.stringify(data.vendors)); if(data.vendors.length>0) setActiveVendorTab(data.vendors[0].id); }
+                            if (data.vendors) { saveVendors(data.vendors); if(data.vendors.length>0) setActiveVendorTab(data.vendors[0].id); }
                             if (data.vendorBills) { setVendorBills(data.vendorBills); localStorage.setItem('vendor_bills', JSON.stringify(data.vendorBills)); }
                             if (data.vendorPayments) { setVendorPayments(data.vendorPayments); localStorage.setItem('vendor_payments', JSON.stringify(data.vendorPayments)); }
                             if (data.vendorItems) { setVendorItems(data.vendorItems); localStorage.setItem('vendor_items', JSON.stringify(data.vendorItems)); }
@@ -5822,8 +5831,7 @@ ${list}` }]
                               const memo = document.getElementById('vMemo').value.trim();
                               const newV = { id: Date.now(), name, type, phone, memo, createdAt: new Date().toISOString() };
                               const updated = [...vendors, newV];
-                              setVendors(updated);
-                              localStorage.setItem('vendors', JSON.stringify(updated));
+                              saveVendors(updated);
                               setActiveVendorTab(newV.id);
                               setVendorRegPopup(false);
                               alert(`${name} 등록 완료!`);
@@ -6160,7 +6168,7 @@ ${list}` }]
                                 <Plus /> 거래 등록
                               </button>
                             )}
-                            <button onClick={() => { if(confirm(`${vendor.name}을 삭제하시겠습니까?`)) { const u=vendors.filter(v=>v.id!==vendor.id); setVendors(u); localStorage.setItem('vendors',JSON.stringify(u)); setActiveVendorTab(u[0]?.id||null); }}}
+                            <button onClick={() => { if(confirm(`${vendor.name}을 삭제하시겠습니까?`)) { const u=vendors.filter(v=>v.id!==vendor.id); saveVendors(u); setActiveVendorTab(u[0]?.id||null); }}}
                               className="px-3 py-2 text-red-400 hover:bg-red-50 rounded-xl text-sm transition-all">삭제</button>
                           </div>
                         </div>
