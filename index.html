@@ -1414,6 +1414,15 @@ ${list}` }]
             }
           };
 
+          const saveVendorItems = (data) => {
+            setVendorItems(data);
+            try {
+              localStorage.setItem('vendor_items', JSON.stringify(data));
+            } catch (e) {
+              console.error('저장 오류:', e);
+            }
+          };
+
           const saveFabricSuppliers = (data) => {
             setFabricSuppliersState(data);
             try {
@@ -2998,7 +3007,7 @@ ${list}` }]
                             if (data.vendors) { saveVendors(data.vendors); if(data.vendors.length>0) setActiveVendorTab(data.vendors[0].id); }
                             if (data.vendorBills) saveVendorBills(data.vendorBills);
                             if (data.vendorPayments) saveVendorPayments(data.vendorPayments);
-                            if (data.vendorItems) { setVendorItems(data.vendorItems); localStorage.setItem('vendor_items', JSON.stringify(data.vendorItems)); }
+                            if (data.vendorItems) saveVendorItems(data.vendorItems);
                             if (data.dashboardLinks) { setDashboardLinks(data.dashboardLinks); localStorage.setItem('dashboard_links', JSON.stringify(data.dashboardLinks)); }
                             if (data.memos) saveMemos(data.memos);
                             if (data.recurringMemos) saveRecurringMemos(data.recurringMemos);
@@ -6126,8 +6135,7 @@ ${list}` }]
                               } else {
                                 updated = [...vendorItems, { id: Date.now(), vendorId: itemPopup.vendorId, itemDate, desc, vendorDesc, needsReceipt, received: false, qty, unitPrice, supplyAmt, taxAmt, payDate, payAmt, memo, orderCode, createdAt: new Date().toISOString() }];
                               }
-                              setVendorItems(updated);
-                              localStorage.setItem('vendor_items', JSON.stringify(updated));
+                              saveVendorItems(updated);
                               setItemPopup(null);
                               alert('저장 완료!');
                             }} className="flex-1 py-3 rounded-xl bg-blue-600 text-white font-bold text-sm">저장</button>
@@ -6377,8 +6385,7 @@ ${list}` }]
                                                     checked={item.received || false}
                                                     onChange={e => {
                                                       const updated = vendorItems.map(i => i.id === item.id ? {...i, received: e.target.checked, receivedDate: e.target.checked ? new Date().toISOString().split('T')[0] : ''} : i);
-                                                      setVendorItems(updated);
-                                                      localStorage.setItem('vendor_items', JSON.stringify(updated));
+                                                      saveVendorItems(updated);
                                                     }}
                                                     className="w-4 h-4 accent-green-500"
                                                   />
@@ -6408,8 +6415,7 @@ ${list}` }]
                                                     const updated = vendorItems.map(i => i.id === item.id
                                                       ? {...i, taxInvoiceReceived: e.target.checked, taxInvoiceDate: e.target.checked ? new Date().toISOString().split('T')[0] : ''}
                                                       : i);
-                                                    setVendorItems(updated);
-                                                    localStorage.setItem('vendor_items', JSON.stringify(updated));
+                                                    saveVendorItems(updated);
                                                   }}
                                                   className="w-4 h-4 accent-purple-600"
                                                 />
@@ -6422,7 +6428,7 @@ ${list}` }]
                                             <td className="py-3 px-4 text-center">
                                               <div className="flex gap-1 justify-center">
                                                 <button onClick={() => setItemPopup({ vendorId: vendor.id, item })} className="text-blue-500 hover:bg-blue-50 p-1 rounded"><Edit /></button>
-                                                <button onClick={() => { if(confirm('삭제?')){ const u=vendorItems.filter(i=>i.id!==item.id); setVendorItems(u); localStorage.setItem('vendor_items',JSON.stringify(u)); }}} className="text-red-400 hover:bg-red-50 p-1 rounded"><Trash /></button>
+                                                <button onClick={() => { if(confirm('삭제?')){ const u=vendorItems.filter(i=>i.id!==item.id); saveVendorItems(u); }}} className="text-red-400 hover:bg-red-50 p-1 rounded"><Trash /></button>
                                               </div>
                                             </td>
                                           </tr>
