@@ -1396,6 +1396,15 @@ ${list}` }]
             }
           };
 
+          const saveVendorBills = (data) => {
+            setVendorBills(data);
+            try {
+              localStorage.setItem('vendor_bills', JSON.stringify(data));
+            } catch (e) {
+              console.error('저장 오류:', e);
+            }
+          };
+
           const saveFabricSuppliers = (data) => {
             setFabricSuppliersState(data);
             try {
@@ -2978,7 +2987,7 @@ ${list}` }]
                             if (data.salaryRecords) saveSalaryRecords(data.salaryRecords);
                             if (data.salaryPayments) saveSalaryPayments(data.salaryPayments);
                             if (data.vendors) { saveVendors(data.vendors); if(data.vendors.length>0) setActiveVendorTab(data.vendors[0].id); }
-                            if (data.vendorBills) { setVendorBills(data.vendorBills); localStorage.setItem('vendor_bills', JSON.stringify(data.vendorBills)); }
+                            if (data.vendorBills) saveVendorBills(data.vendorBills);
                             if (data.vendorPayments) { setVendorPayments(data.vendorPayments); localStorage.setItem('vendor_payments', JSON.stringify(data.vendorPayments)); }
                             if (data.vendorItems) { setVendorItems(data.vendorItems); localStorage.setItem('vendor_items', JSON.stringify(data.vendorItems)); }
                             if (data.dashboardLinks) { setDashboardLinks(data.dashboardLinks); localStorage.setItem('dashboard_links', JSON.stringify(data.dashboardLinks)); }
@@ -5895,8 +5904,7 @@ ${list}` }]
                                 if (exists) return alert('해당 월 청구가 이미 있습니다');
                                 updated = [...vendorBills, { id: Date.now(), vendorId: billPopup.vendorId, month, carryOver, supplyAmt, taxAmt, memo, createdAt: new Date().toISOString() }];
                               }
-                              setVendorBills(updated);
-                              localStorage.setItem('vendor_bills', JSON.stringify(updated));
+                              saveVendorBills(updated);
                               setBillPopup(null);
                               alert('저장 완료!');
                             }} className="flex-1 py-3 rounded-xl bg-blue-600 text-white font-bold text-sm">저장</button>
@@ -6223,8 +6231,7 @@ ${list}` }]
                                               const updated = vendorBills.map(b => b.id === bill.id
                                                 ? {...b, taxInvoiceReceived: e.target.checked, taxInvoiceDate: e.target.checked ? new Date().toISOString().split('T')[0] : ''}
                                                 : b);
-                                              setVendorBills(updated);
-                                              localStorage.setItem('vendor_bills', JSON.stringify(updated));
+                                              saveVendorBills(updated);
                                             }}
                                             className="w-4 h-4 accent-purple-600"
                                           />
@@ -6238,7 +6245,7 @@ ${list}` }]
                                           className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700">+ 지급</button>
                                         <button onClick={() => setBillPopup({ vendorId: vendor.id, bill })}
                                           className="px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg text-xs font-semibold hover:bg-slate-200">수정</button>
-                                        <button onClick={() => { if(confirm('삭제하시겠습니까?')) { const u=vendorBills.filter(b=>b.id!==bill.id); setVendorBills(u); localStorage.setItem('vendor_bills',JSON.stringify(u)); }}}
+                                        <button onClick={() => { if(confirm('삭제하시겠습니까?')) { const u=vendorBills.filter(b=>b.id!==bill.id); saveVendorBills(u); }}}
                                           className="px-3 py-1.5 text-red-400 rounded-lg text-xs hover:bg-red-50">삭제</button>
                                       </div>
                                     </div>
