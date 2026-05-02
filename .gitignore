@@ -1,0 +1,15 @@
+# Claude Code 로컬 설정 (PC별로 다름, 공유 안 함)
+.claude/
+
+# 작업용 백업 (각 Phase 시작 직전 생성된 index.html 사본; git이 이미 추적하므로 별도 보관 불필요)
+index.html.backup-*
+
+# OS 부산물
+Thumbs.db
+.DS_Store
+
+# 에디터 산출물
+*.swp
+*~
+.vscode/
+.idea/
