@@ -1432,6 +1432,15 @@ ${list}` }]
             }
           };
 
+          const saveFabricOrders = (data) => {
+            setFabricOrders(data);
+            try {
+              localStorage.setItem('fabric_orders', JSON.stringify(data));
+            } catch (e) {
+              console.error('저장 오류:', e);
+            }
+          };
+
           const saveFabricSuppliers = (data) => {
             setFabricSuppliersState(data);
             try {
@@ -2763,12 +2772,7 @@ ${list}` }]
             };
             
             const newOrders = [...fabricOrders, newFabricOrder];
-            setFabricOrders(newOrders);
-            try {
-              localStorage.setItem('fabric_orders', JSON.stringify(newOrders));
-            } catch (e) {
-              console.error('주문 기록 저장 오류:', e);
-            }
+            saveFabricOrders(newOrders);
             
             // 주문 항목 초기화
             setOrderItems([]);
@@ -3007,7 +3011,7 @@ ${list}` }]
                             if (data.history) saveHistory(data.history);
                             if (data.receivables) saveReceivables(data.receivables);
                             if (data.fabricSuppliers) saveFabricSuppliers(data.fabricSuppliers);
-                            if (data.fabricOrders) { setFabricOrders(data.fabricOrders); localStorage.setItem('fabric_orders', JSON.stringify(data.fabricOrders)); }
+                            if (data.fabricOrders) saveFabricOrders(data.fabricOrders);
                             if (data.freelancers) saveFreelancers(data.freelancers);
                             if (data.freelancerWorks) saveFreelancerWorks(data.freelancerWorks);
                             if (data.employees) saveEmployees(data.employees);
@@ -7096,8 +7100,7 @@ ${list}` }]
                                       <div className="flex gap-2">
                                         <button onClick={() => {
                                           const updated = fabricOrders.map(o => o.id === order.id ? {...o, ...editingOrderData} : o);
-                                          setFabricOrders(updated);
-                                          try { localStorage.setItem('fabric_orders', JSON.stringify(updated)); } catch(e) {}
+                                          saveFabricOrders(updated);
                                           setEditingOrderId(null);
                                         }} className="flex-1 bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-600">저장</button>
                                         <button onClick={() => setEditingOrderId(null)}
@@ -7118,8 +7121,7 @@ ${list}` }]
                                             className="text-slate-400 hover:text-blue-600 hover:bg-blue-50 px-2 py-1 rounded text-xs transition-all">수정</button>
                                           <button onClick={() => { if(confirm(`${order.fabricName} 주문을 삭제하시겠습니까?`)) {
                                             const updated = fabricOrders.filter(o => o.id !== order.id);
-                                            setFabricOrders(updated);
-                                            try { localStorage.setItem('fabric_orders', JSON.stringify(updated)); } catch(e) {}
+                                            saveFabricOrders(updated);
                                           }}} className="text-red-400 hover:text-red-600 hover:bg-red-50 px-2 py-1 rounded text-xs transition-all">삭제</button>
                                         </div>
                                       </div>
