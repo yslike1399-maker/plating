@@ -1423,6 +1423,15 @@ ${list}` }]
             }
           };
 
+          const saveDashboardLinks = (data) => {
+            setDashboardLinks(data);
+            try {
+              localStorage.setItem('dashboard_links', JSON.stringify(data));
+            } catch (e) {
+              console.error('저장 오류:', e);
+            }
+          };
+
           const saveFabricSuppliers = (data) => {
             setFabricSuppliersState(data);
             try {
@@ -3008,7 +3017,7 @@ ${list}` }]
                             if (data.vendorBills) saveVendorBills(data.vendorBills);
                             if (data.vendorPayments) saveVendorPayments(data.vendorPayments);
                             if (data.vendorItems) saveVendorItems(data.vendorItems);
-                            if (data.dashboardLinks) { setDashboardLinks(data.dashboardLinks); localStorage.setItem('dashboard_links', JSON.stringify(data.dashboardLinks)); }
+                            if (data.dashboardLinks) saveDashboardLinks(data.dashboardLinks);
                             if (data.memos) saveMemos(data.memos);
                             if (data.recurringMemos) saveRecurringMemos(data.recurringMemos);
                             if (data.soldoutItems) saveSoldoutItems(data.soldoutItems);
@@ -3874,8 +3883,7 @@ ${list}` }]
                                   bgColor: linkForm.bgColor
                                 };
                                 const newLinks = [...dashboardLinks, newLink];
-                                setDashboardLinks(newLinks);
-                                localStorage.setItem('dashboard_links', JSON.stringify(newLinks));
+                                saveDashboardLinks(newLinks);
                                 setLinkAddPopup(false);
                                 setLinkForm({name:'',url:'',icon:'🌐',image:null,iconType:'emoji',text1:'',text2:'',text1Size:16,text2Size:12,text1Color:'#000000',text2Color:'#666666',bgColor:'#ffffff'});
                               }} className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm" style={{borderRadius:'8px'}}>추가</button>
@@ -4048,8 +4056,7 @@ ${list}` }]
                                   text2Color: linkEditPopup.text2Color||'#666666',
                                   bgColor: linkEditPopup.bgColor||'#ffffff'
                                 } : l);
-                                setDashboardLinks(newLinks);
-                                localStorage.setItem('dashboard_links', JSON.stringify(newLinks));
+                                saveDashboardLinks(newLinks);
                                 setLinkEditPopup(null);
                               }} className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm" style={{borderRadius:'8px'}}>저장</button>
                             </div>
@@ -4081,8 +4088,7 @@ ${list}` }]
                                 const newLinks = [...dashboardLinks];
                                 const [moved] = newLinks.splice(fromIdx, 1);
                                 newLinks.splice(toIdx, 0, moved);
-                                setDashboardLinks(newLinks);
-                                localStorage.setItem('dashboard_links', JSON.stringify(newLinks));
+                                saveDashboardLinks(newLinks);
                               }}
                             >
                               <a href={link.url} target="_blank" rel="noopener noreferrer"
@@ -4131,8 +4137,7 @@ ${list}` }]
                               <button onClick={() => {
                                 if (confirm(`${link.name} 삭제?`)) {
                                   const newLinks = dashboardLinks.filter(l => l.id !== link.id);
-                                  setDashboardLinks(newLinks);
-                                  localStorage.setItem('dashboard_links', JSON.stringify(newLinks));
+                                  saveDashboardLinks(newLinks);
                                 }
                               }} className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs hidden group-hover:flex items-center justify-center">✕</button>
                               <button onClick={() => setLinkEditPopup({...link, iconType: link.image ? 'image' : 'emoji'})}
