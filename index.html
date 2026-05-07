@@ -2791,7 +2791,7 @@ ${list}` }]
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260503.01</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260508.04</div>
                   </div>
                   
                   {/* v10.06: 헬퍼/봇 상태등 */}
@@ -2952,7 +2952,7 @@ ${list}` }]
                         labelPresets,                // ← 라벨 프리셋 (NEW)
                         nameChangeLogs,              // ← 상품명 변경이력 (v10.01)
                         exportDate: new Date().toISOString(),
-                        appVersion: 'v20260503.01'
+                        appVersion: 'v20260508.04'
                       };
                       const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
                       const url = URL.createObjectURL(blob);
@@ -9826,6 +9826,40 @@ ${list}` }]
                   };
                   const setOpts = (updater) => setBarcodePrintPopup({...barcodePrintPopup, opts: typeof updater === 'function' ? updater(opts) : {...opts, ...updater}});
                   const setSelections = (updater) => setBarcodePrintPopup({...barcodePrintPopup, selections: typeof updater === 'function' ? updater(selections) : updater});
+                  // 색상 구분선 핸들러 (영구 저장, 배열 기반: [{id, position, label}])
+                  const updateDividers = (newDividers) => {
+                    const updatedProduct = { ...p, colorDividers: newDividers };
+                    saveMasterProducts(masterProducts.map(mp => mp.id === p.id ? updatedProduct : mp));
+                    setBarcodePrintPopup({...barcodePrintPopup, product: updatedProduct});
+                  };
+                  const addDividerAtTop = (label = '') => {
+                    const list = Array.isArray(p.colorDividers) ? p.colorDividers : [];
+                    updateDividers([{id: `div_${Date.now()}`, position: 0, label}, ...list]);
+                  };
+                  const removeDividerById = (id) => updateDividers((Array.isArray(p.colorDividers)?p.colorDividers:[]).filter(d => d.id !== id));
+                  const editDividerLabel = (id, label) => updateDividers((Array.isArray(p.colorDividers)?p.colorDividers:[]).map(d => d.id === id ? {...d, label} : d));
+                  const moveDividerTo = (id, newPosition) => updateDividers((Array.isArray(p.colorDividers)?p.colorDividers:[]).map(d => d.id === id ? {...d, position: newPosition} : d));
+                  // 모든 상품에서 사용한 구분선 라벨 모음 (중복 제거, 빈값 제외, 사용 빈도순)
+                  const allDividerLabels = (() => {
+                    const counter = {};
+                    (masterProducts || []).forEach(mp => {
+                      const list = Array.isArray(mp.colorDividers) ? mp.colorDividers
+                        : (mp.colorDividers ? Object.values(mp.colorDividers) : []);
+                      list.forEach(d => {
+                        const lbl = (typeof d === 'string' ? d : (d && d.label) || '').trim();
+                        if (lbl) counter[lbl] = (counter[lbl] || 0) + 1;
+                      });
+                    });
+                    return Object.entries(counter).sort((a,b) => b[1]-a[1]).map(([lbl]) => lbl);
+                  })();
+                  const dividerDropdownOpen = !!barcodePrintPopup.dividerDropdownOpen;
+                  const toggleDividerDropdown = () => setBarcodePrintPopup({...barcodePrintPopup, dividerDropdownOpen: !dividerDropdownOpen});
+                  const closeDividerDropdown = () => setBarcodePrintPopup({...barcodePrintPopup, dividerDropdownOpen: false});
+                  // 섹션 접기/펼치기 (디폴트: 모두 접힘)
+                  const collapsedSections = barcodePrintPopup.collapsedSections || {};
+                  const isCollapsed = (key) => collapsedSections[key] !== false;
+                  const toggleSection = (key) => setBarcodePrintPopup({...barcodePrintPopup, collapsedSections: {...collapsedSections, [key]: !isCollapsed(key)}});
+                  const allSectionsCollapsed = ['presets','size','items','text','fineTune'].every(k => isCollapsed(k));
                   
                   const totalLabels = Object.values(selections).reduce((s,v) => s + (parseInt(v)||0), 0);
                   const toPrint = colors
@@ -9904,7 +9938,7 @@ ${list}` }]
                     '14K도금': '#D4AF37', '은': '#C8C8C8'
                   };
                   const getColorRGB = (name) => {
-                    const key = (name || '').replace(/\s/g, '');
+                    const key = (name || '').replace(/[\s()]/g, '');
                     return colorRGB[key] || '#F0F0F0';
                   };
                   const getTextColor = (bgHex) => {
@@ -9952,7 +9986,7 @@ ${list}` }]
                             {p.image ? (
                               <img src={p.image} className="w-12 h-12 object-cover border border-neutral-300" style={{borderRadius:'6px'}} alt=""/>
                             ) : (
-                              <div className="w-12 h-12 bg-white border border-neutral-300 flex items-center justify-center text-xl" style={{borderRadius:'6px'}}>{p.type==='hairpin'?'📌':'🎀'}</div>
+                              <div className="w-12 h-12 bg-white border border-neutral-300 flex items-center justify-center text-xl" style={{borderRadius:'6px'}}>{p.type==='cellulose'?'💠':p.type==='hairpin'?'📌':'🎀'}</div>
                             )}
                             <div className="flex-1 min-w-0">
                               <div className="font-black text-black text-sm truncate tracking-tight">{p.name}</div>
@@ -9969,8 +10003,11 @@ ${list}` }]
                             
                             {/* 디자인 프리셋 */}
                             <div className="bg-white border border-neutral-300 p-2.5" style={{borderRadius:'8px'}}>
-                              <div className="text-[11px] font-black text-black mb-1.5 tracking-tight">⚡ 디자인 프리셋</div>
-                              <div className="space-y-1">
+                              <button onClick={()=>toggleSection('presets')} className="w-full flex justify-between items-center text-[11px] font-black text-black tracking-tight">
+                                <span>⚡ 디자인 프리셋</span>
+                                <span className="text-[10px] text-neutral-400">{isCollapsed('presets')?'▼':'▲'}</span>
+                              </button>
+                              {!isCollapsed('presets') && (<div className="mt-1.5 space-y-1">
                                 {designPresets.map(pr => {
                                   const isActive = Object.keys(pr.apply).every(k => opts[k] === pr.apply[k]);
                                   return (
@@ -10005,12 +10042,16 @@ ${list}` }]
                                   style={{borderRadius:'6px'}}>
                                   💾 현재 설정 저장
                                 </button>
-                              </div>
+                              </div>)}
                             </div>
-                            
+
                             {/* 라벨 크기 */}
                             <div className="bg-white border border-neutral-300 p-2.5" style={{borderRadius:'8px'}}>
-                              <div className="text-[11px] font-black text-black mb-1.5 tracking-tight">📏 라벨 크기</div>
+                              <button onClick={()=>toggleSection('size')} className="w-full flex justify-between items-center text-[11px] font-black text-black tracking-tight">
+                                <span>📏 라벨 크기</span>
+                                <span className="text-[10px] text-neutral-400">{isCollapsed('size')?'▼':'▲'}</span>
+                              </button>
+                              {!isCollapsed('size') && (<div className="mt-1.5">
                               <div className="grid grid-cols-2 gap-1">
                                 {sizePresets.map(s => {
                                   const isActive = opts.widthMm===s.w && opts.heightMm===s.h;
@@ -10035,12 +10076,16 @@ ${list}` }]
                                   style={{borderRadius:'4px'}}/>
                                 <span className="text-[10px] text-black font-black">mm</span>
                               </div>
+                              </div>)}
                             </div>
-                            
+
                             {/* 표시 항목 */}
                             <div className="bg-white border border-neutral-300 p-2.5" style={{borderRadius:'8px'}}>
-                              <div className="text-[11px] font-black text-black mb-1.5 tracking-tight">🎨 표시 항목</div>
-                              <div className="space-y-1">
+                              <button onClick={()=>toggleSection('items')} className="w-full flex justify-between items-center text-[11px] font-black text-black tracking-tight">
+                                <span>🎨 표시 항목</span>
+                                <span className="text-[10px] text-neutral-400">{isCollapsed('items')?'▼':'▲'}</span>
+                              </button>
+                              {!isCollapsed('items') && (<div className="mt-1.5 space-y-1">
                                 {[
                                   {key: 'showLogo', label: 'LACEROOM 로고'},
                                   {key: 'showKoreanName', label: '한글 보조명 (레이스룸)'},
@@ -10058,13 +10103,16 @@ ${list}` }]
                                     <span className="text-[11px] text-black font-bold">{item.label}</span>
                                   </label>
                                 ))}
-                              </div>
+                              </div>)}
                             </div>
-                            
+
                             {/* 텍스트 */}
                             <div className="bg-white border border-neutral-300 p-2.5" style={{borderRadius:'8px'}}>
-                              <div className="text-[11px] font-black text-black mb-1.5 tracking-tight">✏️ 텍스트</div>
-                              <div className="space-y-1.5">
+                              <button onClick={()=>toggleSection('text')} className="w-full flex justify-between items-center text-[11px] font-black text-black tracking-tight">
+                                <span>✏️ 텍스트</span>
+                                <span className="text-[10px] text-neutral-400">{isCollapsed('text')?'▼':'▲'}</span>
+                              </button>
+                              {!isCollapsed('text') && (<div className="mt-1.5 space-y-1.5">
                                 <div>
                                   <label className="text-[9px] text-neutral-500 block mb-0.5 font-bold uppercase tracking-wider">로고</label>
                                   <input type="text" value={opts.topText||''}
@@ -10089,9 +10137,9 @@ ${list}` }]
                                     className="w-full px-2 py-1 border border-neutral-300 text-[10px] font-bold"
                                     style={{borderRadius:'4px'}}/>
                                 </div>
-                              </div>
+                              </div>)}
                             </div>
-                            
+
                             {/* QR 옵션 */}
                             {opts.includeQR && (
                               <div className="bg-red-50 border border-red-300 p-2.5" style={{borderRadius:'8px'}}>
@@ -10119,8 +10167,23 @@ ${list}` }]
                                 </div>
                               </div>
                             )}
+
+                            {/* 모든 섹션 접힘 시 큰 상품 정보 표시 */}
+                            {allSectionsCollapsed && (
+                              <div className="bg-white border border-neutral-300 p-4 flex flex-col items-center gap-3" style={{borderRadius:'8px'}}>
+                                {p.image ? (
+                                  <img src={p.image} className="w-full aspect-square object-cover border border-neutral-300" style={{borderRadius:'8px'}} alt=""/>
+                                ) : (
+                                  <div className="w-full aspect-square bg-neutral-100 border border-neutral-300 flex items-center justify-center text-6xl" style={{borderRadius:'8px'}}>{p.type==='cellulose'?'💠':p.type==='hairpin'?'📌':'🎀'}</div>
+                                )}
+                                <div className="text-center w-full">
+                                  <div className="text-sm font-black text-black tracking-tight break-words">{p.name}</div>
+                                  {p.labelName && <div className="text-[11px] text-neutral-600 mt-1 font-bold break-words">🏷️ {p.labelName}</div>}
+                                </div>
+                              </div>
+                            )}
                           </div>
-                          
+
                           {/* === 우측: 미리보기 + 미세조정 + 색상수량 === */}
                           <div className="space-y-3">
                             
@@ -10128,10 +10191,17 @@ ${list}` }]
                             <div className="bg-neutral-50 border border-neutral-200 p-3" style={{borderRadius:'8px'}}>
                               <div className="flex justify-between items-center mb-2">
                                 <span className="text-[11px] font-black text-black tracking-tight">📐 실시간 미리보기</span>
-                                <span className="text-[9px] text-neutral-500 font-bold">{opts.widthMm}×{opts.heightMm}mm @ 200dpi · 8배 확대</span>
+                                <div className="flex items-center gap-2">
+                                  <button onClick={()=>setBarcodePrintPopup({...barcodePrintPopup, previewBarcodeHidden: !barcodePrintPopup.previewBarcodeHidden})}
+                                    className="text-[9px] font-black tracking-wider px-2 py-0.5 border border-neutral-400 hover:bg-neutral-200" style={{borderRadius:'4px'}}
+                                    title="미리보기 전용 (실제 출력에는 영향 없음)">
+                                    {barcodePrintPopup.previewBarcodeHidden ? '미리보기 펼치기 ▼' : '미리보기 접기 ▲'}
+                                  </button>
+                                  <span className="text-[9px] text-neutral-500 font-bold">{opts.widthMm}×{opts.heightMm}mm @ 200dpi · 8배 확대</span>
+                                </div>
                               </div>
-                              <div className="flex justify-center bg-neutral-200 p-3" style={{borderRadius:'6px'}}>
-                                <div className="bg-white border border-neutral-400 relative" 
+                              {!barcodePrintPopup.previewBarcodeHidden && (<><div className="flex justify-center bg-neutral-200 p-3" style={{borderRadius:'6px'}}>
+                                <div className="bg-white border border-neutral-400 relative"
                                   style={{
                                     width: `${pvW}px`, height: `${pvH}px`,
                                     padding: `${opts.margin}px`, boxSizing: 'border-box',
@@ -10184,12 +10254,12 @@ ${list}` }]
                                       <div style={{flex: opts.includeQR ? '0 1 auto' : '1 1 100%', marginRight: opts.includeQR ? '6px' : '0', minWidth: 0}}>
                                         <div style={{
                                           background: 'repeating-linear-gradient(90deg, #000 0, #000 1px, transparent 1px, transparent 3px)',
-                                          height: `${opts.barcodeHeight*0.9}px`,
+                                          height: `${opts.barcodeHeight*0.45}px`,
                                           width: opts.includeQR ? `${pvW * 0.60}px` : '100%',
                                           minWidth: '80px'
                                         }}></div>
                                         {opts.showBarcodeText && (
-                                          <div style={{fontFamily: 'monospace', fontSize: '12px', marginTop: '4px', textAlign: 'center', fontWeight: 500}}>{previewBarcode}</div>
+                                          <div style={{fontFamily: 'monospace', fontSize: '6px', marginTop: '2px', textAlign: 'center', fontWeight: 500}}>{previewBarcode}</div>
                                         )}
                                       </div>
                                     )}
@@ -10214,13 +10284,16 @@ ${list}` }]
                                   )}
                                 </div>
                               </div>
-                              <div className="text-[9px] text-neutral-500 mt-1.5 text-center font-bold">색상별로 자동 변경 · 실제 출력은 한글이 더 선명합니다</div>
+                              <div className="text-[9px] text-neutral-500 mt-1.5 text-center font-bold">색상별로 자동 변경 · 실제 출력은 한글이 더 선명합니다</div></>)}
                             </div>
                             
                             {/* 미세조정 */}
                             <div className="bg-white border border-neutral-300 p-3" style={{borderRadius:'8px'}}>
-                              <div className="text-[11px] font-black text-black mb-2 tracking-tight">🎯 미세조정</div>
-                              <div className="grid grid-cols-2 gap-2">
+                              <button onClick={()=>toggleSection('fineTune')} className="w-full flex justify-between items-center text-[11px] font-black text-black tracking-tight">
+                                <span>🎯 미세조정</span>
+                                <span className="text-[10px] text-neutral-400">{isCollapsed('fineTune')?'▼':'▲'}</span>
+                              </button>
+                              {!isCollapsed('fineTune') && (<div className="mt-2 grid grid-cols-2 gap-2">
                                 <div>
                                   <div className="flex justify-between text-[10px] mb-0.5">
                                     <span className="text-neutral-600 font-bold">상품명 크기</span>
@@ -10257,14 +10330,43 @@ ${list}` }]
                                     onChange={e=>setOpts({badgeSize: parseInt(e.target.value)||20})}
                                     className="w-full accent-black"/>
                                 </div>
-                              </div>
+                              </div>)}
                             </div>
-                            
+
                             {/* 색상별 수량 */}
                             <div className="bg-white border border-neutral-300 p-3" style={{borderRadius:'8px'}}>
                               <div className="text-[11px] font-black text-black mb-2 flex items-center justify-between tracking-tight">
                                 <span>📋 색상별 출력 수량</span>
-                                <div className="flex gap-1">
+                                <div className="flex gap-1 items-center relative">
+                                  <div className="flex border border-neutral-400 bg-white" style={{borderRadius:'4px'}}>
+                                    <button onClick={()=>addDividerAtTop('')} className="text-[10px] hover:bg-neutral-100 text-black px-2 py-0.5 font-black tracking-wider border-r border-neutral-300"
+                                    title="빈 구분선을 최상단에 추가 → 드래그로 위치 이동">＋ 구분선</button>
+                                    <button onClick={toggleDividerDropdown} className="text-[10px] hover:bg-neutral-100 text-black px-1.5 py-0.5 font-black"
+                                    title={`다른 상품에서 사용한 구분선 (${allDividerLabels.length}개)`}>{dividerDropdownOpen ? '▲' : '▼'}</button>
+                                  </div>
+                                  {dividerDropdownOpen && (
+                                    <div className="absolute right-0 top-full mt-1 z-50 bg-white border-2 border-black shadow-lg p-2 w-72 max-h-72 overflow-y-auto"
+                                      style={{borderRadius:'6px'}}>
+                                      <div className="flex items-center justify-between mb-1.5">
+                                        <span className="text-[10px] font-black text-black tracking-wider">📚 다른 상품 구분선 ({allDividerLabels.length})</span>
+                                        <button onClick={closeDividerDropdown} className="text-[10px] text-neutral-500 hover:text-black font-black px-1">✕</button>
+                                      </div>
+                                      {allDividerLabels.length === 0 ? (
+                                        <div className="text-[10px] text-neutral-500 text-center py-3 font-bold">아직 다른 상품에서 만든 구분선이 없습니다</div>
+                                      ) : (
+                                        <div className="flex flex-wrap gap-1">
+                                          {allDividerLabels.map(lbl => (
+                                            <button key={lbl}
+                                              onClick={() => { addDividerAtTop(lbl); closeDividerDropdown(); }}
+                                              title={`이 라벨로 구분선 추가: ${lbl}`}
+                                              className="text-[10px] bg-yellow-100 hover:bg-yellow-300 text-black px-2 py-1 font-black tracking-wide border border-yellow-400"
+                                              style={{borderRadius:'3px'}}>＋ {lbl}</button>
+                                          ))}
+                                        </div>
+                                      )}
+                                      <div className="text-[9px] text-neutral-400 mt-1.5 font-bold">클릭하면 최상단에 추가됨 → 드래그로 위치 이동</div>
+                                    </div>
+                                  )}
                                   <button onClick={()=>{
                                     const next = {};
                                     colors.forEach(c => { if (barcodes[c]) next[c] = 1; });
@@ -10275,7 +10377,7 @@ ${list}` }]
                                   style={{borderRadius:'4px'}}>해제</button>
                                 </div>
                               </div>
-                              <div className="space-y-1 max-h-56 overflow-y-auto">
+                              <div className={`space-y-1 overflow-y-auto ${barcodePrintPopup.previewBarcodeHidden && allSectionsCollapsed ? 'max-h-[44rem]' : (barcodePrintPopup.previewBarcodeHidden ? 'max-h-[32rem]' : 'max-h-56')}`}>
                                 {colors.length === 0 && <div className="text-xs text-slate-400 text-center py-3">등록된 색상이 없습니다</div>}
                                 {(() => {
                                   // 색상 표시 순서 규칙
@@ -10288,58 +10390,125 @@ ${list}` }]
                                     const idx = colorOrder.indexOf(c);
                                     return idx === -1 ? 9999 : idx;
                                   };
-                                  return [...colors].sort((a, b) => getOrder(a) - getOrder(b));
-                                })().map(color => {
-                                  const bc = barcodes[color];
-                                  const pos = positions[color] || '';
-                                  // 위치값에서 [ ] 제거하여 표시
-                                  const posDisplay = pos.replace(/^\[/, '').replace(/\]$/, '');
-                                  const qty = selections[color] || '';
-                                  const cBg = getColorRGB(color);
-                                  const cTxt = getTextColor(cBg);
-                                  // 커스텀 라벨 색상명 (입력됐으면 우선 표시)
-                                  const customColorNames = p.customColorNames || {};
-                                  const customName = customColorNames[color] || '';
-                                  const displayColorName = (customName && customName.trim()) ? customName.trim() : color;
-                                  // 반광 구분
-                                  const isMatte = color.includes('(반광)');
-                                  const rowBg = !bc ? 'bg-neutral-50 border-neutral-200 opacity-60' : 
-                                                isMatte ? 'bg-neutral-100 border-neutral-400' : 
-                                                'bg-white border-neutral-300';
-                                  return (
-                                    <div key={color} className={`flex items-center gap-2 p-2 border ${rowBg}`} style={{borderRadius:'6px'}}>
-                                      <span style={{background:cBg, color:cTxt, padding:'2px 8px', borderRadius:'4px', fontSize:'11px', fontWeight:700}} title={color}>{displayColorName}</span>
-                                      {posDisplay && <span className="text-[10px] font-mono text-black bg-neutral-200 px-1.5 py-0.5 font-black" style={{borderRadius:'4px'}}>{posDisplay}</span>}
-                                      {bc ? (
-                                        <>
-                                          <span className="text-[10px] font-mono text-neutral-700 bg-neutral-100 px-1.5 py-0.5 ml-auto font-bold" style={{borderRadius:'4px'}}>{bc}</span>
-                                          <input type="number" min="0" max="99" value={qty}
-                                            onChange={e=>setSelections(s=>({...s, [color]: e.target.value.replace(/\D/g,'').slice(0,2)}))}
-                                            placeholder="0"
-                                            className="w-12 px-1 py-1 border border-neutral-300 text-xs text-center outline-none font-black" style={{borderRadius:'4px'}}/>
-                                          <span className="text-[10px] text-neutral-500 font-bold">장</span>
-                                          <button
-                                            onClick={()=>{
-                                              const n = parseInt(qty) || 1;
-                                              const singleItem = [{
-                                                color,
-                                                barcode: bc,
-                                                labelName: p.labelName || p.name,
-                                                copies: n,
-                                                colorText: displayColorName,
-                                                positionText: pos || ''
-                                              }];
-                                              printBarcodeBatch(singleItem, opts);
-                                            }}
-                                            title={`${displayColorName} ${qty||1}장 즉시 출력`}
-                                            className="bg-black hover:bg-neutral-800 text-white px-2 py-1 text-[10px] font-black tracking-wider whitespace-nowrap" style={{borderRadius:'4px'}}>🖨️ 출력</button>
-                                        </>
-                                      ) : (
-                                        <span className="text-[10px] text-amber-700 font-black ml-auto">⚠️ 바코드 미등록</span>
-                                      )}
-                                    </div>
-                                  );
-                                })}
+                                  const sortedColors = [...colors].sort((a, b) => getOrder(a) - getOrder(b));
+
+                                  // 구분선 데이터 정규화 (구버전 객체 → 배열 마이그레이션)
+                                  let dividers = p.colorDividers;
+                                  if (dividers && !Array.isArray(dividers)) {
+                                    dividers = Object.entries(dividers).map(([afterColor, label], i) => ({
+                                      id: `mig_${Date.now()}_${i}`,
+                                      position: sortedColors.indexOf(afterColor) + 1,
+                                      label
+                                    }));
+                                    setTimeout(() => updateDividers(dividers), 0);
+                                  }
+                                  dividers = Array.isArray(dividers) ? dividers : [];
+
+                                  // 통합 렌더 항목 (구분선 + 색상)
+                                  const items = [];
+                                  dividers.filter(d => d.position === 0).forEach(d => items.push({type:'divider', divider: d}));
+                                  sortedColors.forEach((color, idx) => {
+                                    items.push({type:'color', color, idx});
+                                    dividers.filter(d => d.position === idx + 1).forEach(d => items.push({type:'divider', divider: d}));
+                                  });
+
+                                  return items.map((item) => {
+                                    if (item.type === 'divider') {
+                                      const d = item.divider;
+                                      return (
+                                        <div key={d.id} draggable={true}
+                                          onDragStart={e => { e.dataTransfer.setData('dividerId', d.id); e.dataTransfer.effectAllowed='move'; }}
+                                          className="flex items-center gap-2 px-1 py-1 cursor-move bg-neutral-50 border border-neutral-300"
+                                          style={{borderRadius:'2px'}}
+                                          title="드래그하여 위치 이동">
+                                          <span className="text-neutral-500 text-[12px] font-black select-none">⋮⋮</span>
+                                          <hr className="flex-1 border-t border-neutral-400"/>
+                                          <input type="text" value={d.label}
+                                            onChange={e => editDividerLabel(d.id, e.target.value)}
+                                            onMouseDown={e => e.stopPropagation()}
+                                            draggable={false}
+                                            placeholder="구분명 입력"
+                                            list="laceroom-divider-labels"
+                                            className="w-40 px-2 py-0.5 text-[10px] font-bold text-center border border-neutral-400 bg-white outline-none focus:border-black"
+                                            style={{borderRadius:'2px'}}/>
+                                          <datalist id="laceroom-divider-labels">
+                                            {allDividerLabels.map(lbl => <option key={lbl} value={lbl}/>)}
+                                          </datalist>
+                                          <button onClick={() => removeDividerById(d.id)}
+                                            className="text-[10px] text-red-600 font-black px-1.5 py-0.5 hover:bg-red-50 border border-red-300"
+                                            style={{borderRadius:'2px'}} title="구분선 삭제">×</button>
+                                          <hr className="flex-1 border-t border-neutral-400"/>
+                                        </div>
+                                      );
+                                    }
+                                    // 색상 행
+                                    const color = item.color;
+                                    const idx = item.idx;
+                                    const bc = barcodes[color];
+                                    const pos = positions[color] || '';
+                                    const posDisplay = pos.replace(/^\[/, '').replace(/\]$/, '');
+                                    const qty = selections[color] || '';
+                                    const cBg = getColorRGB(color);
+                                    const cTxt = getTextColor(cBg);
+                                    const customColorNames = p.customColorNames || {};
+                                    const customName = customColorNames[color] || '';
+                                    const displayColorName = (customName && customName.trim()) ? customName.trim() : color;
+                                    const isMatte = color.includes('(반광)');
+                                    const rowBg = !bc ? 'border-neutral-200 opacity-60' : 'border-neutral-300';
+                                    const rowStyle = {borderRadius:'6px', ...(bc ? {backgroundColor: `${cBg}33`} : {})};
+                                    const matteMatch = displayColorName.match(/^(.*?)(\(반광\))(.*)$/);
+                                    return (
+                                      <div key={`color-${color}`}
+                                        onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+                                        onDrop={e => {
+                                          e.preventDefault();
+                                          const dragId = e.dataTransfer.getData('dividerId');
+                                          if (!dragId) return;
+                                          const rect = e.currentTarget.getBoundingClientRect();
+                                          const isAbove = (e.clientY - rect.top) < rect.height / 2;
+                                          moveDividerTo(dragId, isAbove ? idx : idx + 1);
+                                        }}
+                                        className={`flex items-center gap-2 p-2 border ${rowBg}`} style={rowStyle}>
+                                        <span style={{background:cBg, width:'14px', height:'14px', borderRadius:'3px', flexShrink:0, border:'1px solid rgba(0,0,0,0.15)'}} title={color}></span>
+                                        <span style={{fontSize:'11px', fontWeight:700, color:'#000'}}>{matteMatch ? (<>{matteMatch[1]}<span style={{color:'#dc2626'}}>{matteMatch[2]}</span>{matteMatch[3]}</>) : displayColorName}</span>
+                                        {posDisplay && <span className="text-[11px] text-black bg-white border border-neutral-500 px-2 py-0.5 font-bold tracking-wide" style={{borderRadius:'4px'}}>{posDisplay}</span>}
+                                        {bc ? (
+                                          <>
+                                            <span className="text-[10px] font-mono text-neutral-800 bg-white border border-neutral-500 px-1.5 py-0.5 ml-auto font-bold" style={{borderRadius:'4px'}}>{bc}</span>
+                                            <div className="flex gap-0.5">
+                                              {[5, 10, 15, 20].map(n => (
+                                                <button key={n} onClick={()=>setSelections(s=>({...s, [color]: n}))}
+                                                  className="px-1.5 py-0.5 bg-white border border-neutral-500 hover:bg-black hover:text-white text-[9px] font-bold" style={{borderRadius:'2px'}}>{n}</button>
+                                              ))}
+                                            </div>
+                                            <input type="number" min="0" max="99" value={qty}
+                                              onChange={e=>setSelections(s=>({...s, [color]: e.target.value.replace(/\D/g,'').slice(0,2)}))}
+                                              placeholder="0"
+                                              className="w-12 px-1 py-1 border border-neutral-300 text-xs text-center outline-none font-black" style={{borderRadius:'4px'}}/>
+                                            <span className="text-[10px] text-neutral-500 font-bold">장</span>
+                                            <button
+                                              onClick={()=>{
+                                                const n = parseInt(qty) || 1;
+                                                const singleItem = [{
+                                                  color,
+                                                  barcode: bc,
+                                                  labelName: p.labelName || p.name,
+                                                  copies: n,
+                                                  colorText: displayColorName,
+                                                  positionText: pos || ''
+                                                }];
+                                                printBarcodeBatch(singleItem, opts);
+                                              }}
+                                              title={`${displayColorName} ${qty||1}장 즉시 출력`}
+                                              className="bg-black hover:bg-neutral-800 text-white px-2 py-1 text-[10px] font-black tracking-wider whitespace-nowrap" style={{borderRadius:'4px'}}>🖨️ 출력</button>
+                                          </>
+                                        ) : (
+                                          <span className="text-[10px] text-amber-700 font-black ml-auto">⚠️ 바코드 미등록</span>
+                                        )}
+                                      </div>
+                                    );
+                                  });
+                                })()}
                               </div>
                             </div>
                             
@@ -10486,7 +10655,7 @@ ${list}` }]
                           {p.image ? (
                             <img src={p.image} className="w-12 h-12 rounded-lg object-cover border" alt=""/>
                           ) : (
-                            <div className="w-12 h-12 rounded-lg bg-white border flex items-center justify-center text-xl">{p.type==='hairpin'?'📌':'🎀'}</div>
+                            <div className="w-12 h-12 rounded-lg bg-white border flex items-center justify-center text-xl">{p.type==='cellulose'?'💠':p.type==='hairpin'?'📌':'🎀'}</div>
                           )}
                           <div className="flex-1 min-w-0">
                             <div className="font-bold text-slate-900 text-sm truncate">{p.name}</div>
@@ -10611,7 +10780,7 @@ ${list}` }]
                           {p.image ? (
                             <img src={p.image} className="w-14 h-14 rounded-lg object-cover border" alt=""/>
                           ) : (
-                            <div className="w-14 h-14 rounded-lg bg-white border flex items-center justify-center text-2xl">{p.type==='hairpin'?'📌':'🎀'}</div>
+                            <div className="w-14 h-14 rounded-lg bg-white border flex items-center justify-center text-2xl">{p.type==='cellulose'?'💠':p.type==='hairpin'?'📌':'🎀'}</div>
                           )}
                           <div className="flex-1 min-w-0">
                             <div className="font-bold text-slate-900 text-sm truncate">{p.name}</div>
@@ -10698,7 +10867,7 @@ ${list}` }]
                           {p.image ? (
                             <img src={p.image} className="w-14 h-14 rounded-lg object-cover border" alt=""/>
                           ) : (
-                            <div className="w-14 h-14 rounded-lg bg-white border flex items-center justify-center text-2xl">{p.type==='hairpin'?'📌':'🎀'}</div>
+                            <div className="w-14 h-14 rounded-lg bg-white border flex items-center justify-center text-2xl">{p.type==='cellulose'?'💠':p.type==='hairpin'?'📌':'🎀'}</div>
                           )}
                           <div className="flex-1 min-w-0">
                             <div className="font-bold text-slate-900 text-sm truncate">{p.name}</div>
@@ -10809,8 +10978,8 @@ ${list}` }]
                                     {/* 상품 타입 */}
                                     <div>
                                       <label className="block text-[11px] font-bold text-black mb-2 uppercase tracking-wider">상품 타입</label>
-                                      <div className="grid grid-cols-2 gap-2">
-                                        {[['hairpin','헤어핀'],['gocchang','곱창밴드']].map(([val,label])=>(
+                                      <div className="grid grid-cols-3 gap-2">
+                                        {[['hairpin','📌 헤어핀'],['gocchang','🎀 곱창밴드'],['cellulose','💠 셀룰로오스(복합)']].map(([val,label])=>(
                                           <button key={val} onClick={()=>setForm(p=>({...p,type:val,colors:[]}))}
                                             className={`py-3 text-sm font-bold border transition-all ${form.type===val?'border-black bg-black text-white':'border-neutral-300 text-neutral-700 hover:border-black'}`}
                                             style={{borderRadius:'2px'}}>
@@ -11208,9 +11377,14 @@ ${list}` }]
                                             </div>
                                           ) : (
                                             // 🟦 v20260502.11: 곱창밴드 - 헤어핀처럼 색상 카드 시스템 (원단정보 유무 무관)
+                                            // 💠 v20260508.04: 셀룰로오스(복합)도 같은 색상 카드 시스템 사용 (호피+골드(유광) 식 키)
                                             <div className="space-y-2">
                                               {/* 안내 */}
-                                              {form.hasFabricInfo === false ? (
+                                              {form.type === 'cellulose' ? (
+                                                <div className="bg-purple-50 border border-purple-300 px-3 py-2 text-[11px] text-purple-900" style={{borderRadius:'2px'}}>
+                                                  💠 <strong>셀룰로오스(복합 소재)</strong> - 패턴/소재 prefix(예: 호피, 지브라) + 베이스 색상 다중 선택으로 일괄 등록. 등록 형식: <code className="bg-white px-1 border border-purple-200">호피+골드(유광)</code>
+                                                </div>
+                                              ) : form.hasFabricInfo === false ? (
                                                 <div className="bg-amber-50 border border-amber-200 px-3 py-2 text-[11px] text-amber-800" style={{borderRadius:'2px'}}>
                                                   📝 <strong>원단 정보 없음</strong> - 색상을 직접 입력하세요. 나중에 "원단 정보 있음"으로 변경하면 거래처 원단과 매칭할 수 있어요.
                                                 </div>
@@ -12556,6 +12730,158 @@ ${list}` }]
                             );
                           })()}
 
+                          {/* 💠 v20260508.04: 셀룰로오스(복합) 색상 추가 모달 - prefix + 베이스 다중 선택 일괄 등록 */}
+                          {colorAddModal && masterPopup && masterPopup.type === 'cellulose' && (() => {
+                            const setForm = (updater) => setMasterPopup(prev => typeof updater==='function'?updater(prev):updater);
+                            const currentColors = new Set(masterPopup.colors || []);
+                            const prefix = (masterPopup._cellulosePrefix || '').trim();
+                            const selectedBases = masterPopup._celluloseBases || [];
+                            const baseColors = [
+                              '골드(유광)','골드(반광)',
+                              '실버(유광)','실버(반광)',
+                              '블랙(유광)','블랙(반광)',
+                              '로즈골드(유광)','로즈골드(반광)',
+                              '다크골드(유광)','다크골드(반광)',
+                              '14K도금','은','흑무광'
+                            ];
+                            const buildKey = (pre, base) => pre ? `${pre}+${base}` : base;
+                            const toggleBase = (b) => {
+                              setForm(p => {
+                                const cur = p._celluloseBases || [];
+                                return {...p, _celluloseBases: cur.includes(b) ? cur.filter(x => x !== b) : [...cur, b]};
+                              });
+                            };
+                            const addBatch = () => {
+                              if (selectedBases.length === 0) return alert('베이스 색상을 1개 이상 선택하세요');
+                              const newKeys = selectedBases.map(b => buildKey(prefix, b));
+                              const dupes = newKeys.filter(k => currentColors.has(k));
+                              const fresh = newKeys.filter(k => !currentColors.has(k));
+                              if (fresh.length === 0) return alert('이미 모두 등록된 색상입니다');
+                              setForm(p => ({
+                                ...p,
+                                colors: [...(p.colors||[]), ...fresh],
+                                unlockedColors: [...(p.unlockedColors||[]), ...fresh],
+                                _cellulosePrefix: '',
+                                _celluloseBases: []
+                              }));
+                              if (dupes.length > 0) alert(`${fresh.length}개 추가됨\n중복 ${dupes.length}개 스킵: ${dupes.join(', ')}`);
+                            };
+                            // 모든 cellulose 상품에서 prefix만 모음 (자동완성)
+                            const allPrefixes = (() => {
+                              const set = new Set();
+                              (masterProducts||[]).filter(mp => mp.type === 'cellulose').forEach(mp => {
+                                (mp.colors || []).forEach(c => {
+                                  const m = c.match(/^(.+?)\+/);
+                                  if (m) set.add(m[1].trim());
+                                });
+                              });
+                              return [...set];
+                            })();
+                            return (
+                              <div onClick={()=>setColorAddModal(false)}
+                                className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
+                                <div onClick={e=>e.stopPropagation()}
+                                  className="bg-white max-w-xl w-full p-5 max-h-[90vh] overflow-y-auto" style={{borderRadius:'2px'}}>
+                                  <div className="flex items-center justify-between mb-4 pb-3 border-b border-neutral-200">
+                                    <div>
+                                      <div className="text-base font-black text-black uppercase tracking-tight">💠 셀룰로오스 색상 추가</div>
+                                      <div className="text-[10px] text-neutral-500 mt-0.5">패턴 prefix + 베이스 색상 다중 선택 → 일괄 등록</div>
+                                    </div>
+                                    <button onClick={()=>setColorAddModal(false)} className="text-neutral-400 hover:text-black text-2xl font-light w-7 h-7 flex items-center justify-center">×</button>
+                                  </div>
+
+                                  {/* prefix 입력 */}
+                                  <div className="mb-4">
+                                    <label className="block text-[11px] font-bold text-black mb-2 uppercase tracking-wider">패턴/소재 prefix <span className="text-neutral-400 font-normal normal-case tracking-normal">(선택)</span></label>
+                                    <input type="text"
+                                      value={masterPopup._cellulosePrefix || ''}
+                                      onChange={e=>setForm(p=>({...p, _cellulosePrefix: e.target.value.slice(0,30)}))}
+                                      placeholder="예: 호피, 지브라, 마블 (비우면 일반 색상으로 등록)"
+                                      list="cellulose_prefixes"
+                                      maxLength={30}
+                                      autoFocus
+                                      className="w-full px-3 py-2 border border-purple-300 focus:border-purple-600 outline-none text-sm bg-purple-50"
+                                      style={{borderRadius:'2px'}}/>
+                                    <datalist id="cellulose_prefixes">
+                                      {allPrefixes.map(pp => <option key={pp} value={pp}/>)}
+                                    </datalist>
+                                    <div className="text-[10px] text-neutral-500 mt-1">기존 셀룰로오스 상품에서 사용한 prefix가 자동완성됩니다</div>
+                                  </div>
+
+                                  {/* 베이스 색상 다중 선택 */}
+                                  <div className="mb-4">
+                                    <div className="flex items-center justify-between mb-2">
+                                      <label className="text-[11px] font-bold text-black uppercase tracking-wider">베이스 색상 (다중 선택) <span className="text-purple-700">{selectedBases.length}개</span></label>
+                                      <div className="flex gap-1">
+                                        <button onClick={()=>setForm(p=>({...p, _celluloseBases: ['골드(유광)','실버(유광)','블랙(유광)','로즈골드(유광)','다크골드(유광)']}))}
+                                          className="text-[10px] bg-white border border-neutral-400 hover:bg-purple-100 text-black px-2 py-0.5 font-bold" style={{borderRadius:'2px'}}>전체 유광</button>
+                                        <button onClick={()=>setForm(p=>({...p, _celluloseBases: ['골드(반광)','실버(반광)','블랙(반광)','로즈골드(반광)','다크골드(반광)']}))}
+                                          className="text-[10px] bg-white border border-neutral-400 hover:bg-purple-100 text-black px-2 py-0.5 font-bold" style={{borderRadius:'2px'}}>전체 반광</button>
+                                        <button onClick={()=>setForm(p=>({...p, _celluloseBases: []}))}
+                                          className="text-[10px] bg-white border border-neutral-300 hover:bg-neutral-200 text-neutral-600 px-2 py-0.5 font-bold" style={{borderRadius:'2px'}}>해제</button>
+                                      </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-1.5 bg-neutral-50 border border-neutral-300 p-2" style={{borderRadius:'2px'}}>
+                                      {baseColors.map(b => {
+                                        const checked = selectedBases.includes(b);
+                                        const wouldBe = buildKey(prefix, b);
+                                        const dup = currentColors.has(wouldBe);
+                                        return (
+                                          <label key={b} className={`flex items-center gap-2 px-2 py-1.5 cursor-pointer text-[11px] border ${checked?'bg-purple-100 border-purple-500':'bg-white border-neutral-300 hover:border-purple-400'} ${dup?'opacity-50':''}`}
+                                            style={{borderRadius:'2px'}} title={dup?`이미 등록됨: ${wouldBe}`:`등록될 이름: ${wouldBe}`}>
+                                            <input type="checkbox" checked={checked} disabled={dup}
+                                              onChange={()=>toggleBase(b)} className="accent-purple-600 w-4 h-4"/>
+                                            <span className={`font-medium ${dup?'text-neutral-400 line-through':'text-black'}`}>{b}</span>
+                                          </label>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+
+                                  {/* 미리보기 */}
+                                  {selectedBases.length > 0 && (
+                                    <div className="mb-4 bg-purple-50 border border-purple-200 px-3 py-2" style={{borderRadius:'2px'}}>
+                                      <div className="text-[10px] font-bold text-purple-700 mb-1">💡 등록될 이름 ({selectedBases.length}개):</div>
+                                      <div className="flex flex-wrap gap-1">
+                                        {selectedBases.map(b => (
+                                          <span key={b} className="text-[11px] bg-white border border-purple-300 text-purple-900 px-2 py-0.5 font-bold" style={{borderRadius:'2px'}}>
+                                            {buildKey(prefix, b)}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  <button onClick={addBatch}
+                                    disabled={selectedBases.length === 0}
+                                    className={`w-full py-2.5 font-black text-sm uppercase tracking-wider mb-3 ${selectedBases.length === 0 ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700 text-white'}`}
+                                    style={{borderRadius:'2px'}}>
+                                    ＋ {selectedBases.length}개 일괄 추가
+                                  </button>
+
+                                  {/* 현재 등록 */}
+                                  {(masterPopup.colors||[]).length > 0 && (
+                                    <div className="mb-4">
+                                      <label className="block text-[11px] font-bold text-black mb-2 uppercase tracking-wider">✓ 현재 등록 ({(masterPopup.colors||[]).length}개)</label>
+                                      <div className="flex flex-wrap gap-1.5 bg-neutral-50 border border-neutral-200 p-2.5" style={{borderRadius:'2px'}}>
+                                        {(masterPopup.colors||[]).map(c => (
+                                          <span key={c} className="text-xs bg-white border border-neutral-400 text-black px-2.5 py-1 font-medium" style={{borderRadius:'2px'}}>
+                                            {c}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  <button onClick={()=>setColorAddModal(false)}
+                                    className="w-full py-2.5 bg-black hover:bg-neutral-800 text-white font-black text-sm uppercase tracking-wider" style={{borderRadius:'2px'}}>
+                                    완료
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })()}
+
                           <div className="flex items-center justify-between flex-wrap gap-2">
                             <div>
                               <span className="font-black text-black text-lg tracking-tight">상품 마스터</span>
@@ -12642,7 +12968,7 @@ ${list}` }]
                           ) : (
                             <>
                               {/* 요약 통계 (클릭 가능한 필터) - 무신사 스타일 */}
-                              <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
+                              <div className="grid grid-cols-2 md:grid-cols-6 gap-2 mb-4">
                                 <button onClick={()=>setForm_masterFilter('all')}
                                   className={`p-3 border-2 transition-all text-left ${(form_masterFilter||'all')==='all' ? 'bg-black border-black' : 'bg-white border-neutral-300 hover:border-black'}`}
                                   style={{borderRadius:'2px'}}>
@@ -12653,16 +12979,23 @@ ${list}` }]
                                 <button onClick={()=>setForm_masterFilter('hairpin')}
                                   className={`p-3 border-2 transition-all text-left ${form_masterFilter==='hairpin' ? 'bg-black border-black' : 'bg-white border-neutral-300 hover:border-black'}`}
                                   style={{borderRadius:'2px'}}>
-                                  <div className={`text-[10px] mb-1 font-bold uppercase tracking-wider ${form_masterFilter==='hairpin'?'text-white':'text-neutral-600'}`}>헤어핀</div>
+                                  <div className={`text-[10px] mb-1 font-bold uppercase tracking-wider ${form_masterFilter==='hairpin'?'text-white':'text-neutral-600'}`}>📌 헤어핀</div>
                                   <div className={`text-2xl font-black ${form_masterFilter==='hairpin'?'text-white':'text-black'}`}>{masterProducts.filter(p=>p.type==='hairpin').length}</div>
                                   <div className={`text-[10px] mt-0.5 ${form_masterFilter==='hairpin'?'text-neutral-300':'text-neutral-500'}`}>이미지 {masterProducts.filter(p=>p.type==='hairpin'&&p.image).length}개</div>
                                 </button>
                                 <button onClick={()=>setForm_masterFilter('gocchang')}
                                   className={`p-3 border-2 transition-all text-left ${form_masterFilter==='gocchang' ? 'bg-black border-black' : 'bg-white border-neutral-300 hover:border-black'}`}
                                   style={{borderRadius:'2px'}}>
-                                  <div className={`text-[10px] mb-1 font-bold uppercase tracking-wider ${form_masterFilter==='gocchang'?'text-white':'text-neutral-600'}`}>곱창밴드</div>
+                                  <div className={`text-[10px] mb-1 font-bold uppercase tracking-wider ${form_masterFilter==='gocchang'?'text-white':'text-neutral-600'}`}>🎀 곱창밴드</div>
                                   <div className={`text-2xl font-black ${form_masterFilter==='gocchang'?'text-white':'text-black'}`}>{masterProducts.filter(p=>p.type==='gocchang').length}</div>
                                   <div className={`text-[10px] mt-0.5 ${form_masterFilter==='gocchang'?'text-neutral-300':'text-neutral-500'}`}>원단연결 {masterProducts.filter(p=>p.type==='gocchang'&&p.fabricId).length}개</div>
+                                </button>
+                                <button onClick={()=>setForm_masterFilter('cellulose')}
+                                  className={`p-3 border-2 transition-all text-left ${form_masterFilter==='cellulose' ? 'bg-purple-700 border-purple-700' : 'bg-white border-neutral-300 hover:border-purple-700'}`}
+                                  style={{borderRadius:'2px'}}>
+                                  <div className={`text-[10px] mb-1 font-bold uppercase tracking-wider ${form_masterFilter==='cellulose'?'text-white':'text-neutral-600'}`}>💠 셀룰로오스</div>
+                                  <div className={`text-2xl font-black ${form_masterFilter==='cellulose'?'text-white':'text-black'}`}>{masterProducts.filter(p=>p.type==='cellulose').length}</div>
+                                  <div className={`text-[10px] mt-0.5 ${form_masterFilter==='cellulose'?'text-purple-200':'text-neutral-500'}`}>복합 소재</div>
                                 </button>
                                 <button onClick={()=>setProductMgmtTab('soldout')}
                                   className="p-3 border-2 border-neutral-300 bg-white hover:border-black transition-all text-left"
@@ -12807,7 +13140,7 @@ ${list}` }]
                                               </div>
                                             ) : (
                                               <div className="relative aspect-square flex items-center justify-center bg-neutral-100">
-                                                <span className="text-3xl opacity-40 text-neutral-500">{type==='hairpin'?'📌':'🎀'}</span>
+                                                <span className="text-3xl opacity-40 text-neutral-500">{type==='cellulose'?'💠':type==='hairpin'?'📌':'🎀'}</span>
                                                 <button onClick={()=>saveMasterProducts(masterProducts.map(x=>x.id===p.id?{...x, isFeatured: false}:x))}
                                                   className="absolute top-1.5 left-1.5 text-xs px-1.5 py-0.5 font-black bg-black text-white" style={{borderRadius:'2px'}}>★</button>
                                               </div>
@@ -12933,7 +13266,7 @@ ${list}` }]
                                                 {(() => {
                                                   const hasAnyBarcode = p.barcodes && Object.values(p.barcodes).some(v => v && v.length === 11);
                                                   return hasAnyBarcode ? (
-                                                    <button onClick={()=>setBarcodePrintPopup({product: p, selections: {}})}
+                                                    <button onClick={()=>setBarcodePrintPopup({product: p, selections: {}, previewBarcodeHidden: true})}
                                                       title="바코드 출력"
                                                       className="bg-white hover:bg-black hover:text-white text-black border border-neutral-700 px-2 py-1.5 text-[11px] font-black" style={{borderRadius:'2px'}}>🖨️</button>
                                                   ) : (
@@ -12950,6 +13283,14 @@ ${list}` }]
                                                 }}
                                                   className="bg-white hover:bg-black hover:text-white text-neutral-400 border border-neutral-300 px-2 py-1.5 text-[11px] font-black" style={{borderRadius:'2px'}}>🗑️</button>
                                               </div>
+                                              {p.barcodes && Object.values(p.barcodes).some(v => v && v.length === 11) && (
+                                                <button onClick={()=>setBarcodePrintPopup({product: p, selections: {}, previewBarcodeHidden: true})}
+                                                  title="바코드 출력 (라벨 인쇄)"
+                                                  className="w-full text-black py-2.5 text-[12px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 mt-1 animate-pulse border-2 border-black"
+                                                  style={{borderRadius:'2px', backgroundColor:'#FEE500'}}>
+                                                  🖨️ 바코드 출력
+                                                </button>
+                                              )}
                                             </div>
                                           </div>
                                         );
@@ -12960,11 +13301,12 @@ ${list}` }]
                               })()}
 
                               {/* 타입별 그룹핑 */}
-                              {[['hairpin','📌 헤어핀'],['gocchang','🎀 곱창밴드']].map(([type,label])=>{
+                              {[['hairpin','📌 헤어핀'],['gocchang','🎀 곱창밴드'],['cellulose','💠 셀룰로오스(복합)']].map(([type,label])=>{
                                 const filter = form_masterFilter || 'all';
-                                // 타입 필터 (전체/헤어핀/곱창밴드)
+                                // 타입 필터 (전체/헤어핀/곱창밴드/셀룰로오스)
                                 if (filter === 'hairpin' && type !== 'hairpin') return null;
                                 if (filter === 'gocchang' && type !== 'gocchang') return null;
+                                if (filter === 'cellulose' && type !== 'cellulose') return null;
                                 const search = (form_masterSearch||'').toLowerCase().trim();
                                 // v10.04: 집중관리(featured) 상품은 일반 리스트에서 제외 (위 집중관리 섹션에 이미 표시됨)
                                 let items = masterProducts.filter(p => p.type===type && !p.isFeatured && (!search || p.name.toLowerCase().includes(search)));
@@ -13038,7 +13380,7 @@ ${list}` }]
                                               </div>
                                             ) : (
                                               <div className="relative aspect-square flex items-center justify-center bg-neutral-100">
-                                                <span className="text-3xl opacity-40 text-neutral-500">{type==='hairpin'?'📌':'🎀'}</span>
+                                                <span className="text-3xl opacity-40 text-neutral-500">{type==='cellulose'?'💠':type==='hairpin'?'📌':'🎀'}</span>
                                                 <div className="absolute top-1.5 left-1.5">
                                                   <button onClick={(e)=>{e.stopPropagation(); saveMasterProducts(masterProducts.map(x=>x.id===p.id?{...x, isFeatured: !p.isFeatured}:x));}}
                                                     title={p.isFeatured ? '집중관리 해제' : '집중관리로 설정'}
@@ -13199,7 +13541,7 @@ ${list}` }]
                                                 {(() => {
                                                   const hasAnyBarcode = p.barcodes && Object.values(p.barcodes).some(v => v && v.length === 11);
                                                   return hasAnyBarcode ? (
-                                                    <button onClick={()=>setBarcodePrintPopup({product: p, selections: {}})}
+                                                    <button onClick={()=>setBarcodePrintPopup({product: p, selections: {}, previewBarcodeHidden: true})}
                                                       title="바코드 출력"
                                                       className="bg-white hover:bg-black hover:text-white text-black border border-neutral-700 px-2 py-1.5 text-[11px] font-black" style={{borderRadius:'2px'}}>🖨️</button>
                                                   ) : (
@@ -13217,6 +13559,14 @@ ${list}` }]
                                                   🗑️
                                                 </button>
                                               </div>
+                                              {p.barcodes && Object.values(p.barcodes).some(v => v && v.length === 11) && (
+                                                <button onClick={()=>setBarcodePrintPopup({product: p, selections: {}, previewBarcodeHidden: true})}
+                                                  title="바코드 출력 (라벨 인쇄)"
+                                                  className="w-full text-black py-2.5 text-[12px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 mt-1 animate-pulse border-2 border-black"
+                                                  style={{borderRadius:'2px', backgroundColor:'#FEE500'}}>
+                                                  🖨️ 바코드 출력
+                                                </button>
+                                              )}
                                             </div>
                                           </div>
                                         );
