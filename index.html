@@ -115,6 +115,55 @@
           return `${name}(${finish})`;
         };
 
+        // 💠 v20260508.13: 도금공장 발주서 색상 정렬 우선순위 (캡쳐2 기준)
+        // 반광 그룹(골드→블랙→실버→로즈골드→다크골드) → 유광 그룹 → 단일색
+        const FACTORY_COLOR_ORDER = [
+          { color: '대금',            finish: '반무광' },  // 1. 골드(반광)
+          { color: '흑진주',          finish: '반무광' },  // 2. 블랙(반광)
+          { color: '니켈',            finish: '반무광' },  // 3. 실버(반광)
+          { color: '로즈골드 대용금', finish: '반무광' },  // 4. 로즈골드(반광)
+          { color: '흑골드',          finish: '반무광' },  // 5. 다크골드(반광)
+          { color: '대금',            finish: '유광' },    // 6. 골드(유광)
+          { color: '흑진주',          finish: '유광' },    // 7. 블랙(유광)
+          { color: '니켈',            finish: '유광' },    // 8. 실버(유광)
+          { color: '로즈골드 대용금', finish: '유광' },    // 9. 로즈골드(유광)
+          { color: '흑골드',          finish: '유광' },    // 10. 다크골드(유광)
+          { color: '14k대용금',       finish: '유광' },    // 11. 14K도금
+          { color: '은',              finish: '유광' },    // 12. 은
+          { color: '동착',            finish: '' },        // 13. 흑무광
+        ];
+        const getFactoryColorOrderIndex = (color, finish) => {
+          const idx = FACTORY_COLOR_ORDER.findIndex(f =>
+            f.color === color && f.finish === (finish || '')
+          );
+          return idx === -1 ? 999 : idx;
+        };
+
+        // 💠 v20260508.13: 글로벌 색상 헥스 매핑 (라벨 인쇄 + 월별 누적 시각화 공유)
+        const COLOR_HEX_MAP = {
+          '골드유광':       '#FFD700', '골드반광':       '#DAA520',
+          '실버유광':       '#DCDCDC', '실버반광':       '#C0C0C0',
+          '블랙유광':       '#282828', '블랙반광':       '#3C3C3C',
+          '흑무광':         '#141414',
+          '로즈골드유광':   '#E79A84', '로즈골드반광':   '#D2826E',
+          '다크골드유광':   '#A07832', '다크골드반광':   '#8C6428',
+          '14K도금':        '#D4AF37', '14k도금':        '#D4AF37',
+          '은':             '#C8C8C8',
+        };
+        const getSaleColorHex = (saleColor) => {
+          const key = (saleColor || '').replace(/[\s()]/g, '');
+          return COLOR_HEX_MAP[key] || '#F0F0F0';
+        };
+        // 도금공장 색상명 → 9-1 판매명 역변환 → hex
+        const getFactoryColorHex = (factoryColor, factoryFinish) => {
+          for (const [sale, f] of Object.entries(SALE_TO_FACTORY_MAP)) {
+            if (f.factoryColor === factoryColor && f.factoryFinish === (factoryFinish || '')) {
+              return getSaleColorHex(sale);
+            }
+          }
+          return '#F0F0F0';
+        };
+
         const formatDate = (date) => date.toISOString().split('T')[0];
 
         // 🟦 v20260502.11: 곱창밴드 자주 쓰는 색상/금속라벨 자동 학습 (빈도순)
@@ -1103,6 +1152,8 @@ ${list}` }]
             const m = String(today.getMonth() + 1).padStart(2, '0');
             return `${today.getFullYear()}-${m}`;
           });
+          // 💠 v20260508.13: 보기 모드 (전체 / 제품별)
+          const [costViewMode, setCostViewMode] = useState('all'); // 'all' | 'product'
 
           useEffect(() => {
             try {
@@ -2107,30 +2158,31 @@ ${list}` }]
             const workbook = new ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet('작업지시서');
 
+            // 💠 v20260508.13: 새 양식 적용 (캡쳐2 기준 색상 정렬 + 컴팩트 양식)
             // 제목
             worksheet.mergeCells('A1:H1');
             worksheet.getCell('A1').value = '주식회사 골드 / 도금 작업 지시서';
-            worksheet.getCell('A1').font = { size: 22, bold: true };
+            worksheet.getCell('A1').font = { size: 16, bold: true, name: '맑은 고딕' };
             worksheet.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
             worksheet.getRow(1).height = 32;
 
             // 헤더
             const headers = ['출고날짜', '품명', '이미지', '연마', '색상', '구분', '출고\n수량', '비고'];
             worksheet.getRow(2).values = headers;
-            worksheet.getRow(2).font = { bold: true, size: 14 };
+            worksheet.getRow(2).font = { bold: true, size: 14, name: '맑은 고딕' };
             worksheet.getRow(2).alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
             worksheet.getRow(2).height = 40;
 
-            // 열 너비 설정
+            // 열 너비 (캡쳐2 양식)
             worksheet.columns = [
-              { key: 'date', width: 14 },
-              { key: 'name', width: 20 },
-              { key: 'image', width: 14 },
-              { key: 'grind', width: 12 },
-              { key: 'color', width: 25 },
-              { key: 'finish', width: 12 },
-              { key: 'qty', width: 12 },
-              { key: 'note', width: 6.35 }
+              { key: 'date',   width: 12.75 },
+              { key: 'name',   width: 12.75 },
+              { key: 'image',  width: 16.375 },
+              { key: 'grind',  width: 6.5 },
+              { key: 'color',  width: 17.125 },
+              { key: 'finish', width: 8.875 },
+              { key: 'qty',    width: 6.5 },
+              { key: 'note',   width: 6.5 }
             ];
 
             let currentRow = 3;
@@ -2141,15 +2193,24 @@ ${list}` }]
             for (const product of order.products) {
               const startRow = currentRow;
               const isGrayBackground = productIndex % 2 === 0;
-              
+
+              // 💠 v20260508.13: 색상 정렬 (캡쳐2 도금공장 순서 강제)
+              const sortedItems = [...product.items].sort((a, b) =>
+                getFactoryColorOrderIndex(a.color, a.finish) -
+                getFactoryColorOrderIndex(b.color, b.finish)
+              );
+
               // 각 색상 행 추가
-              for (let i = 0; i < product.items.length; i++) {
-                const item = product.items[i];
+              for (let i = 0; i < sortedItems.length; i++) {
+                const item = sortedItems[i];
                 const row = worksheet.getRow(currentRow);
-                
+
                 if (i === 0) {
-                  row.getCell(1).value = order.date;
-                  row.getCell(1).font = { size: 14 };
+                  // 출고날짜는 첫 상품 첫 행에만 (이후 A열 전체 병합)
+                  if (productIndex === 0) {
+                    row.getCell(1).value = order.date;
+                    row.getCell(1).font = { size: 12, name: '맑은 고딕' };
+                  }
                   // 도금거래처 상품명 우선 표시 (마스터에서 최신 데이터 조회)
                   let displayName = product.productName;
                   const matchedMp = masterProducts.find(mp =>
@@ -2161,69 +2222,69 @@ ${list}` }]
                     displayName = matchedMp.platingOrderName.trim();
                   }
                   row.getCell(2).value = displayName;
-                  row.getCell(2).font = { size: 14 };
-                  
+                  row.getCell(2).font = { size: 12, name: '맑은 고딕' };
+
                   // 연마 상태 텍스트 변환
                   let grindText = product.grind;
                   if (product.grind === '연마 제외') grindText = '연마\n제외';
                   if (product.grind === '연마 완료') grindText = '연마\n완료';
-                  
+
                   row.getCell(4).value = grindText;
                   row.getCell(4).alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-                  row.getCell(4).font = { size: 14, bold: true };
-                  
+                  row.getCell(4).font = { size: 14, bold: true, name: '맑은 고딕' };
+
                   // 연마 상태별 색상
                   if (product.grind === '연마 제외') {
                     row.getCell(4).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF0000' } };
-                    row.getCell(4).font = { color: { argb: 'FFFFFFFF' }, bold: true, size: 14 };
+                    row.getCell(4).font = { color: { argb: 'FFFFFFFF' }, bold: true, size: 14, name: '맑은 고딕' };
                   } else if (product.grind === '연마') {
-                    row.getCell(4).font = { color: { argb: 'FFFF0000' }, bold: true, size: 14 };
+                    row.getCell(4).font = { color: { argb: 'FFFF0000' }, bold: true, size: 14, name: '맑은 고딕' };
                     if (isGrayBackground) {
                       row.getCell(4).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC0C0C0' } };
                     }
                   } else if (product.grind === '연마 완료') {
-                    row.getCell(4).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF33CCFF' } };
-                    row.getCell(4).font = { color: { argb: 'FFFFFFFF' }, bold: true, size: 14 };
+                    row.getCell(4).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF00B0F0' } };
+                    row.getCell(4).font = { color: { argb: 'FFFFFFFF' }, bold: true, size: 14, name: '맑은 고딕' };
                   }
                 }
-                
+
                 row.getCell(5).value = item.color;
-                row.getCell(5).font = { size: 14 };
+                row.getCell(5).font = { size: 12, name: '맑은 고딕' };
                 row.getCell(6).value = item.finish || '';
-                row.getCell(6).font = { size: 14 };
+                row.getCell(6).font = { size: 12, name: '맑은 고딕' };
                 row.getCell(7).value = item.qty;
-                row.getCell(7).font = { size: 14 };
-                
-                // 기본 배경색 (출고날짜 제외)
+                row.getCell(7).font = { size: 12, name: '맑은 고딕' };
+
+                // 짝수 상품 zebra 회색 배경 (상품 혼동 방지)
                 if (isGrayBackground) {
-                  for (let col = 2; col <= 8; col++) { // 2부터 시작 (출고날짜 제외)
+                  for (let col = 2; col <= 8; col++) { // 2부터 (출고날짜 제외)
                     const cell = row.getCell(col);
                     if (!cell.fill || !cell.fill.fgColor) {
                       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC0C0C0' } };
                     }
                   }
                 }
-                
-                // 반무광 서식 적용
+
+                // 반무광 서식 (선명한 노랑 + 빨강 글씨)
                 if (item.finish === '반무광') {
-                  row.getCell(5).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9F26D' } };
-                  row.getCell(5).font = { color: { argb: 'FFFF0000' }, bold: true, size: 14 };
-                  row.getCell(6).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9F26D' } };
-                  row.getCell(6).font = { color: { argb: 'FFFF0000' }, bold: true, size: 14 };
-                  row.getCell(7).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9F26D' } };
-                  row.getCell(7).font = { color: { argb: 'FFFF0000' }, bold: true, size: 14 };
+                  row.getCell(5).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
+                  row.getCell(5).font = { color: { argb: 'FFFF0000' }, bold: true, size: 12, name: '맑은 고딕' };
+                  row.getCell(6).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
+                  row.getCell(6).font = { color: { argb: 'FFFF0000' }, bold: true, size: 12, name: '맑은 고딕' };
+                  row.getCell(7).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
+                  row.getCell(7).font = { color: { argb: 'FFFF0000' }, bold: true, size: 12, name: '맑은 고딕' };
                 }
-                
-                row.height = 36;
+
+                row.height = 17.25;
                 row.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-                
+
                 currentRow++;
               }
 
               const endRow = currentRow - 1;
 
-              // 셀 병합
-              if (product.items.length > 1) {
+              // 셀 병합 (색상 행만)
+              if (sortedItems.length > 1) {
                 worksheet.mergeCells(`B${startRow}:B${endRow}`);
                 worksheet.mergeCells(`C${startRow}:C${endRow}`);
                 worksheet.mergeCells(`D${startRow}:D${endRow}`);
@@ -2264,12 +2325,12 @@ ${list}` }]
                       base64: imgData,
                       extension: extension,
                     });
-                    // 이미지를 셀 병합 영역의 정중앙에 배치
-                    const rowCount = endRow - startRow + 1;
-                    const totalHeight = rowCount * 36; // 각 행 36pt
-                    const imgSize = Math.min(totalHeight - 4, 110); // 여백 4px, 최대 110px
+                    // 💠 v20260508.13: 이미지는 색상 행 영역에 fit (총수량 행 제외)
+                    // 색상 행 1개 = 17.25pt ≈ 23px
+                    const colorRowCount = sortedItems.length;
+                    const imgSize = Math.min(colorRowCount * 23 - 2, 130);
                     worksheet.addImage(imageId, {
-                      tl: { col: 2.1, row: startRow - 1 + 0.1 },
+                      tl: { col: 2.05, row: startRow - 1 + 0.05 },
                       ext: { width: imgSize, height: imgSize },
                       editAs: 'oneCell'
                     });
@@ -2284,14 +2345,15 @@ ${list}` }]
                 console.warn('이미지 없음 (1-2 + 9-1 모두 없음):', product.productName);
               }
 
-              // 총수량 행
+              // 총수량 행 (양식: 행높이 20.25, 폰트 12pt)
               const sumRow = worksheet.getRow(currentRow);
               sumRow.getCell(2).value = '총수량';
               sumRow.getCell(7).value = { formula: `SUM(G${startRow}:G${endRow})` };
-              sumRow.getCell(7).font = { bold: true, size: 14, color: { argb: 'FFFF0000' } }; // 빨간색
-              sumRow.font = { bold: true, size: 14 };
+              sumRow.font = { bold: true, size: 12, name: '맑은 고딕' };
               sumRow.alignment = { horizontal: 'center', vertical: 'middle' };
-              sumRow.height = 32;
+              sumRow.height = 20.25;
+              // G7 합계는 빨간색 강조 (row.font 덮어쓰기 후 재적용)
+              sumRow.getCell(7).font = { bold: true, size: 12, color: { argb: 'FFFF0000' }, name: '맑은 고딕' };
               
               // 총수량 행 배경색 (출고날짜 제외)
               if (isGrayBackground) {
@@ -2302,22 +2364,31 @@ ${list}` }]
               
               worksheet.mergeCells(`B${currentRow}:F${currentRow}`);
               
-              // 비고란: 선연마 재고 확인 후 안내 문구 자동 입력 (v09.14: 정확 매칭)
+              // 비고란: 선연마 재고 확인 후 안내 문구 자동 입력
+              // 💠 v20260508.13: 발주 저장 시 polishStocks가 이미 차감된 상태이므로
+              // outHistory에서 이번 order.id의 출고분을 더해 "발주 전 보관량"을 복원해 표시
               const productTotalQty = product.items.reduce((s,i) => s+(i.qty||0), 0);
               const matchedStocks = polishStocks.filter(s => matchPolishStock(s, product));
-              const stockQty = matchedStocks.reduce((s,x) => s+x.remaining, 0);
-              
+              const currentRemaining = matchedStocks.reduce((s,x) => s + x.remaining, 0);
+              const thisOrderUsed = matchedStocks.reduce((s, x) =>
+                s + (x.outHistory || [])
+                  .filter(h => h.orderId === order.id)
+                  .reduce((acc, h) => acc + (h.outQty || 0), 0)
+              , 0);
+              const stockQty = currentRemaining + thisOrderUsed; // 발주 전 보관량
+
               const noteCell = worksheet.getCell(`H${startRow}`);
               if (stockQty > 0) {
                 const needExtra = Math.max(0, productTotalQty - stockQty);
+                const afterRemain = stockQty - productTotalQty; // 발주 후 잔여
                 if (needExtra > 0) {
                   // 도금 요청 수량 > 보관 수량 → 추가 입고 필요
-                  noteCell.value = `⚠️ 공장보관 ${stockQty}개\n→ ${needExtra}개만 추가 입고하면 됩니다`;
+                  noteCell.value = `⚠️ 공장보관 ${stockQty}개\n→ ${needExtra}개 추가 입고 필요`;
                   noteCell.font = { bold: true, size: 11, color: { argb: 'FFCC0000' } };
                   noteCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF0CC' } };
                 } else {
                   // 보관 수량이 도금 요청보다 많거나 같음 → 추가 입고 불필요
-                  noteCell.value = `✅ 공장보관 ${stockQty}개\n추가 입고 불필요`;
+                  noteCell.value = `✅ 공장보관 ${stockQty}개에서 전량 충당\n발주 후 잔여 ${afterRemain}개`;
                   noteCell.font = { bold: true, size: 11, color: { argb: 'FF006600' } };
                   noteCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE6FFE6' } };
                 }
@@ -2330,11 +2401,11 @@ ${list}` }]
               productIndex++;
             }
 
-            // 출고날짜 열 병합 (전체)
+            // 출고날짜 열 병합 (전체) - 양식: 발주서당 1번만 표시
             const dateEndRow = currentRow - 1;
             worksheet.mergeCells(`A${dateStartRow}:A${dateEndRow}`);
             worksheet.getCell(`A${dateStartRow}`).alignment = { horizontal: 'center', vertical: 'middle' };
-            worksheet.getCell(`A${dateStartRow}`).font = { size: 14 };
+            worksheet.getCell(`A${dateStartRow}`).font = { size: 12, name: '맑은 고딕' };
 
             // 테두리 추가
             for (let row = 2; row < currentRow; row++) {
@@ -2791,7 +2862,7 @@ ${list}` }]
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260508.04</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260508.13</div>
                   </div>
                   
                   {/* v10.06: 헬퍼/봇 상태등 */}
@@ -2952,7 +3023,7 @@ ${list}` }]
                         labelPresets,                // ← 라벨 프리셋 (NEW)
                         nameChangeLogs,              // ← 상품명 변경이력 (v10.01)
                         exportDate: new Date().toISOString(),
-                        appVersion: 'v20260508.04'
+                        appVersion: 'v20260508.13'
                       };
                       const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
                       const url = URL.createObjectURL(blob);
@@ -5656,6 +5727,33 @@ ${list}` }]
                             {/* 컨트롤 패널 */}
                             <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-5 mb-6 border-2 border-blue-200">
                               <div className="flex flex-wrap items-center gap-4">
+                                {/* 보기 모드 토글 */}
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-bold text-slate-700">👀 보기:</span>
+                                  <div className="flex bg-white rounded-xl p-1 shadow-md border-2 border-slate-200">
+                                    <button
+                                      onClick={() => costViewMode !== 'all' && setCostViewMode('all')}
+                                      className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                                        costViewMode === 'all'
+                                          ? 'bg-purple-600 text-white shadow-md'
+                                          : 'text-slate-600 hover:bg-slate-100'
+                                      }`}
+                                    >
+                                      🔲 전체보기
+                                    </button>
+                                    <button
+                                      onClick={() => costViewMode !== 'product' && setCostViewMode('product')}
+                                      className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                                        costViewMode === 'product'
+                                          ? 'bg-purple-600 text-white shadow-md'
+                                          : 'text-slate-600 hover:bg-slate-100'
+                                      }`}
+                                    >
+                                      📦 제품별보기
+                                    </button>
+                                  </div>
+                                </div>
+
                                 {/* 조회 기준 토글 */}
                                 <div className="flex items-center gap-2">
                                   <span className="text-sm font-bold text-slate-700">📅 조회 기준:</span>
@@ -5711,12 +5809,12 @@ ${list}` }]
                               </div>
                             </div>
 
-                            {/* 피벗 테이블 */}
+                            {/* 피벗 테이블 (전체보기) */}
                             {rows.length === 0 ? (
                               <div className="text-center py-12 text-slate-400">
                                 <p className="font-medium">작업 내역이 없습니다</p>
                               </div>
-                            ) : (
+                            ) : costViewMode === 'all' ? (
                               <div className="overflow-x-auto border-2 border-slate-200 rounded-2xl">
                                 <table className="w-full text-sm">
                                   <thead className="bg-slate-100 sticky top-0">
@@ -5743,7 +5841,9 @@ ${list}` }]
                                       return (
                                         <tr key={idx} className="border-b border-slate-200 hover:bg-blue-50">
                                           <td className="py-3 px-3 font-semibold text-slate-800 sticky left-0 bg-white" style={{borderRight: '1px solid #e2e8f0'}}>{r.productName}</td>
-                                          <td className="text-center py-3 px-3">{getColorDisplayName ? getColorDisplayName(r.color) : r.color}</td>
+                                          <td className="text-center py-3 px-3" style={{backgroundColor: getFactoryColorHex(r.color, r.finish) + '33'}}>
+                                            <span className="font-semibold">{r.color}</span>
+                                          </td>
                                           <td className="text-center py-3 px-3">{r.finish || '-'}</td>
                                           <td className={`text-right py-3 px-3 ${r.platingCost === 0 ? 'text-red-500 font-bold' : 'text-slate-700'}`}>
                                             {r.platingCost > 0 ? `${r.platingCost.toLocaleString()}원` : '⚠️ 미입력'}
@@ -5807,6 +5907,223 @@ ${list}` }]
                                   </tbody>
                                 </table>
                               </div>
+                            ) : (
+                              /* 💠 v20260508.13: 제품별보기 (카드 + 막대그래프) */
+                              (() => {
+                                // 제품별 그룹핑
+                                const productGroups = {};
+                                rows.forEach(r => {
+                                  const pkey = r.productId ? `pid_${r.productId}` : `name_${r.productName}`;
+                                  if (!productGroups[pkey]) {
+                                    const matchedMp = masterProducts.find(mp =>
+                                      String(mp.id) === String(r.productId) ||
+                                      String(mp.legacyProductId) === String(r.productId) ||
+                                      mp.name === r.productName
+                                    );
+                                    productGroups[pkey] = {
+                                      productName: r.productName,
+                                      productId: r.productId,
+                                      master: matchedMp,
+                                      colors: [],
+                                      byMonth: {},
+                                      byMonthByColor: {}, // [month][colorKey] = qty
+                                      totalQty: 0,
+                                      totalAmount: 0,
+                                      unset: 0,
+                                    };
+                                  }
+                                  productGroups[pkey].colors.push(r);
+                                  const rowTotalQty = r.unset + months.reduce((s, m) => s + (r.byMonth[m] || 0), 0);
+                                  productGroups[pkey].totalQty += rowTotalQty;
+                                  productGroups[pkey].totalAmount += rowTotalQty * (r.platingCost + r.grindCost);
+                                  productGroups[pkey].unset += r.unset;
+                                  months.forEach(m => {
+                                    const q = r.byMonth[m] || 0;
+                                    productGroups[pkey].byMonth[m] = (productGroups[pkey].byMonth[m] || 0) + q;
+                                    if (!productGroups[pkey].byMonthByColor[m]) productGroups[pkey].byMonthByColor[m] = [];
+                                    if (q > 0) {
+                                      productGroups[pkey].byMonthByColor[m].push({
+                                        color: r.color, finish: r.finish, qty: q,
+                                        hex: getFactoryColorHex(r.color, r.finish)
+                                      });
+                                    }
+                                  });
+                                });
+                                // 누적 수량 많은 순 정렬
+                                const groupList = Object.values(productGroups).sort((a, b) => b.totalQty - a.totalQty);
+
+                                return (
+                                  <div className="space-y-5">
+                                    {groupList.map((g, gi) => {
+                                      // 색상 행을 캡쳐2 도금공장 순서로 정렬
+                                      const sortedColors = [...g.colors].sort((a, b) =>
+                                        getFactoryColorOrderIndex(a.color, a.finish) -
+                                        getFactoryColorOrderIndex(b.color, b.finish)
+                                      );
+                                      // 그래프 최대값
+                                      const maxByMonth = Math.max(1, ...months.map(m => g.byMonth[m] || 0));
+                                      return (
+                                        <div key={gi} className="bg-white rounded-2xl border-2 border-slate-200 shadow-sm overflow-hidden">
+                                          {/* 카드 헤더 */}
+                                          <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-purple-50 to-indigo-50 border-b-2 border-slate-200">
+                                            {g.master && g.master.image ? (
+                                              <img src={g.master.image} className="w-16 h-16 object-cover border-2 border-white shadow-md rounded-xl" alt=""/>
+                                            ) : (
+                                              <div className="w-16 h-16 bg-white border-2 border-slate-200 rounded-xl flex items-center justify-center text-3xl">
+                                                {g.master?.type === 'cellulose' ? '💠' : g.master?.type === 'gocchang' ? '🎀' : '📌'}
+                                              </div>
+                                            )}
+                                            <div className="flex-1 min-w-0">
+                                              <div className="font-black text-slate-900 text-lg truncate">{g.productName}</div>
+                                              <div className="text-xs text-slate-500 mt-0.5">색상 {sortedColors.length}종 · 누적 {g.totalQty.toLocaleString()}개 · {g.totalAmount.toLocaleString()}원</div>
+                                            </div>
+                                            <div className="text-right">
+                                              <div className="text-2xl font-black text-purple-700">{g.totalQty.toLocaleString()}<span className="text-xs ml-1">개</span></div>
+                                              <div className="text-xs text-slate-500">{g.totalAmount.toLocaleString()}원</div>
+                                            </div>
+                                          </div>
+
+                                          {/* 막대그래프 (월별 색상 스택) */}
+                                          <div className="p-4 border-b border-slate-200">
+                                            <div className="text-[11px] font-bold text-slate-600 mb-2 uppercase tracking-wider">📊 월별 도금 수량 (색상 스택)</div>
+                                            {/* 💠 v20260508.13: 가로 막대 그래프 (월 = 행) */}
+                                            <div className="bg-slate-50/40 rounded-lg p-3 space-y-1.5">
+                                              {months.map(m => {
+                                                const monthTotal = g.byMonth[m] || 0;
+                                                const widthPercent = monthTotal > 0 ? (monthTotal / maxByMonth) * 100 : 0;
+                                                const stack = (g.byMonthByColor[m] || []).sort((a, b) =>
+                                                  getFactoryColorOrderIndex(a.color, a.finish) -
+                                                  getFactoryColorOrderIndex(b.color, b.finish)
+                                                );
+                                                return (
+                                                  <div key={m} className="flex items-center gap-2">
+                                                    {/* 월 라벨 (Y축) */}
+                                                    <div className="w-14 text-[11px] font-bold text-slate-600 text-right shrink-0">{m.substring(2)}</div>
+                                                    {/* 막대 영역 */}
+                                                    <div className="flex-1 h-9 bg-white border border-slate-200 rounded relative" style={{minWidth: '200px'}}>
+                                                      {monthTotal > 0 && (
+                                                        <div className="flex h-full border border-slate-400 rounded overflow-hidden"
+                                                          style={{width: `${Math.max(widthPercent, 2)}%`, minWidth: '4px'}}>
+                                                          {stack.map((s, si) => {
+                                                            const segPercent = (s.qty / monthTotal) * 100;
+                                                            // 텍스트 대비
+                                                            const rr = parseInt(s.hex.slice(1,3),16);
+                                                            const gg = parseInt(s.hex.slice(3,5),16);
+                                                            const bb = parseInt(s.hex.slice(5,7),16);
+                                                            const lum = (0.299*rr + 0.587*gg + 0.114*bb) / 255;
+                                                            const txtColor = lum < 0.5 ? '#FFFFFF' : '#111111';
+                                                            const shortName = s.color === '로즈골드 대용금' ? '로즈' : s.color === '14k대용금' ? '14k' : s.color;
+                                                            const finishFull = s.finish === '유광' ? '유광' : s.finish === '반무광' ? '반광' : '';
+                                                            const fullLabel = finishFull ? `${shortName}(${finishFull}) ${s.qty}개` : `${shortName} ${s.qty}개`;
+                                                            return (
+                                                              <div key={si}
+                                                                className="border-l border-white/30 first:border-l-0 flex items-center justify-center text-[9px] font-black whitespace-nowrap overflow-hidden"
+                                                                style={{
+                                                                  width: `${segPercent}%`,
+                                                                  background: s.hex,
+                                                                  color: txtColor,
+                                                                  padding: '0 2px'
+                                                                }}
+                                                                title={`${s.color}${s.finish?'('+s.finish+')':''}: ${s.qty}개`}>
+                                                                {fullLabel}
+                                                              </div>
+                                                            );
+                                                          })}
+                                                        </div>
+                                                      )}
+                                                      {/* 막대 우측에 합계 (막대가 짧을 때 막대 옆 외부, 막대가 길면 막대 안 우측 끝) */}
+                                                      {monthTotal > 0 && widthPercent < 90 && (
+                                                        <div className="absolute top-1/2 text-[10px] font-bold text-slate-700 whitespace-nowrap"
+                                                          style={{left: `calc(${Math.max(widthPercent, 2)}% + 4px)`, transform: 'translateY(-50%)'}}>
+                                                          {monthTotal.toLocaleString()}개
+                                                        </div>
+                                                      )}
+                                                    </div>
+                                                    {/* 우측 합계 (막대가 거의 꽉 찼을 때) */}
+                                                    {widthPercent >= 90 && (
+                                                      <div className="w-16 text-[11px] font-bold text-slate-700 text-right shrink-0">
+                                                        {monthTotal > 0 ? `${monthTotal.toLocaleString()}개` : '-'}
+                                                      </div>
+                                                    )}
+                                                    {widthPercent < 90 && monthTotal === 0 && (
+                                                      <div className="w-16 text-[11px] font-bold text-slate-300 text-right shrink-0">-</div>
+                                                    )}
+                                                  </div>
+                                                );
+                                              })}
+                                            </div>
+                                            {/* 범례 */}
+                                            <div className="flex flex-wrap gap-2 mt-3">
+                                              {sortedColors.map((c, ci) => {
+                                                const hex = getFactoryColorHex(c.color, c.finish);
+                                                const cqty = c.unset + months.reduce((s, m) => s + (c.byMonth[m] || 0), 0);
+                                                const finishFullL = c.finish === '유광' ? '유광' : c.finish === '반무광' ? '반광' : '';
+                                                return (
+                                                  <div key={ci} className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-md px-2 py-1 text-[11px]">
+                                                    <span className="w-3 h-3 rounded-sm border border-slate-400" style={{background: hex}}/>
+                                                    <span className="font-semibold text-slate-700">{c.color}{finishFullL?`(${finishFullL})`:''}</span>
+                                                    <span className="text-slate-500">{cqty.toLocaleString()}개</span>
+                                                  </div>
+                                                );
+                                              })}
+                                            </div>
+                                          </div>
+
+                                          {/* 색상별 분해 표 */}
+                                          <div className="overflow-x-auto">
+                                            <table className="w-full text-sm">
+                                              <thead className="bg-slate-50">
+                                                <tr className="border-b border-slate-200">
+                                                  <th className="text-center py-2 px-3 font-bold text-slate-700" style={{minWidth:'90px'}}>색상</th>
+                                                  <th className="text-center py-2 px-3 font-bold text-slate-700" style={{minWidth:'60px'}}>마감</th>
+                                                  {billingViewMode === 'billing' && (
+                                                    <th className="text-center py-2 px-3 font-bold text-amber-700 bg-amber-50" style={{minWidth:'60px'}}>미입력</th>
+                                                  )}
+                                                  {months.map(m => (
+                                                    <th key={m} className="text-center py-2 px-3 font-bold text-blue-700" style={{minWidth:'60px'}}>{m.substring(2)}</th>
+                                                  ))}
+                                                  <th className="text-right py-2 px-3 font-bold text-slate-900 bg-yellow-100" style={{minWidth:'80px'}}>총수량</th>
+                                                </tr>
+                                              </thead>
+                                              <tbody>
+                                                {sortedColors.map((c, ci) => {
+                                                  const cTotal = c.unset + months.reduce((s, m) => s + (c.byMonth[m] || 0), 0);
+                                                  const hex = getFactoryColorHex(c.color, c.finish);
+                                                  return (
+                                                    <tr key={ci} className="border-b border-slate-100 hover:bg-blue-50/30">
+                                                      <td className="text-center py-2 px-3 font-semibold" style={{backgroundColor: hex + '33'}}>{c.color}</td>
+                                                      <td className="text-center py-2 px-3">{c.finish || '-'}</td>
+                                                      {billingViewMode === 'billing' && (
+                                                        <td className={`text-center py-2 px-3 ${c.unset > 0 ? 'bg-amber-50 text-amber-700 font-bold' : 'text-slate-300'}`}>
+                                                          {c.unset > 0 ? c.unset.toLocaleString() : '-'}
+                                                        </td>
+                                                      )}
+                                                      {months.map(m => (
+                                                        <td key={m} className={`text-center py-2 px-3 ${(c.byMonth[m] || 0) > 0 ? 'font-bold text-blue-700' : 'text-slate-300'}`}>
+                                                          {(c.byMonth[m] || 0) > 0 ? c.byMonth[m].toLocaleString() : '-'}
+                                                        </td>
+                                                      ))}
+                                                      <td className="text-right py-2 px-3 font-bold text-slate-900 bg-yellow-50">{cTotal.toLocaleString()}</td>
+                                                    </tr>
+                                                  );
+                                                })}
+                                                {/* 제품 합계 */}
+                                                <tr className="bg-purple-50 font-bold border-t-2 border-purple-300">
+                                                  <td colSpan={billingViewMode === 'billing' ? 3 : 2} className="py-2 px-3 text-purple-900">📊 합계</td>
+                                                  {months.map(m => (
+                                                    <td key={m} className="text-center py-2 px-3 text-purple-700">{(g.byMonth[m] || 0).toLocaleString()}</td>
+                                                  ))}
+                                                  <td className="text-right py-2 px-3 text-purple-900 bg-yellow-100">{g.totalQty.toLocaleString()}</td>
+                                                </tr>
+                                              </tbody>
+                                            </table>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                );
+                              })()
                             )}
 
                             {/* 안내 */}
@@ -11377,7 +11694,7 @@ ${list}` }]
                                             </div>
                                           ) : (
                                             // 🟦 v20260502.11: 곱창밴드 - 헤어핀처럼 색상 카드 시스템 (원단정보 유무 무관)
-                                            // 💠 v20260508.04: 셀룰로오스(복합)도 같은 색상 카드 시스템 사용 (호피+골드(유광) 식 키)
+                                            // 💠 v20260508.13: 셀룰로오스(복합)도 같은 색상 카드 시스템 사용 (호피+골드(유광) 식 키)
                                             <div className="space-y-2">
                                               {/* 안내 */}
                                               {form.type === 'cellulose' ? (
@@ -12730,7 +13047,7 @@ ${list}` }]
                             );
                           })()}
 
-                          {/* 💠 v20260508.04: 셀룰로오스(복합) 색상 추가 모달 - prefix + 베이스 다중 선택 일괄 등록 */}
+                          {/* 💠 v20260508.13: 셀룰로오스(복합) 색상 추가 모달 - prefix + 베이스 다중 선택 일괄 등록 */}
                           {colorAddModal && masterPopup && masterPopup.type === 'cellulose' && (() => {
                             const setForm = (updater) => setMasterPopup(prev => typeof updater==='function'?updater(prev):updater);
                             const currentColors = new Set(masterPopup.colors || []);
