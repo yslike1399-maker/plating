@@ -13,6 +13,27 @@
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     <style>
       @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+      /* 💠 v20260510: 유광/반무광 시각 강조 (도금 착오 방지) */
+      @keyframes finishGoldShine {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+      }
+      .finish-gloss {
+        background: linear-gradient(90deg, #FEF3C7 0%, #FCD34D 25%, #FEF9C3 50%, #FCD34D 75%, #FEF3C7 100%) !important;
+        background-size: 200% 100% !important;
+        animation: finishGoldShine 3s linear infinite;
+        color: #92400E !important;
+        font-weight: 900 !important;
+        border: 2px solid #F59E0B !important;
+        border-radius: 6px !important;
+      }
+      .finish-matte {
+        background: #E5E7EB !important;
+        color: #4B5563 !important;
+        font-weight: 600 !important;
+        border: 2px dashed #9CA3AF !important;
+        border-radius: 6px !important;
+      }
     </style>
 </head>
 <body>
@@ -1780,12 +1801,48 @@ ${list}` }]
           };
 
           const handleAddColorItem = (productId, grind) => {
+            // 💠 v20260510: 이미 사용된 (색상, 유광/반광) 조합 제외하고 사용 가능한 첫 조합으로 추가
+            let blocked = false;
             const newProducts = orderForm.products.map(p => {
               if (p.productId === productId && p.grind === grind) {
-                return {...p, items: [...p.items, { color: '대금', finish: '유광', qty: 1 }]};
+                const usedCombos = new Set();
+                p.items.forEach(it => {
+                  const cd = COLOR_DEFS.find(c => c.name === it.color);
+                  if (cd && cd.finishType !== 'other') {
+                    usedCombos.add(`${it.color}|${it.finish || '유광'}`);
+                  } else {
+                    usedCombos.add(it.color);
+                  }
+                });
+
+                let newColor = null, newFinish = '유광';
+                for (const cd of COLOR_DEFS) {
+                  if (cd.finishType === 'other') {
+                    if (!usedCombos.has(cd.name)) { newColor = cd.name; newFinish = '유광'; break; }
+                  } else if (cd.finishType === 'glossOnly') {
+                    if (!usedCombos.has(`${cd.name}|유광`)) { newColor = cd.name; newFinish = '유광'; break; }
+                  } else {
+                    // both
+                    let foundFinish = null;
+                    for (const f of FINISH_OPTIONS) {
+                      if (!usedCombos.has(`${cd.name}|${f}`)) { foundFinish = f; break; }
+                    }
+                    if (foundFinish) { newColor = cd.name; newFinish = foundFinish; break; }
+                  }
+                }
+
+                if (!newColor) {
+                  blocked = true;
+                  return p; // 모든 조합 소진 — 추가 안 함
+                }
+                return {...p, items: [...p.items, { color: newColor, finish: newFinish, qty: 1 }]};
               }
               return p;
             });
+            if (blocked) {
+              alert('⚠️ 모든 색상/유광 조합이 이미 사용 중입니다.');
+              return;
+            }
             setOrderForm({ ...orderForm, products: newProducts });
           };
 
@@ -2862,7 +2919,7 @@ ${list}` }]
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260508.13</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260510.01</div>
                   </div>
                   
                   {/* v10.06: 헬퍼/봇 상태등 */}
@@ -3023,7 +3080,7 @@ ${list}` }]
                         labelPresets,                // ← 라벨 프리셋 (NEW)
                         nameChangeLogs,              // ← 상품명 변경이력 (v10.01)
                         exportDate: new Date().toISOString(),
-                        appVersion: 'v20260508.13'
+                        appVersion: 'v20260510.01'
                       };
                       const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
                       const url = URL.createObjectURL(blob);
@@ -4438,9 +4495,9 @@ ${list}` }]
                       )}
 
 
-                {/* 1번 하위탭 */}
+                {/* 1번 하위탭 (흑백 미니멀 톤 - 9-상품관리 컨셉 통일) */}
                 {activeMainTab === 'plating' && (
-                  <div className="bg-white border-b border-slate-200 px-4 py-2 sticky top-0 z-40">
+                  <div className="bg-white border-b border-neutral-300 px-4 py-2 sticky top-0 z-40">
                     <div className="flex space-x-1">
                       {[
                         // v20260502.11: 1-1 색상별 단가 탭 삭제 (9-1 상품 마스터로 통합)
@@ -4450,8 +4507,8 @@ ${list}` }]
                         ['polishStock', '선연마재고(고은도금보관)', '1-5']
                       ].map(([tab, label, num]) => (
                         <button key={tab} onClick={() => setActiveTab(tab)}
-                          className={`px-3 py-1.5 rounded-lg font-semibold text-xs transition-all flex items-center gap-1.5 ${activeTab === tab ? 'bg-blue-100 text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>
-                          <span className={`text-xs font-bold px-1 py-0.5 rounded ${activeTab === tab ? 'bg-blue-200 text-blue-600' : 'bg-slate-200 text-slate-400'}`}>{num}</span>
+                          className={`px-3 py-1.5 font-black text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 ${activeTab === tab ? 'bg-black text-white' : 'text-neutral-500 hover:bg-neutral-100 hover:text-black'}`} style={{borderRadius:'2px'}}>
+                          <span className={`text-[10px] font-black px-1.5 py-0.5 ${activeTab === tab ? 'bg-white text-black' : 'bg-neutral-200 text-neutral-500'}`} style={{borderRadius:'2px'}}>{num}</span>
                           {label}
                         </button>
                       ))}
@@ -4466,10 +4523,10 @@ ${list}` }]
                 {activeTab === 'order' && (
                   <div className="space-y-6">
 
-                    {/* C안: 상단 배너 - 고은도금보관 전체 현황 */}
+                    {/* C안: 상단 배너 - 고은도금보관 전체 현황 (흑백 미니멀 톤) */}
                     {polishStocks.filter(s=>s.remaining>0).length > 0 && (
-                      <div className="bg-blue-600 rounded-2xl px-5 py-3 flex items-center gap-3 flex-wrap">
-                        <span className="text-white font-bold text-sm shrink-0">📦 고은도금보관 현황</span>
+                      <div className="bg-black px-5 py-3 flex items-center gap-3 flex-wrap" style={{borderRadius:'6px'}}>
+                        <span className="text-white font-black text-sm shrink-0 tracking-tight">📦 고은도금보관 현황</span>
                         <div className="flex gap-2 flex-wrap">
                           {(() => {
                             // 상품명 기준으로 합산
@@ -4478,125 +4535,130 @@ ${list}` }]
                               grouped[s.name] = (grouped[s.name]||0) + s.remaining;
                             });
                             return Object.entries(grouped).map(([name, qty]) => (
-                              <span key={name} className="bg-white/20 text-white text-xs px-3 py-1 rounded-full font-semibold">
+                              <span key={name} className="bg-white text-black text-xs px-2.5 py-1 font-black tracking-tight" style={{borderRadius:'6px'}}>
                                 {name} <strong>{qty.toLocaleString()}개</strong>
                               </span>
                             ));
                           })()}
                         </div>
                         <button onClick={() => setActiveTab('polishStock')}
-                          className="ml-auto text-xs text-white/80 hover:text-white underline shrink-0">전체보기 →</button>
+                          className="ml-auto text-[11px] text-white hover:underline font-black uppercase tracking-widest shrink-0">전체보기 →</button>
                       </div>
                     )}
 
-                    <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8">
-                      {/* 수정 모드 표시 (v09.10) */}
-                      {editingPlatingOrderId !== null && (() => {
-                        const editing = history.find(h => h.id === editingPlatingOrderId);
-                        return editing ? (
-                          <div className="mb-5 bg-amber-50 border-2 border-amber-400 rounded-xl p-4 flex items-center justify-between">
-                            <div>
-                              <div className="font-black text-amber-900 text-sm tracking-tight">✏️ 수정 모드</div>
-                              <div className="text-xs text-amber-700 mt-0.5 font-bold">
-                                {editing.date} {editing.orderNum}차 작업 수정 중 · 저장 시 기존 작업이 덮어쓰기 됩니다
-                              </div>
+                    {/* 💠 v20260509.01: 수정 모드 배너 (헤더 위로 분리) */}
+                    {editingPlatingOrderId !== null && (() => {
+                      const editing = history.find(h => h.id === editingPlatingOrderId);
+                      return editing ? (
+                        <div className="bg-amber-100 border-2 border-amber-700 p-4 flex items-center justify-between" style={{borderRadius:'6px'}}>
+                          <div>
+                            <div className="font-black text-amber-900 text-sm tracking-tight">✏️ 수정 모드</div>
+                            <div className="text-[11px] text-amber-800 mt-0.5 font-bold tracking-tight">
+                              {editing.date} {editing.orderNum}차 작업 수정 중 · 저장 시 기존 작업이 덮어쓰기 됩니다
                             </div>
-                            <button
-                              onClick={() => {
-                                if (confirm('수정을 취소하시겠어요? 변경사항이 저장되지 않습니다.')) {
-                                  setEditingPlatingOrderId(null);
-                                  setOrderForm({ date: formatDate(new Date()), products: [] });
-                                  alert('수정 취소되었습니다');
-                                }
-                              }}
-                              className="px-3 py-1.5 bg-white border-2 border-amber-600 hover:bg-amber-100 text-amber-800 rounded-lg font-black text-xs tracking-wider"
-                            >
-                              ✕ 수정 취소
-                            </button>
                           </div>
-                        ) : null;
-                      })()}
-                      
-                      <h2 className="text-xl font-bold text-slate-900 mb-6 flex items-center">
-                        <FileText /> <span className="ml-2">{editingPlatingOrderId !== null ? '작업 지시서 수정' : '작업 지시서 생성'}</span>
-                      </h2>
+                          <button
+                            onClick={() => {
+                              if (confirm('수정을 취소하시겠어요? 변경사항이 저장되지 않습니다.')) {
+                                setEditingPlatingOrderId(null);
+                                setOrderForm({ date: formatDate(new Date()), products: [] });
+                                alert('수정 취소되었습니다');
+                              }
+                            }}
+                            className="px-3 py-1.5 bg-white border-2 border-amber-700 hover:bg-amber-700 hover:text-white text-amber-900 font-black text-[11px] uppercase tracking-widest transition-all"
+                            style={{borderRadius:'6px'}}
+                          >
+                            ✕ 수정 취소
+                          </button>
+                        </div>
+                      ) : null;
+                    })()}
 
-                      <div className="space-y-5">
-                        <div>
-                          <label className="block text-sm font-semibold text-slate-700 mb-2">출고 날짜</label>
+                    {/* 💠 v20260510.01: 컴팩트 헤더 - 흑백 미니멀 톤 (9-상품관리 컨셉 통일) */}
+                    <div className="bg-white border border-neutral-300 p-4" style={{borderRadius:'6px'}}>
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <h2 className="font-black text-black flex items-center shrink-0 tracking-tight">
+                          <FileText /> <span className="ml-2 text-base">{editingPlatingOrderId !== null ? '작업 지시서 수정' : '작업 지시서 생성'}</span>
+                        </h2>
+                        <div className="h-6 w-px bg-neutral-300 hidden md:block"></div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-[11px] font-black text-neutral-500 uppercase tracking-widest">출고일</span>
                           <input
                             type="date"
                             value={orderForm.date}
                             onChange={(e) => setOrderForm({...orderForm, date: e.target.value})}
-                            className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none"
+                            className="px-3 py-2 border border-neutral-400 focus:border-black outline-none text-sm"
+                            style={{borderRadius:'6px'}}
                           />
                         </div>
+                        <select id="productSelect" className="flex-1 min-w-[180px] px-3 py-2 border border-neutral-400 focus:border-black outline-none bg-white text-sm"
+                          style={{borderRadius:'6px'}}
+                          onChange={(e) => {
+                            // 상품 선택 시 해당 재고 배지 표시 (v09.14: 정확한 ID 매칭)
+                            const sel = e.target;
+                            const selectedProductId = sel.value;
+                            const badge = document.getElementById('polish-stock-badge');
+                            if (!badge) return;
+                            if (!selectedProductId) { badge.style.display='none'; return; }
 
-                        <div>
-                          <label className="block text-sm font-semibold text-slate-700 mb-2">제품 추가</label>
-                          <div className="flex space-x-3">
-                            <select id="productSelect" className="flex-1 px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none bg-white"
-                              onChange={(e) => {
-                                // 상품 선택 시 해당 재고 배지 표시 (v09.14: 정확한 ID 매칭)
-                                const sel = e.target;
-                                const selectedProductId = sel.value;
-                                const badge = document.getElementById('polish-stock-badge');
-                                if (!badge) return;
-                                if (!selectedProductId) { badge.style.display='none'; return; }
-                                
-                                // 선택한 상품(products)의 productName, masterProductId 확인
-                                const selectedProd = products.find(p => String(p.id) === String(selectedProductId));
-                                if (!selectedProd) { badge.style.display='none'; return; }
-                                
-                                // 매칭: 1순위 productId, 2순위 정확한 이름 일치
-                                const matched = polishStocks.filter(s => {
-                                  if (s.remaining <= 0) return false;
-                                  // productId 매칭 (s.productId가 선택 상품의 id 또는 masterProductId와 일치)
-                                  if (s.productId) {
-                                    if (String(s.productId) === String(selectedProd.id)) return true;
-                                    if (selectedProd.masterProductId && String(s.productId) === String(selectedProd.masterProductId)) return true;
-                                    return false;
-                                  }
-                                  // productId 없는 기존 데이터: 정확한 이름 일치만
-                                  return s.name === (selectedProd.productName || selectedProd.name);
-                                });
-                                const total = matched.reduce((s,x)=>s+x.remaining,0);
-                                if (total > 0) {
-                                  badge.style.display='flex';
-                                  badge.querySelector('#badge-text').textContent = `📦 고은도금 보관재고 ${total.toLocaleString()}개 있습니다`;
-                                } else {
-                                  badge.style.display='none';
-                                }
-                              }}>
-                              <option value="">제품을 선택하세요</option>
-                              {products.map(p => (
-                                <option key={p.id} value={p.id}>{p.name} ({p.grindRequired ? '연마필요' : '연마불필요'})</option>
-                              ))}
-                            </select>
-                            <button
-                              onClick={() => {
-                                const select = document.getElementById('productSelect');
-                                const productId = parseInt(select.value);
-                                if (productId) {
-                                  handleAddProductToOrder(productId);
-                                  select.value = '';
-                                  const badge = document.getElementById('polish-stock-badge');
-                                  if (badge) badge.style.display='none';
-                                }
-                              }}
-                              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold shadow-lg transition-all flex items-center whitespace-nowrap"
-                            >
-                              <Plus /> <span className="ml-2">추가</span>
-                            </button>
-                          </div>
-                          {/* B안: 말풍선 배지 */}
-                          <div id="polish-stock-badge" style={{display:'none'}}
-                            className="flex items-center gap-2 mt-2 bg-blue-50 border border-blue-300 rounded-xl px-4 py-2">
-                            <span className="text-blue-600 text-lg">📦</span>
-                            <span id="badge-text" className="text-blue-700 font-bold text-sm"></span>
-                            <span className="text-blue-500 text-xs ml-1">— 발주서 생성 시 자동 차감됩니다</span>
-                          </div>
-                        </div>
+                            // 선택한 상품(products)의 productName, masterProductId 확인
+                            const selectedProd = products.find(p => String(p.id) === String(selectedProductId));
+                            if (!selectedProd) { badge.style.display='none'; return; }
+
+                            // 매칭: 1순위 productId, 2순위 정확한 이름 일치
+                            const matched = polishStocks.filter(s => {
+                              if (s.remaining <= 0) return false;
+                              // productId 매칭 (s.productId가 선택 상품의 id 또는 masterProductId와 일치)
+                              if (s.productId) {
+                                if (String(s.productId) === String(selectedProd.id)) return true;
+                                if (selectedProd.masterProductId && String(s.productId) === String(selectedProd.masterProductId)) return true;
+                                return false;
+                              }
+                              // productId 없는 기존 데이터: 정확한 이름 일치만
+                              return s.name === (selectedProd.productName || selectedProd.name);
+                            });
+                            const total = matched.reduce((s,x)=>s+x.remaining,0);
+                            if (total > 0) {
+                              badge.style.display='flex';
+                              badge.querySelector('#badge-text').textContent = `📦 고은도금 보관재고 ${total.toLocaleString()}개 있습니다`;
+                            } else {
+                              badge.style.display='none';
+                            }
+                          }}>
+                          <option value="">제품을 선택하세요</option>
+                          {products.map(p => (
+                            <option key={p.id} value={p.id}>{p.name} ({p.grindRequired ? '연마필요' : '연마불필요'})</option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={() => {
+                            const select = document.getElementById('productSelect');
+                            const productId = parseInt(select.value);
+                            if (productId) {
+                              handleAddProductToOrder(productId);
+                              select.value = '';
+                              const badge = document.getElementById('polish-stock-badge');
+                              if (badge) badge.style.display='none';
+                            }
+                          }}
+                          className="px-4 py-2 bg-black hover:bg-neutral-800 text-white font-black text-xs uppercase tracking-widest transition-all flex items-center whitespace-nowrap shrink-0"
+                          style={{borderRadius:'6px'}}
+                        >
+                          <Plus /> <span className="ml-1">추가</span>
+                        </button>
+                        {orderForm.products.length > 0 && (
+                          <span className="bg-black text-white text-[11px] font-black px-2.5 py-1 tracking-widest shrink-0" style={{borderRadius:'6px'}}>
+                            {orderForm.products.length}건
+                          </span>
+                        )}
+                      </div>
+
+                      {/* 말풍선 배지 (흑백 미니멀) */}
+                      <div id="polish-stock-badge" style={{display:'none', borderRadius:'6px'}}
+                        className="flex items-center gap-2 mt-2 bg-neutral-50 border border-neutral-400 px-3 py-1.5">
+                        <span>📦</span>
+                        <span id="badge-text" className="text-black font-black text-xs tracking-tight"></span>
+                        <span className="text-neutral-500 text-[11px] ml-1 font-bold">— 발주서 생성 시 자동 차감됩니다</span>
                       </div>
                     </div>
 
@@ -4621,15 +4683,6 @@ ${list}` }]
                                 <div>
                                   <div className="flex items-center gap-2 flex-wrap mb-1">
                                     <ProductIdBadge id={product.productId} size="md" />
-                                    {(() => {
-                                      // 발주 상품과 매칭되는 선연마재고 검색 (사전 알림)
-                                      const matched = polishStocks.filter(s => s.remaining > 0 && matchPolishStock(s, product));
-                                      const totalStock = matched.reduce((sum, s) => sum + s.remaining, 0);
-                                      if (totalStock > 0) {
-                                        return <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 font-bold" title={`매칭된 선연마재고 ${matched.length}건, ${totalStock}개 사용 가능`}>📦 보관재고 {totalStock}개</span>;
-                                      }
-                                      return null;
-                                    })()}
                                   </div>
                                   <h3 className="font-bold text-lg text-slate-900">{product.productName}</h3>
                                   <div className="flex items-center space-x-2 mt-1">
@@ -4648,7 +4701,46 @@ ${list}` }]
                                   </div>
                                 </div>
                               </div>
-                              
+
+                              {/* 💠 v20260510.01: 보관재고 잔여 박스 - 흑백 미니멀 톤 (9-상품관리 컨셉 통일) */}
+                              {(() => {
+                                const matched = polishStocks.filter(s => s.remaining > 0 && matchPolishStock(s, product));
+                                const totalStock = matched.reduce((sum, s) => sum + s.remaining, 0);
+                                if (totalStock <= 0) return null;
+
+                                const usedQty = product.items.reduce((sum, item) => sum + (parseInt(item.qty) || 0), 0);
+                                const displayRemaining = totalStock - usedQty;
+                                const isShortage = displayRemaining < 0;
+                                const hasUsage = usedQty > 0;
+
+                                return (
+                                  <div className={`flex-1 mx-6 px-5 py-3 border-2 ${isShortage ? 'bg-red-100 border-red-700' : 'bg-neutral-50 border-black'}`} style={{borderRadius:'6px'}}>
+                                    <div className={`text-[10px] font-black tracking-widest uppercase mb-1.5 ${isShortage ? 'text-red-800' : 'text-black'}`}>
+                                      📦 고은도금 보관재고
+                                    </div>
+                                    <div className="flex items-baseline gap-2 flex-wrap">
+                                      {hasUsage ? (
+                                        <>
+                                          <span className="text-base font-bold text-neutral-500 tracking-tight">{totalStock}개</span>
+                                          <span className="text-neutral-400 text-base">→</span>
+                                          <span className={`text-2xl font-black tracking-tight ${isShortage ? 'text-red-700' : 'text-black'}`}>{displayRemaining}개</span>
+                                          <span className={`text-[10px] font-black ml-1 uppercase tracking-widest ${isShortage ? 'text-red-700' : 'text-neutral-500'}`}>
+                                            작성중 {usedQty}개 차감
+                                          </span>
+                                        </>
+                                      ) : (
+                                        <span className="text-2xl font-black text-black tracking-tight">{totalStock}개</span>
+                                      )}
+                                    </div>
+                                    <div className={`text-[10px] font-black mt-1 uppercase tracking-widest ${isShortage ? 'text-red-800' : 'text-neutral-700'}`}>
+                                      {isShortage
+                                        ? '⚠️ 보관재고 부족 — 추가 발주 필요'
+                                        : (hasUsage ? `✓ 발주 가능 잔여 ${displayRemaining}개` : '✓ 발주 시 자동 차감')}
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+
                               <button
                                 onClick={() => handleRemoveProductFromOrder(product.productId, product.grind)}
                                 className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-all"
@@ -4659,10 +4751,11 @@ ${list}` }]
 
                             <div>
                               <div className="flex items-center justify-between mb-3">
-                                <label className="text-sm font-semibold text-slate-700">색상 및 수량</label>
+                                <label className="text-sm font-black text-black tracking-tight">색상 및 수량</label>
                                 <button
                                   onClick={() => handleAddColorItem(product.productId, product.grind)}
-                                  className="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 font-semibold text-sm flex items-center"
+                                  className="px-3 py-1.5 bg-white border-2 border-black hover:bg-black hover:text-white text-black font-black text-[11px] uppercase tracking-widest transition-all flex items-center"
+                                  style={{borderRadius:'6px'}}
                                 >
                                   <Plus /> <span className="ml-1">색상 추가</span>
                                 </button>
@@ -4675,6 +4768,31 @@ ${list}` }]
                                   // 'glossOnly'는 유광만 선택 가능, 'other'는 마감재 없음
                                   const showFinish = colorDef && (colorDef.finishType === 'both' || colorDef.finishType === 'glossOnly');
                                   const finishOptions = colorDef?.finishType === 'glossOnly' ? ['유광'] : FINISH_OPTIONS;
+
+                                  // 💠 v20260510: 동일 (색상, 유광/반광) 조합 중복 방지 — 오작성 방지
+                                  const usedCombos = new Set();
+                                  product.items.forEach((it, i) => {
+                                    if (i === index) return; // 자기 자신 제외
+                                    const cd = COLOR_DEFS.find(c => c.name === it.color);
+                                    if (cd && cd.finishType !== 'other') {
+                                      usedCombos.add(`${it.color}|${it.finish || '유광'}`);
+                                    } else {
+                                      usedCombos.add(it.color); // finish 없는 색상은 색상만 키로
+                                    }
+                                  });
+                                  const isColorDisabled = (colorName) => {
+                                    if (colorName === item.color) return false; // 자기 자신은 항상 선택 가능
+                                    const cd = COLOR_DEFS.find(c => c.name === colorName);
+                                    if (!cd) return false;
+                                    if (cd.finishType === 'other') return usedCombos.has(colorName);
+                                    if (cd.finishType === 'glossOnly') return usedCombos.has(`${colorName}|유광`);
+                                    return FINISH_OPTIONS.every(f => usedCombos.has(`${colorName}|${f}`));
+                                  };
+                                  const isFinishDisabled = (finishName) => {
+                                    if (finishName === (item.finish || '유광')) return false; // 자기 자신은 항상 선택 가능
+                                    return usedCombos.has(`${item.color}|${finishName}`);
+                                  };
+
                                   return (
                                   <div key={index} className="flex items-center gap-2 p-3 rounded-xl bg-slate-50 border border-slate-200">
                                     {/* 색상 + 유광/반광 + 수량을 한 그룹으로 묶기 */}
@@ -4684,7 +4802,10 @@ ${list}` }]
                                         onChange={(e) => updateColorItem(product.productId, product.grind, index, 'color', e.target.value)}
                                         className="w-44 px-2 py-1.5 border-0 outline-none text-sm font-medium bg-transparent cursor-pointer"
                                       >
-                                        {COLOR_DEFS.map(c => <option key={c.name} value={c.name}>{c.displayName}</option>)}
+                                        {COLOR_DEFS.map(c => {
+                                          const disabled = isColorDisabled(c.name);
+                                          return <option key={c.name} value={c.name} disabled={disabled}>{c.displayName}{disabled ? ' (사용중)' : ''}</option>;
+                                        })}
                                       </select>
 
                                       {showFinish && (
@@ -4693,9 +4814,12 @@ ${list}` }]
                                           <select
                                             value={item.finish || '유광'}
                                             onChange={(e) => updateColorItem(product.productId, product.grind, index, 'finish', e.target.value)}
-                                            className="w-20 px-2 py-1.5 border-0 outline-none text-sm font-bold text-blue-600 bg-transparent cursor-pointer"
+                                            className={`w-28 px-2 py-1.5 outline-none text-sm cursor-pointer ${(item.finish || '유광') === '유광' ? 'finish-gloss' : 'finish-matte'}`}
                                           >
-                                            {finishOptions.map(f => <option key={f} value={f}>{f}</option>)}
+                                            {finishOptions.map(f => {
+                                              const disabled = isFinishDisabled(f);
+                                              return <option key={f} value={f} disabled={disabled} className="bg-white text-black">{f === '유광' ? '✨ 유광' : '◼ 반무광'}{disabled ? ' (사용중)' : ''}</option>;
+                                            })}
                                           </select>
                                         </>
                                       )}
@@ -4728,40 +4852,54 @@ ${list}` }]
                               </div>
 
                               {product.items.length > 0 && (
-                                <div className="mt-4 bg-blue-50 rounded-xl p-4 border border-blue-200">
-                                  <div className="flex justify-between items-center">
-                                    <span className="font-semibold text-slate-700">이 제품 총 수량</span>
-                                    <span className="text-xl font-bold text-blue-600">
-                                      {product.items.reduce((sum, item) => sum + parseInt(item.qty || 0), 0)}개
-                                    </span>
+                                <div className="mt-4 bg-neutral-50 border border-neutral-300 p-4 flex justify-between items-center gap-3" style={{borderRadius:'6px'}}>
+                                  <div className="flex items-center gap-2 flex-wrap min-w-0">
+                                    <span className="font-black text-black tracking-tight truncate">{product.productName}</span>
+                                    <span className="text-neutral-400">/</span>
+                                    <span className="text-[11px] font-black text-neutral-500 uppercase tracking-widest">총수량</span>
                                   </div>
+                                  <span className="text-2xl font-black text-black tracking-tight whitespace-nowrap">
+                                    {product.items.reduce((sum, item) => sum + parseInt(item.qty || 0), 0)}개
+                                  </span>
                                 </div>
                               )}
                             </div>
                           </div>
                         ))}
 
-                        <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-6 text-white shadow-lg">
-                          <div className="flex justify-between items-center">
-                            <div>
-                              <p className="text-blue-100 text-sm font-medium">전체 총 수량</p>
-                              <p className="text-xs text-blue-200 mt-1">{orderForm.products.length}개 제품</p>
+                        {/* 전체 총 수량 박스 (흑백 + 카카오노란 강조 + 제품별 알약) */}
+                        <div className="bg-black p-6 text-white" style={{borderRadius:'6px'}}>
+                          <div className="flex justify-between items-center gap-5">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-neutral-400 text-xs font-black uppercase tracking-widest mb-2.5">전체 총 수량 · {orderForm.products.length}개 제품</p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {orderForm.products.map((p, i) => {
+                                  const qty = p.items.reduce((s, item) => s + parseInt(item.qty || 0), 0);
+                                  return (
+                                    <span key={`${p.productId}-${p.grind}-${i}`} className="bg-neutral-800 text-white text-[12px] px-2.5 py-1 font-black tracking-tight" style={{borderRadius:'6px'}}>
+                                      {p.productName} <strong style={{color:'#FEE500'}}>{qty}</strong>개
+                                    </span>
+                                  );
+                                })}
+                              </div>
                             </div>
-                            <span className="text-4xl font-bold">
-                              {orderForm.products.reduce((sum, product) => 
+                            <span className="text-6xl font-black tracking-tight whitespace-nowrap shrink-0" style={{color:'#FEE500'}}>
+                              {orderForm.products.reduce((sum, product) =>
                                 sum + product.items.reduce((s, item) => s + parseInt(item.qty || 0), 0), 0
                               )}개
                             </span>
                           </div>
                         </div>
 
+                        {/* 작업 지시서 생성 버튼 (흑백 미니멀 톤) */}
                         <button
                           onClick={handleCreateOrder}
-                          className={`w-full text-white py-5 rounded-2xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all ${
-                            editingPlatingOrderId !== null 
-                              ? 'bg-gradient-to-r from-amber-500 to-orange-600' 
-                              : 'bg-gradient-to-r from-blue-600 to-purple-600'
+                          className={`w-full text-white py-4 font-black text-base uppercase tracking-widest transition-all ${
+                            editingPlatingOrderId !== null
+                              ? 'bg-amber-700 hover:bg-amber-800'
+                              : 'bg-black hover:bg-neutral-800'
                           }`}
+                          style={{borderRadius:'6px'}}
                         >
                           {editingPlatingOrderId !== null ? '✏️ 수정 사항 저장 (덮어쓰기)' : '작업 지시서 생성'}
                         </button>
@@ -5265,7 +5403,7 @@ ${list}` }]
                       <div className="fixed inset-0 z-50 flex items-center justify-center" style={{background:'rgba(0,0,0,0.5)'}}>
                         <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm mx-4 p-8">
                           <div className="flex items-center justify-between mb-5">
-                            <h3 className="text-lg font-bold text-slate-900">📤 도금 출고</h3>
+                            <h3 className="text-lg font-bold text-slate-900">📤 도금 차감</h3>
                             <button onClick={() => setPolishOutPopup(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
                           </div>
                           <div className="bg-blue-50 rounded-xl px-4 py-3 mb-4">
@@ -5274,12 +5412,12 @@ ${list}` }]
                           </div>
                           <div className="space-y-3">
                             <div>
-                              <label className="block text-xs font-semibold text-slate-600 mb-1">출고 수량 *</label>
+                              <label className="block text-xs font-semibold text-slate-600 mb-1">차감 수량 *</label>
                               <input type="number" id="poQty" min="1" max={polishOutPopup.remaining} placeholder="0"
                                 className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-400 outline-none text-sm"/>
                             </div>
                             <div>
-                              <label className="block text-xs font-semibold text-slate-600 mb-1">출고일</label>
+                              <label className="block text-xs font-semibold text-slate-600 mb-1">차감일</label>
                               <input type="date" id="poDate" defaultValue={new Date().toISOString().split('T')[0]}
                                 className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-400 outline-none text-sm"/>
                             </div>
@@ -5304,8 +5442,8 @@ ${list}` }]
                               );
                               savePolishStocks(updated);
                               setPolishOutPopup(null);
-                              alert(`${outQty}개 출고 완료! 잔여: ${polishOutPopup.remaining - outQty}개`);
-                            }} className="flex-1 py-3 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold text-sm">출고</button>
+                              alert(`${outQty}개 차감 완료! 잔여: ${polishOutPopup.remaining - outQty}개`);
+                            }} className="flex-1 py-3 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold text-sm">차감</button>
                           </div>
                         </div>
                       </div>
@@ -5321,7 +5459,7 @@ ${list}` }]
                           </div>
                           <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4">
                             <div className="text-xs text-amber-700 font-bold">⚠️ 직접 수정은 신중하게!</div>
-                            <div className="text-[10px] text-amber-600 mt-1">정상적인 출고는 발주서 작성 또는 [📤 출고] 버튼을 사용하세요. 직접 수정은 잘못 입력된 데이터 보정 등 예외 상황용입니다.</div>
+                            <div className="text-[10px] text-amber-600 mt-1">정상적인 차감는 발주서 작성 또는 [📤 차감] 버튼을 사용하세요. 직접 수정은 잘못 입력된 데이터 보정 등 예외 상황용입니다.</div>
                           </div>
                           <div className="space-y-3">
                             <div>
@@ -5413,110 +5551,133 @@ ${list}` }]
                       </div>
                     )}
 
-                    {/* 헤더 */}
+                    {/* 헤더 (흑백 미니멀 톤) */}
                     <div className="flex items-center justify-between">
                       <div>
-                        <h2 className="text-xl font-bold text-slate-900">🔩 선연마재고 (고은도금보관)</h2>
-                        <p className="text-xs text-slate-400 mt-0.5">고은도금공장 보관 중 · 색상 미정 상태 (연마완료)</p>
+                        <h2 className="text-xl font-black text-black tracking-tight flex items-center gap-2">
+                          🔩 선연마재고 (고은도금보관)
+                          <span className="bg-black text-white text-[10px] font-black px-2 py-0.5 tracking-widest" style={{borderRadius:'6px'}}>1-5</span>
+                        </h2>
+                        <p className="text-[11px] text-neutral-500 mt-0.5 font-bold tracking-tight">고은도금공장 보관 중 · 색상 미정 상태 (연마완료)</p>
                       </div>
                       <button onClick={() => setPolishPopup(true)}
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold">+ 재고 등록</button>
+                        className="px-4 py-2 bg-black hover:bg-neutral-800 text-white text-xs font-black uppercase tracking-widest transition-all" style={{borderRadius:'6px'}}>+ 선연마 등록</button>
                     </div>
 
-                    {/* 요약 */}
+                    {/* 요약 (흑백 + 연마진행중만 amber 강조) */}
                     {polishStocks.length > 0 && (
                       <div className="grid grid-cols-3 gap-3">
-                        <div className="bg-blue-50 rounded-2xl p-4 text-center border border-blue-100">
-                          <div className="text-xs text-slate-400 mb-1">전체 상품 종류</div>
-                          <div className="text-2xl font-bold text-blue-600">{[...new Set(polishStocks.map(s=>s.name))].length}종</div>
+                        <div className="bg-white border border-neutral-300 p-4 text-center" style={{borderRadius:'6px'}}>
+                          <div className="text-[10px] text-neutral-500 mb-1.5 font-black uppercase tracking-widest">전체 상품 종류</div>
+                          <div className="text-3xl font-black text-black tracking-tight">{[...new Set(polishStocks.map(s=>s.name))].length}<span className="text-base ml-0.5 text-neutral-500">종</span></div>
                         </div>
-                        <div className="bg-green-50 rounded-2xl p-4 text-center border border-green-100">
-                          <div className="text-xs text-slate-400 mb-1">총 보관수량</div>
-                          <div className="text-2xl font-bold text-green-600">{polishStocks.reduce((s,i)=>s+i.remaining,0).toLocaleString()}개</div>
+                        <div className="bg-white border border-neutral-300 p-4 text-center" style={{borderRadius:'6px'}}>
+                          <div className="text-[10px] text-neutral-500 mb-1.5 font-black uppercase tracking-widest">총 보관수량</div>
+                          <div className="text-3xl font-black text-black tracking-tight">{polishStocks.reduce((s,i)=>s+i.remaining,0).toLocaleString()}<span className="text-base ml-0.5 text-neutral-500">개</span></div>
                         </div>
-                        <div className="bg-amber-50 rounded-2xl p-4 text-center border border-amber-100">
-                          <div className="text-xs text-slate-400 mb-1">연마진행중</div>
-                          <div className="text-2xl font-bold text-amber-600">{polishStocks.filter(s=>s.status==='연마진행중').reduce((s,i)=>s+i.remaining,0).toLocaleString()}개</div>
+                        <div className="bg-amber-50 border-2 border-amber-700 p-4 text-center" style={{borderRadius:'6px'}}>
+                          <div className="text-[10px] text-amber-800 mb-1.5 font-black uppercase tracking-widest">연마진행중</div>
+                          <div className="text-3xl font-black text-amber-900 tracking-tight">{polishStocks.filter(s=>s.status==='연마진행중').reduce((s,i)=>s+i.remaining,0).toLocaleString()}<span className="text-base ml-0.5 text-amber-700">개</span></div>
                         </div>
                       </div>
                     )}
 
-                    {/* 목록 */}
+                    {/* 목록 (빈 상태) */}
                     {polishStocks.length === 0 ? (
-                      <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400">
+                      <div className="bg-white border border-neutral-300 p-12 text-center" style={{borderRadius:'6px'}}>
                         <div className="text-4xl mb-3">🔩</div>
-                        <p className="font-medium">등록된 선연마재고(고은도금보관)가 없습니다</p>
+                        <p className="font-black text-neutral-500 tracking-tight">등록된 선연마재고(고은도금보관)가 없습니다</p>
                       </div>
                     ) : (
-                      <div className="space-y-3">
-                        {polishStocks.sort((a,b)=>b.date.localeCompare(a.date)).map(stock => (
-                          <div key={stock.id} className={`bg-white rounded-2xl border-2 overflow-hidden ${stock.remaining===0?'border-slate-100 opacity-50':'border-slate-200'}`}>
+                      <div className="space-y-4">
+                        {polishStocks.sort((a,b)=>b.date.localeCompare(a.date)).map(stock => {
+                          // 💠 v20260510: 9-1 마스터에서 제품 이미지 가져오기
+                          const matchedMaster = stock.productId
+                            ? masterProducts.find(m => String(m.id) === String(stock.productId))
+                            : masterProducts.find(m => m.name === stock.name || m.platingOrderName?.trim() === stock.name);
+                          const productImage = matchedMaster?.image || null;
+                          // 카드 좌측 인디케이터 색상 (매칭 상태 + 소진 여부)
+                          const indicatorColor = stock.remaining === 0
+                            ? 'bg-neutral-300'
+                            : (stock.productId ? 'bg-black' : 'bg-amber-500');
+                          return (
+                          <div key={stock.id} className={`bg-white border-2 overflow-hidden flex ${stock.remaining===0?'border-neutral-200 opacity-50':'border-neutral-400'}`} style={{borderRadius:'6px'}}>
+                            {/* 좌측 컬러 인디케이터 바 (4px) */}
+                            <div className={`w-1 shrink-0 ${indicatorColor}`}></div>
+                            <div className="flex-1">
                             <div className="px-5 py-4 flex items-center justify-between gap-3 flex-wrap">
                               <div className="flex items-center gap-3">
+                                {/* 제품 이미지 */}
+                                {productImage ? (
+                                  <img src={productImage} alt={stock.name} className="w-16 h-16 object-cover border border-neutral-300 shrink-0" style={{borderRadius:'6px'}}/>
+                                ) : (
+                                  <div className="w-16 h-16 bg-neutral-100 border border-neutral-300 flex items-center justify-center text-2xl shrink-0" style={{borderRadius:'6px'}}>📦</div>
+                                )}
                                 <div>
                                   <div className="flex items-center gap-2 flex-wrap">
                                     {stock.productId && <ProductIdBadge id={stock.productId} />}
-                                    <span className="font-bold text-slate-900">{stock.name}</span>
+                                    <span className="font-black text-black tracking-tight">{stock.name}</span>
                                     {stock.productId ? (
-                                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-bold" title={`9-1 상품 ID: ${stock.productId}`}>🔗 매칭</span>
+                                      <span className="text-[10px] px-1.5 py-0.5 bg-black text-white font-black tracking-widest" style={{borderRadius:'6px'}} title={`9-1 상품 ID: ${stock.productId}`}>🔗 매칭</span>
                                     ) : (
-                                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-bold" title="9-1 상품과 매칭되지 않음. [수정]에서 9-1 상품 선택 권장">⚠️ 미매칭</span>
+                                      <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 border border-amber-700 text-amber-900 font-black tracking-widest" style={{borderRadius:'6px'}} title="9-1 상품과 매칭되지 않음. [수정]에서 9-1 상품 선택 권장">⚠️ 미매칭</span>
                                     )}
-                                    <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${stock.status==='연마진행중'?'bg-amber-100 text-amber-600':'bg-green-100 text-green-600'}`}>{stock.status}</span>
-                                    {stock.remaining === 0 && <span className="text-xs bg-slate-100 text-slate-400 px-2 py-0.5 rounded-full">소진</span>}
+                                    <span className={`text-[10px] px-2 py-0.5 font-black tracking-widest uppercase ${stock.status==='연마진행중'?'bg-amber-100 border border-amber-700 text-amber-900':'bg-neutral-100 border border-neutral-700 text-neutral-900'}`} style={{borderRadius:'6px'}}>{stock.status}</span>
+                                    {stock.remaining === 0 && <span className="text-[10px] bg-neutral-200 text-neutral-500 px-2 py-0.5 font-black tracking-widest uppercase" style={{borderRadius:'6px'}}>소진</span>}
                                   </div>
-                                  <div className="text-xs text-slate-400 mt-0.5">{stock.date} 등록 {stock.memo && `· ${stock.memo}`}</div>
+                                  <div className="text-[11px] text-neutral-500 mt-0.5 font-bold tracking-tight">{stock.date} 등록 {stock.memo && `· ${stock.memo}`}</div>
                                 </div>
                               </div>
                               <div className="flex items-center gap-4">
                                 <div className="text-right">
-                                  <div className="text-xs text-slate-400">보관수량</div>
-                                  <div className="text-xl font-bold text-blue-600">{stock.remaining.toLocaleString()}개</div>
-                                  {stock.remaining !== stock.qty && <div className="text-xs text-slate-400">원래 {stock.qty}개</div>}
+                                  <div className="text-[10px] text-neutral-500 font-black uppercase tracking-widest">보관수량</div>
+                                  <div className="text-2xl font-black text-black tracking-tight">{stock.remaining.toLocaleString()}<span className="text-base ml-0.5 text-neutral-500">개</span></div>
+                                  {stock.remaining !== stock.qty && <div className="text-[10px] text-neutral-400 font-bold tracking-tight">원래 {stock.qty}개</div>}
                                 </div>
                                 <div className="flex gap-2">
                                   {stock.remaining > 0 && (
                                     <button onClick={() => setPolishOutPopup(stock)}
-                                      className="px-3 py-2 bg-green-500 hover:bg-green-600 text-white rounded-xl text-xs font-bold">📤 출고</button>
+                                      className="px-3 py-2 bg-black hover:bg-neutral-800 text-white text-[11px] font-black uppercase tracking-widest transition-all" style={{borderRadius:'6px'}}>📤 차감</button>
                                   )}
                                   <button onClick={() => setPolishEditPopup(stock)}
-                                    className="px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold" title="수량/메모 직접 수정">✏️ 수정</button>
+                                    className="px-3 py-2 bg-white border-2 border-black hover:bg-black hover:text-white text-black text-[11px] font-black uppercase tracking-widest transition-all" style={{borderRadius:'6px'}} title="수량/메모 직접 수정">✏️ 수정</button>
                                   <button onClick={() => { if(confirm('삭제?')) savePolishStocks(polishStocks.filter(s=>s.id!==stock.id)); }}
-                                    className="p-2 text-red-400 hover:bg-red-50 rounded-xl"><Trash /></button>
+                                    className="p-2 text-red-500 hover:bg-red-50" style={{borderRadius:'6px'}}><Trash /></button>
                                 </div>
                               </div>
                             </div>
-                            {/* 출고 이력 */}
+                            {/* 차감 이력 */}
                             {stock.outHistory?.length > 0 && (
-                              <div className="border-t border-slate-100 px-5 py-3 bg-slate-50">
-                                <div className="text-xs font-semibold text-slate-500 mb-2 flex items-center justify-between">
-                                  <span>📋 출고 이력 ({stock.outHistory.length}건)</span>
-                                  <span className="text-[10px] text-slate-400 font-normal">발주서 출고는 자동 기록됩니다</span>
+                              <div className="border-t border-neutral-200 px-5 py-3 bg-neutral-50">
+                                <div className="text-[11px] font-black text-neutral-700 mb-2 flex items-center justify-between uppercase tracking-widest">
+                                  <span>📋 차감 이력 ({stock.outHistory.length}건)</span>
+                                  <span className="text-[10px] text-neutral-500 font-bold normal-case tracking-tight">발주서 차감은 자동 기록됩니다</span>
                                 </div>
                                 <div className="space-y-1">
                                   {stock.outHistory.map((h,i) => (
-                                    <div key={i} className="flex items-center justify-between text-xs text-slate-500 bg-white rounded px-2 py-1.5 border border-slate-100">
+                                    <div key={i} className="flex items-center justify-between text-xs bg-white px-2 py-1.5 border border-neutral-200" style={{borderRadius:'6px'}}>
                                       <div className="flex items-center gap-2 flex-1">
-                                        <span className="font-bold text-slate-700">{h.outDate}</span>
-                                        <span className="text-slate-400">·</span>
-                                        <span>{h.outMemo||'출고'}</span>
-                                        {h.orderNum && <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-bold">{h.orderNum}차</span>}
+                                        <span className="font-black text-black tracking-tight">{h.outDate}</span>
+                                        <span className="text-neutral-400">·</span>
+                                        <span className="text-neutral-700 font-bold">{h.outMemo||'차감'}</span>
+                                        {h.orderNum && <span className="text-[10px] bg-black text-white px-1.5 py-0.5 font-black tracking-widest" style={{borderRadius:'6px'}}>{h.orderNum}차</span>}
                                       </div>
                                       <div className="flex items-center gap-2">
-                                        <span className="font-bold text-green-600">-{h.outQty}개</span>
+                                        <span className="font-black text-red-700 tracking-tight">-{h.outQty}개</span>
                                         <button
                                           onClick={() => {
-                                            if (!confirm(`이 출고 이력을 삭제하시겠어요?\n\n${h.outDate} -${h.outQty}개\n${h.outMemo||''}\n\n삭제하면 보관수량이 ${h.outQty}개 복구됩니다.`)) return;
+                                            if (!confirm(`이 차감 이력을 삭제하시겠어요?\n\n${h.outDate} -${h.outQty}개\n${h.outMemo||''}\n\n삭제하면 보관수량이 ${h.outQty}개 복구됩니다.`)) return;
                                             const newOutHistory = stock.outHistory.filter((_, idx) => idx !== i);
-                                            const updated = polishStocks.map(s => 
-                                              s.id === stock.id 
+                                            const updated = polishStocks.map(s =>
+                                              s.id === stock.id
                                                 ? { ...s, remaining: s.remaining + h.outQty, outHistory: newOutHistory }
                                                 : s
                                             );
                                             savePolishStocks(updated);
                                           }}
-                                          className="text-red-400 hover:bg-red-50 rounded p-1"
-                                          title="이 출고 이력 삭제 (수량 복구)"
+                                          className="text-red-500 hover:bg-red-50 p-1"
+                                          style={{borderRadius:'6px'}}
+                                          title="이 차감 이력 삭제 (수량 복구)"
                                         >
                                           <Trash />
                                         </button>
@@ -5526,8 +5687,10 @@ ${list}` }]
                                 </div>
                               </div>
                             )}
+                            </div>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -5535,14 +5698,17 @@ ${list}` }]
                 </>
                 )}
 
-                {/* 월별 누적 도금 내역 탭 (v20260502.11) */}
+                {/* 월별 누적 도금 내역 탭 (흑백 미니멀 톤 통일) */}
                 {activeMainTab === 'cost' && (
-                  <div className="space-y-6">
-                    <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8">
+                  <div className="space-y-6 p-6">
+                    <div className="bg-white border border-neutral-300 p-6" style={{borderRadius:'6px'}}>
                       <div className="flex items-center justify-between mb-6">
                         <div>
-                          <h2 className="text-xl font-bold text-slate-900">📊 월별 누적 도금 내역</h2>
-                          <p className="text-sm text-slate-500 mt-1">1번 작업내역서 기반 · 9-1 상품 마스터 단가 자동 적용</p>
+                          <h2 className="text-xl font-black text-black tracking-tight flex items-center gap-2">
+                            📊 월별 누적 도금 내역
+                            <span className="bg-black text-white text-[10px] font-black px-2 py-0.5 tracking-widest" style={{borderRadius:'6px'}}>2</span>
+                          </h2>
+                          <p className="text-[11px] text-neutral-500 mt-0.5 font-bold tracking-tight">1번 작업내역서 기반 · 9-1 상품 마스터 단가 자동 적용</p>
                         </div>
                       </div>
 
@@ -5695,7 +5861,11 @@ ${list}` }]
                         });
 
                         // 정렬: 제품명 → 색상 → 마감
-                        const rows = Object.values(pivot).sort((a, b) => {
+                        // 💠 v20260510: 선택 월 범위에 데이터 없는 행 제외 (청구일 미입력 unset은 항상 표시)
+                        const rows = Object.values(pivot).filter(p => {
+                          const monthsSum = months.reduce((s, m) => s + (p.byMonth[m] || 0), 0);
+                          return (monthsSum + p.unset) > 0;
+                        }).sort((a, b) => {
                           if (a.productName !== b.productName) return a.productName.localeCompare(b.productName);
                           if (a.color !== b.color) return a.color.localeCompare(b.color);
                           return a.finish.localeCompare(b.finish);
@@ -5724,30 +5894,30 @@ ${list}` }]
 
                         return (
                           <div>
-                            {/* 컨트롤 패널 */}
-                            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-5 mb-6 border-2 border-blue-200">
+                            {/* 컨트롤 패널 (흑백 미니멀 톤) */}
+                            <div className="bg-neutral-50 border border-neutral-300 p-4 mb-6" style={{borderRadius:'6px'}}>
                               <div className="flex flex-wrap items-center gap-4">
                                 {/* 보기 모드 토글 */}
                                 <div className="flex items-center gap-2">
-                                  <span className="text-sm font-bold text-slate-700">👀 보기:</span>
-                                  <div className="flex bg-white rounded-xl p-1 shadow-md border-2 border-slate-200">
+                                  <span className="text-[11px] font-black text-neutral-500 uppercase tracking-widest">👀 보기</span>
+                                  <div className="flex bg-white p-1 border border-neutral-300" style={{borderRadius:'6px'}}>
                                     <button
                                       onClick={() => costViewMode !== 'all' && setCostViewMode('all')}
-                                      className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                                      className={`px-3 py-1.5 text-xs font-black uppercase tracking-widest transition-all ${
                                         costViewMode === 'all'
-                                          ? 'bg-purple-600 text-white shadow-md'
-                                          : 'text-slate-600 hover:bg-slate-100'
-                                      }`}
+                                          ? 'bg-black text-white'
+                                          : 'text-neutral-500 hover:bg-neutral-100 hover:text-black'
+                                      }`} style={{borderRadius:'6px'}}
                                     >
                                       🔲 전체보기
                                     </button>
                                     <button
                                       onClick={() => costViewMode !== 'product' && setCostViewMode('product')}
-                                      className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                                      className={`px-3 py-1.5 text-xs font-black uppercase tracking-widest transition-all ${
                                         costViewMode === 'product'
-                                          ? 'bg-purple-600 text-white shadow-md'
-                                          : 'text-slate-600 hover:bg-slate-100'
-                                      }`}
+                                          ? 'bg-black text-white'
+                                          : 'text-neutral-500 hover:bg-neutral-100 hover:text-black'
+                                      }`} style={{borderRadius:'6px'}}
                                     >
                                       📦 제품별보기
                                     </button>
@@ -5756,25 +5926,25 @@ ${list}` }]
 
                                 {/* 조회 기준 토글 */}
                                 <div className="flex items-center gap-2">
-                                  <span className="text-sm font-bold text-slate-700">📅 조회 기준:</span>
-                                  <div className="flex bg-white rounded-xl p-1 shadow-md border-2 border-slate-200">
+                                  <span className="text-[11px] font-black text-neutral-500 uppercase tracking-widest">📅 조회 기준</span>
+                                  <div className="flex bg-white p-1 border border-neutral-300" style={{borderRadius:'6px'}}>
                                     <button
                                       onClick={() => billingViewMode !== 'order' && setBillingViewMode('order')}
-                                      className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                                      className={`px-3 py-1.5 text-xs font-black uppercase tracking-widest transition-all ${
                                         billingViewMode === 'order'
-                                          ? 'bg-blue-600 text-white shadow-md'
-                                          : 'text-slate-600 hover:bg-slate-100'
-                                      }`}
+                                          ? 'bg-black text-white'
+                                          : 'text-neutral-500 hover:bg-neutral-100 hover:text-black'
+                                      }`} style={{borderRadius:'6px'}}
                                     >
                                       📝 발주서 작성일
                                     </button>
                                     <button
                                       onClick={() => billingViewMode !== 'billing' && setBillingViewMode('billing')}
-                                      className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                                      className={`px-3 py-1.5 text-xs font-black uppercase tracking-widest transition-all ${
                                         billingViewMode === 'billing'
-                                          ? 'bg-blue-600 text-white shadow-md'
-                                          : 'text-slate-600 hover:bg-slate-100'
-                                      }`}
+                                          ? 'bg-black text-white'
+                                          : 'text-neutral-500 hover:bg-neutral-100 hover:text-black'
+                                      }`} style={{borderRadius:'6px'}}
                                     >
                                       💰 도금공장 청구일
                                     </button>
@@ -5783,27 +5953,29 @@ ${list}` }]
 
                                 {/* 기간 선택 */}
                                 <div className="flex items-center gap-2">
-                                  <span className="text-sm font-bold text-slate-700">📊 기간:</span>
+                                  <span className="text-[11px] font-black text-neutral-500 uppercase tracking-widest">📊 기간</span>
                                   <input
                                     type="month"
                                     value={startMonth}
                                     onChange={(e) => setCostStartMonth(e.target.value)}
-                                    className="px-3 py-2 rounded-lg border-2 border-slate-300 text-sm font-semibold focus:border-blue-500 outline-none"
+                                    className="px-3 py-2 border border-neutral-400 text-sm font-bold focus:border-black outline-none"
+                                    style={{borderRadius:'6px'}}
                                   />
-                                  <span className="text-slate-500 font-bold">~</span>
+                                  <span className="text-neutral-500 font-black">~</span>
                                   <input
                                     type="month"
                                     value={endMonth}
                                     onChange={(e) => setCostEndMonth(e.target.value)}
-                                    className="px-3 py-2 rounded-lg border-2 border-slate-300 text-sm font-semibold focus:border-blue-500 outline-none"
+                                    className="px-3 py-2 border border-neutral-400 text-sm font-bold focus:border-black outline-none"
+                                    style={{borderRadius:'6px'}}
                                   />
                                 </div>
 
-                                {/* 안내 */}
+                                {/* 안내 (amber 강조 유지) */}
                                 {billingViewMode === 'billing' && totals.unset > 0 && (
-                                  <div className="ml-auto bg-amber-100 border-2 border-amber-300 rounded-xl px-4 py-2">
-                                    <span className="text-sm font-bold text-amber-800">⚠️ 청구일 미입력: {totals.unset.toLocaleString()}개</span>
-                                    <p className="text-xs text-amber-700 mt-0.5">1-4 작업내역에서 청구일 입력 시 자동 이동</p>
+                                  <div className="ml-auto bg-amber-100 border-2 border-amber-700 px-3 py-1.5" style={{borderRadius:'6px'}}>
+                                    <span className="text-xs font-black text-amber-900 uppercase tracking-widest">⚠️ 청구일 미입력: {totals.unset.toLocaleString()}개</span>
+                                    <p className="text-[10px] text-amber-800 mt-0.5 font-bold tracking-tight">1-4 작업내역에서 청구일 입력 시 자동 이동</p>
                                   </div>
                                 )}
                               </div>
@@ -5815,23 +5987,23 @@ ${list}` }]
                                 <p className="font-medium">작업 내역이 없습니다</p>
                               </div>
                             ) : costViewMode === 'all' ? (
-                              <div className="overflow-x-auto border-2 border-slate-200 rounded-2xl">
+                              <div className="overflow-x-auto border-2 border-neutral-300" style={{borderRadius:'6px'}}>
                                 <table className="w-full text-sm">
-                                  <thead className="bg-slate-100 sticky top-0">
-                                    <tr className="border-b-2 border-slate-300">
-                                      <th className="text-left py-3 px-3 font-bold text-slate-700 sticky left-0 bg-slate-100" style={{minWidth: '140px'}}>제품</th>
-                                      <th className="text-center py-3 px-3 font-bold text-slate-700" style={{minWidth: '100px'}}>색상</th>
-                                      <th className="text-center py-3 px-3 font-bold text-slate-700" style={{minWidth: '70px'}}>마감</th>
-                                      <th className="text-right py-3 px-3 font-bold text-slate-700" style={{minWidth: '80px'}}>도금<br/>단가</th>
-                                      <th className="text-right py-3 px-3 font-bold text-slate-700" style={{minWidth: '80px'}}>연마<br/>단가</th>
+                                  <thead className="bg-neutral-100 sticky top-0">
+                                    <tr className="border-b-2 border-black">
+                                      <th className="text-left py-3 px-3 font-black text-black sticky left-0 bg-neutral-100 uppercase tracking-widest text-[10px]" style={{minWidth: '140px'}}>제품</th>
+                                      <th className="text-center py-3 px-3 font-black text-black uppercase tracking-widest text-[10px]" style={{minWidth: '100px'}}>색상</th>
+                                      <th className="text-center py-3 px-3 font-black text-black uppercase tracking-widest text-[10px]" style={{minWidth: '70px'}}>마감</th>
+                                      <th className="text-right py-3 px-3 font-black text-black uppercase tracking-widest text-[10px]" style={{minWidth: '80px'}}>도금<br/>단가</th>
+                                      <th className="text-right py-3 px-3 font-black text-black uppercase tracking-widest text-[10px]" style={{minWidth: '80px'}}>연마<br/>단가</th>
                                       {billingViewMode === 'billing' && (
-                                        <th className="text-center py-3 px-3 font-bold text-amber-700 bg-amber-50" style={{minWidth: '70px'}}>미입력</th>
+                                        <th className="text-center py-3 px-3 font-black text-amber-900 bg-amber-100 uppercase tracking-widest text-[10px]" style={{minWidth: '70px'}}>미입력</th>
                                       )}
                                       {months.map(m => (
-                                        <th key={m} className="text-center py-3 px-3 font-bold text-blue-700" style={{minWidth: '70px'}}>{m.substring(2)}</th>
+                                        <th key={m} className="text-center py-3 px-3 font-black text-black uppercase tracking-widest text-[10px]" style={{minWidth: '70px'}}>{m.substring(2)}</th>
                                       ))}
-                                      <th className="text-right py-3 px-3 font-bold text-slate-900 bg-yellow-100" style={{minWidth: '90px'}}>총수량</th>
-                                      <th className="text-right py-3 px-3 font-bold text-slate-900 bg-yellow-100" style={{minWidth: '110px'}}>총금액</th>
+                                      <th className="text-right py-3 px-3 font-black text-black bg-yellow-200 uppercase tracking-widest text-[10px]" style={{minWidth: '90px'}}>총수량</th>
+                                      <th className="text-right py-3 px-3 font-black text-black bg-yellow-200 uppercase tracking-widest text-[10px]" style={{minWidth: '110px'}}>총금액</th>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -5839,68 +6011,68 @@ ${list}` }]
                                       const rowTotalQty = r.unset + months.reduce((s, m) => s + (r.byMonth[m] || 0), 0);
                                       const rowTotalAmount = rowTotalQty * (r.platingCost + r.grindCost);
                                       return (
-                                        <tr key={idx} className="border-b border-slate-200 hover:bg-blue-50">
-                                          <td className="py-3 px-3 font-semibold text-slate-800 sticky left-0 bg-white" style={{borderRight: '1px solid #e2e8f0'}}>{r.productName}</td>
-                                          <td className="text-center py-3 px-3" style={{backgroundColor: getFactoryColorHex(r.color, r.finish) + '33'}}>
-                                            <span className="font-semibold">{r.color}</span>
+                                        <tr key={idx} className="border-b border-neutral-200 hover:bg-neutral-50">
+                                          <td className="py-3 px-3 font-black text-black sticky left-0 bg-white tracking-tight" style={{borderRight: '1px solid #e5e7eb'}}>{r.productName}</td>
+                                          <td className="text-center py-3 px-3 font-black text-black tracking-tight" style={{backgroundColor: getFactoryColorHex(r.color, r.finish) + '33'}}>
+                                            <span>{r.color}</span>
                                           </td>
-                                          <td className="text-center py-3 px-3">{r.finish || '-'}</td>
-                                          <td className={`text-right py-3 px-3 ${r.platingCost === 0 ? 'text-red-500 font-bold' : 'text-slate-700'}`}>
+                                          <td className="text-center py-3 px-3 font-bold text-neutral-700">{r.finish || '-'}</td>
+                                          <td className={`text-right py-3 px-3 ${r.platingCost === 0 ? 'text-red-600 font-black' : 'text-neutral-700 font-bold'}`}>
                                             {r.platingCost > 0 ? `${r.platingCost.toLocaleString()}원` : '⚠️ 미입력'}
                                           </td>
-                                          <td className={`text-right py-3 px-3 ${!r.grindRequired ? 'text-slate-400' : (r.grindCost === 0 ? 'text-red-500 font-bold' : 'text-slate-700')}`}>
+                                          <td className={`text-right py-3 px-3 ${!r.grindRequired ? 'text-neutral-400' : (r.grindCost === 0 ? 'text-red-600 font-black' : 'text-neutral-700 font-bold')}`}>
                                             {!r.grindRequired ? '연마X' : (r.grindCost > 0 ? `${r.grindCost.toLocaleString()}원` : '⚠️ 미입력')}
                                           </td>
                                           {billingViewMode === 'billing' && (
-                                            <td className={`text-center py-3 px-3 font-bold ${r.unset > 0 ? 'bg-amber-50 text-amber-700' : 'text-slate-300'}`}>
+                                            <td className={`text-center py-3 px-3 font-black ${r.unset > 0 ? 'bg-amber-50 text-amber-900' : 'text-neutral-300'}`}>
                                               {r.unset > 0 ? r.unset.toLocaleString() : '-'}
                                             </td>
                                           )}
                                           {months.map(m => (
-                                            <td key={m} className={`text-center py-3 px-3 ${(r.byMonth[m] || 0) > 0 ? 'font-bold text-blue-700' : 'text-slate-300'}`}>
+                                            <td key={m} className={`text-center py-3 px-3 ${(r.byMonth[m] || 0) > 0 ? 'font-black text-black' : 'text-neutral-300'}`}>
                                               {(r.byMonth[m] || 0) > 0 ? r.byMonth[m].toLocaleString() : '-'}
                                             </td>
                                           ))}
-                                          <td className="text-right py-3 px-3 font-bold text-slate-900 bg-yellow-50">{rowTotalQty.toLocaleString()}</td>
-                                          <td className="text-right py-3 px-3 font-bold text-blue-600 bg-yellow-50">{rowTotalAmount.toLocaleString()}원</td>
+                                          <td className="text-right py-3 px-3 font-black text-black bg-yellow-50">{rowTotalQty.toLocaleString()}</td>
+                                          <td className="text-right py-3 px-3 font-black text-black bg-yellow-50 tracking-tight">{rowTotalAmount.toLocaleString()}원</td>
                                         </tr>
                                       );
                                     })}
-                                    {/* 합계 행 */}
-                                    <tr className="bg-slate-200 font-bold border-t-2 border-slate-400 sticky bottom-0">
-                                      <td className="py-4 px-3 text-slate-900 sticky left-0 bg-slate-200" colSpan="5">📊 합계 (수량)</td>
+                                    {/* 합계 행 (검정 + 카카오노란) */}
+                                    <tr className="bg-black font-bold border-t-2 border-black sticky bottom-0">
+                                      <td className="py-4 px-3 text-white sticky left-0 bg-black font-black uppercase tracking-widest text-[11px]" colSpan="5">📊 합계 (수량)</td>
                                       {billingViewMode === 'billing' && (
-                                        <td className="text-center py-4 px-3 text-amber-700 bg-amber-100">{totals.unset.toLocaleString()}</td>
+                                        <td className="text-center py-4 px-3 text-amber-200 font-black bg-neutral-800">{totals.unset.toLocaleString()}</td>
                                       )}
                                       {months.map(m => (
-                                        <td key={m} className="text-center py-4 px-3 text-blue-700">{(totals.byMonth[m] || 0).toLocaleString()}</td>
+                                        <td key={m} className="text-center py-4 px-3 text-white font-black tracking-tight">{(totals.byMonth[m] || 0).toLocaleString()}</td>
                                       ))}
-                                      <td className="text-right py-4 px-3 text-slate-900 bg-yellow-200">
+                                      <td className="text-right py-4 px-3 font-black tracking-tight" style={{color:'#FEE500'}}>
                                         {(totals.unset + months.reduce((s, m) => s + (totals.byMonth[m] || 0), 0)).toLocaleString()}
                                       </td>
-                                      <td className="text-right py-4 px-3 text-blue-700 bg-yellow-200">
+                                      <td className="text-right py-4 px-3 font-black tracking-tight" style={{color:'#FEE500'}}>
                                         {(totals.unsetAmount + totals.unsetGrind + months.reduce((s, m) => s + (totals.byMonthAmount[m] || 0) + (totals.byMonthGrind[m] || 0), 0)).toLocaleString()}원
                                       </td>
                                     </tr>
                                     {/* 도금비 합계 행 */}
-                                    <tr className="bg-blue-50 font-semibold">
-                                      <td className="py-3 px-3 text-blue-800 sticky left-0 bg-blue-50" colSpan="5">💰 도금비 합계</td>
+                                    <tr className="bg-neutral-100 font-bold border-t border-neutral-300">
+                                      <td className="py-3 px-3 text-black sticky left-0 bg-neutral-100 font-black uppercase tracking-widest text-[11px]" colSpan="5">💰 도금비 합계</td>
                                       {billingViewMode === 'billing' && (
-                                        <td className="text-right py-3 px-3 text-blue-700">{totals.unsetAmount.toLocaleString()}원</td>
+                                        <td className="text-right py-3 px-3 text-neutral-700 font-bold">{totals.unsetAmount.toLocaleString()}원</td>
                                       )}
                                       {months.map(m => (
-                                        <td key={m} className="text-right py-3 px-3 text-blue-700 text-xs">{(totals.byMonthAmount[m] || 0).toLocaleString()}</td>
+                                        <td key={m} className="text-right py-3 px-3 text-neutral-700 text-xs font-bold">{(totals.byMonthAmount[m] || 0).toLocaleString()}</td>
                                       ))}
                                       <td className="py-3 px-3" colSpan="2"></td>
                                     </tr>
                                     {/* 연마비 합계 행 */}
-                                    <tr className="bg-emerald-50 font-semibold">
-                                      <td className="py-3 px-3 text-emerald-800 sticky left-0 bg-emerald-50" colSpan="5">🔧 연마비 합계</td>
+                                    <tr className="bg-neutral-50 font-bold border-t border-neutral-200">
+                                      <td className="py-3 px-3 text-black sticky left-0 bg-neutral-50 font-black uppercase tracking-widest text-[11px]" colSpan="5">🔧 연마비 합계</td>
                                       {billingViewMode === 'billing' && (
-                                        <td className="text-right py-3 px-3 text-emerald-700">{totals.unsetGrind.toLocaleString()}원</td>
+                                        <td className="text-right py-3 px-3 text-neutral-700 font-bold">{totals.unsetGrind.toLocaleString()}원</td>
                                       )}
                                       {months.map(m => (
-                                        <td key={m} className="text-right py-3 px-3 text-emerald-700 text-xs">{(totals.byMonthGrind[m] || 0).toLocaleString()}</td>
+                                        <td key={m} className="text-right py-3 px-3 text-neutral-700 text-xs font-bold">{(totals.byMonthGrind[m] || 0).toLocaleString()}</td>
                                       ))}
                                       <td className="py-3 px-3" colSpan="2"></td>
                                     </tr>
@@ -5963,126 +6135,90 @@ ${list}` }]
                                       // 그래프 최대값
                                       const maxByMonth = Math.max(1, ...months.map(m => g.byMonth[m] || 0));
                                       return (
-                                        <div key={gi} className="bg-white rounded-2xl border-2 border-slate-200 shadow-sm overflow-hidden">
-                                          {/* 카드 헤더 */}
-                                          <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-purple-50 to-indigo-50 border-b-2 border-slate-200">
+                                        <div key={gi} className="bg-white border-2 border-neutral-300 overflow-hidden" style={{borderRadius:'6px'}}>
+                                          {/* 카드 헤더 (흑백 미니멀 톤) */}
+                                          <div className="flex items-center gap-4 p-4 bg-neutral-50 border-b-2 border-neutral-300">
                                             {g.master && g.master.image ? (
-                                              <img src={g.master.image} className="w-16 h-16 object-cover border-2 border-white shadow-md rounded-xl" alt=""/>
+                                              <img src={g.master.image} className="w-16 h-16 object-cover border border-neutral-300" style={{borderRadius:'6px'}} alt=""/>
                                             ) : (
-                                              <div className="w-16 h-16 bg-white border-2 border-slate-200 rounded-xl flex items-center justify-center text-3xl">
+                                              <div className="w-16 h-16 bg-white border border-neutral-300 flex items-center justify-center text-3xl" style={{borderRadius:'6px'}}>
                                                 {g.master?.type === 'cellulose' ? '💠' : g.master?.type === 'gocchang' ? '🎀' : '📌'}
                                               </div>
                                             )}
                                             <div className="flex-1 min-w-0">
-                                              <div className="font-black text-slate-900 text-lg truncate">{g.productName}</div>
-                                              <div className="text-xs text-slate-500 mt-0.5">색상 {sortedColors.length}종 · 누적 {g.totalQty.toLocaleString()}개 · {g.totalAmount.toLocaleString()}원</div>
+                                              <div className="font-black text-black text-lg tracking-tight truncate">{g.productName}</div>
+                                              <div className="text-[11px] text-neutral-500 mt-0.5 font-bold tracking-tight">색상 {sortedColors.length}종 · 누적 {g.totalQty.toLocaleString()}개 · {g.totalAmount.toLocaleString()}원</div>
                                             </div>
                                             <div className="text-right">
-                                              <div className="text-2xl font-black text-purple-700">{g.totalQty.toLocaleString()}<span className="text-xs ml-1">개</span></div>
-                                              <div className="text-xs text-slate-500">{g.totalAmount.toLocaleString()}원</div>
+                                              <div className="text-3xl font-black text-black tracking-tight">{g.totalQty.toLocaleString()}<span className="text-xs ml-1 text-neutral-500">개</span></div>
+                                              <div className="text-[11px] text-neutral-500 font-bold tracking-tight">{g.totalAmount.toLocaleString()}원</div>
                                             </div>
                                           </div>
 
-                                          {/* 막대그래프 (월별 색상 스택) */}
-                                          <div className="p-4 border-b border-slate-200">
-                                            <div className="text-[11px] font-bold text-slate-600 mb-2 uppercase tracking-wider">📊 월별 도금 수량 (색상 스택)</div>
-                                            {/* 💠 v20260508.13: 가로 막대 그래프 (월 = 행) */}
-                                            <div className="bg-slate-50/40 rounded-lg p-3 space-y-1.5">
-                                              {months.map(m => {
-                                                const monthTotal = g.byMonth[m] || 0;
-                                                const widthPercent = monthTotal > 0 ? (monthTotal / maxByMonth) * 100 : 0;
-                                                const stack = (g.byMonthByColor[m] || []).sort((a, b) =>
-                                                  getFactoryColorOrderIndex(a.color, a.finish) -
-                                                  getFactoryColorOrderIndex(b.color, b.finish)
-                                                );
-                                                return (
-                                                  <div key={m} className="flex items-center gap-2">
-                                                    {/* 월 라벨 (Y축) */}
-                                                    <div className="w-14 text-[11px] font-bold text-slate-600 text-right shrink-0">{m.substring(2)}</div>
-                                                    {/* 막대 영역 */}
-                                                    <div className="flex-1 h-9 bg-white border border-slate-200 rounded relative" style={{minWidth: '200px'}}>
-                                                      {monthTotal > 0 && (
-                                                        <div className="flex h-full border border-slate-400 rounded overflow-hidden"
-                                                          style={{width: `${Math.max(widthPercent, 2)}%`, minWidth: '4px'}}>
-                                                          {stack.map((s, si) => {
-                                                            const segPercent = (s.qty / monthTotal) * 100;
-                                                            // 텍스트 대비
-                                                            const rr = parseInt(s.hex.slice(1,3),16);
-                                                            const gg = parseInt(s.hex.slice(3,5),16);
-                                                            const bb = parseInt(s.hex.slice(5,7),16);
-                                                            const lum = (0.299*rr + 0.587*gg + 0.114*bb) / 255;
-                                                            const txtColor = lum < 0.5 ? '#FFFFFF' : '#111111';
-                                                            const shortName = s.color === '로즈골드 대용금' ? '로즈' : s.color === '14k대용금' ? '14k' : s.color;
-                                                            const finishFull = s.finish === '유광' ? '유광' : s.finish === '반무광' ? '반광' : '';
-                                                            const fullLabel = finishFull ? `${shortName}(${finishFull}) ${s.qty}개` : `${shortName} ${s.qty}개`;
-                                                            return (
-                                                              <div key={si}
-                                                                className="border-l border-white/30 first:border-l-0 flex items-center justify-center text-[9px] font-black whitespace-nowrap overflow-hidden"
-                                                                style={{
-                                                                  width: `${segPercent}%`,
-                                                                  background: s.hex,
-                                                                  color: txtColor,
-                                                                  padding: '0 2px'
-                                                                }}
-                                                                title={`${s.color}${s.finish?'('+s.finish+')':''}: ${s.qty}개`}>
-                                                                {fullLabel}
-                                                              </div>
-                                                            );
-                                                          })}
+                                          {/* 💠 v20260510: 색상별 누적 가로 막대 (캡쳐 스타일) */}
+                                          <div className="p-4 border-b-2 border-neutral-300 bg-white">
+                                            <div className="text-[11px] font-black text-neutral-700 mb-3 uppercase tracking-widest">📊 색상별 누적 도금 수량</div>
+                                            {(() => {
+                                              const colorBars = sortedColors.map(c => ({
+                                                ...c,
+                                                totalQty: c.unset + months.reduce((s, m) => s + (c.byMonth[m] || 0), 0),
+                                                hex: getFactoryColorHex(c.color, c.finish)
+                                              })).filter(c => c.totalQty > 0).sort((a, b) => b.totalQty - a.totalQty);
+
+                                              if (colorBars.length === 0) {
+                                                return <div className="text-center text-neutral-400 text-sm py-4 font-bold">데이터 없음</div>;
+                                              }
+
+                                              const maxQty = Math.max(...colorBars.map(c => c.totalQty));
+
+                                              return (
+                                                <div className="space-y-1.5">
+                                                  {colorBars.map((c, ci) => {
+                                                    const widthPercent = (c.totalQty / maxQty) * 100;
+                                                    const rr = parseInt(c.hex.slice(1,3),16);
+                                                    const gg = parseInt(c.hex.slice(3,5),16);
+                                                    const bb = parseInt(c.hex.slice(5,7),16);
+                                                    const lum = (0.299*rr + 0.587*gg + 0.114*bb) / 255;
+                                                    const txtColor = lum < 0.5 ? '#FFFFFF' : '#111111';
+                                                    const finishFull = c.finish === '유광' ? '유광' : c.finish === '반무광' ? '반광' : '';
+                                                    const label = finishFull ? `${c.color}(${finishFull})` : c.color;
+                                                    return (
+                                                      <div key={ci} className="flex items-center gap-3">
+                                                        <div
+                                                          className="h-7 flex items-center justify-center text-xs font-black border-2 border-black/40 whitespace-nowrap px-3 transition-all"
+                                                          style={{
+                                                            width: `${Math.max(widthPercent, 12)}%`,
+                                                            background: c.hex,
+                                                            color: txtColor,
+                                                            borderRadius: '6px',
+                                                            minWidth: '140px'
+                                                          }}
+                                                          title={`${label}: ${c.totalQty.toLocaleString()}개`}>
+                                                          {label}
                                                         </div>
-                                                      )}
-                                                      {/* 막대 우측에 합계 (막대가 짧을 때 막대 옆 외부, 막대가 길면 막대 안 우측 끝) */}
-                                                      {monthTotal > 0 && widthPercent < 90 && (
-                                                        <div className="absolute top-1/2 text-[10px] font-bold text-slate-700 whitespace-nowrap"
-                                                          style={{left: `calc(${Math.max(widthPercent, 2)}% + 4px)`, transform: 'translateY(-50%)'}}>
-                                                          {monthTotal.toLocaleString()}개
-                                                        </div>
-                                                      )}
-                                                    </div>
-                                                    {/* 우측 합계 (막대가 거의 꽉 찼을 때) */}
-                                                    {widthPercent >= 90 && (
-                                                      <div className="w-16 text-[11px] font-bold text-slate-700 text-right shrink-0">
-                                                        {monthTotal > 0 ? `${monthTotal.toLocaleString()}개` : '-'}
+                                                        <span className="text-sm font-black text-black tracking-tight whitespace-nowrap">{c.totalQty.toLocaleString()}<span className="text-[11px] ml-0.5 text-neutral-500">개</span></span>
                                                       </div>
-                                                    )}
-                                                    {widthPercent < 90 && monthTotal === 0 && (
-                                                      <div className="w-16 text-[11px] font-bold text-slate-300 text-right shrink-0">-</div>
-                                                    )}
-                                                  </div>
-                                                );
-                                              })}
-                                            </div>
-                                            {/* 범례 */}
-                                            <div className="flex flex-wrap gap-2 mt-3">
-                                              {sortedColors.map((c, ci) => {
-                                                const hex = getFactoryColorHex(c.color, c.finish);
-                                                const cqty = c.unset + months.reduce((s, m) => s + (c.byMonth[m] || 0), 0);
-                                                const finishFullL = c.finish === '유광' ? '유광' : c.finish === '반무광' ? '반광' : '';
-                                                return (
-                                                  <div key={ci} className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-md px-2 py-1 text-[11px]">
-                                                    <span className="w-3 h-3 rounded-sm border border-slate-400" style={{background: hex}}/>
-                                                    <span className="font-semibold text-slate-700">{c.color}{finishFullL?`(${finishFullL})`:''}</span>
-                                                    <span className="text-slate-500">{cqty.toLocaleString()}개</span>
-                                                  </div>
-                                                );
-                                              })}
-                                            </div>
+                                                    );
+                                                  })}
+                                                </div>
+                                              );
+                                            })()}
                                           </div>
 
-                                          {/* 색상별 분해 표 */}
+                                          {/* 색상별 분해 표 (흑백 미니멀 톤) */}
                                           <div className="overflow-x-auto">
                                             <table className="w-full text-sm">
-                                              <thead className="bg-slate-50">
-                                                <tr className="border-b border-slate-200">
-                                                  <th className="text-center py-2 px-3 font-bold text-slate-700" style={{minWidth:'90px'}}>색상</th>
-                                                  <th className="text-center py-2 px-3 font-bold text-slate-700" style={{minWidth:'60px'}}>마감</th>
+                                              <thead className="bg-neutral-100">
+                                                <tr className="border-b-2 border-black">
+                                                  <th className="text-center py-2 px-3 font-black text-black uppercase tracking-widest text-[10px]" style={{minWidth:'90px'}}>색상</th>
+                                                  <th className="text-center py-2 px-3 font-black text-black uppercase tracking-widest text-[10px]" style={{minWidth:'60px'}}>마감</th>
                                                   {billingViewMode === 'billing' && (
-                                                    <th className="text-center py-2 px-3 font-bold text-amber-700 bg-amber-50" style={{minWidth:'60px'}}>미입력</th>
+                                                    <th className="text-center py-2 px-3 font-black text-amber-900 bg-amber-100 uppercase tracking-widest text-[10px]" style={{minWidth:'60px'}}>미입력</th>
                                                   )}
                                                   {months.map(m => (
-                                                    <th key={m} className="text-center py-2 px-3 font-bold text-blue-700" style={{minWidth:'60px'}}>{m.substring(2)}</th>
+                                                    <th key={m} className="text-center py-2 px-3 font-black text-black uppercase tracking-widest text-[10px]" style={{minWidth:'60px'}}>{m.substring(2)}</th>
                                                   ))}
-                                                  <th className="text-right py-2 px-3 font-bold text-slate-900 bg-yellow-100" style={{minWidth:'80px'}}>총수량</th>
+                                                  <th className="text-right py-2 px-3 font-black text-black bg-yellow-200 uppercase tracking-widest text-[10px]" style={{minWidth:'80px'}}>총수량</th>
                                                 </tr>
                                               </thead>
                                               <tbody>
@@ -6090,30 +6226,30 @@ ${list}` }]
                                                   const cTotal = c.unset + months.reduce((s, m) => s + (c.byMonth[m] || 0), 0);
                                                   const hex = getFactoryColorHex(c.color, c.finish);
                                                   return (
-                                                    <tr key={ci} className="border-b border-slate-100 hover:bg-blue-50/30">
-                                                      <td className="text-center py-2 px-3 font-semibold" style={{backgroundColor: hex + '33'}}>{c.color}</td>
-                                                      <td className="text-center py-2 px-3">{c.finish || '-'}</td>
+                                                    <tr key={ci} className="border-b border-neutral-200 hover:bg-neutral-50">
+                                                      <td className="text-center py-2 px-3 font-black text-black tracking-tight" style={{backgroundColor: hex + '33'}}>{c.color}</td>
+                                                      <td className="text-center py-2 px-3 font-bold text-neutral-700">{c.finish || '-'}</td>
                                                       {billingViewMode === 'billing' && (
-                                                        <td className={`text-center py-2 px-3 ${c.unset > 0 ? 'bg-amber-50 text-amber-700 font-bold' : 'text-slate-300'}`}>
+                                                        <td className={`text-center py-2 px-3 ${c.unset > 0 ? 'bg-amber-50 text-amber-900 font-black' : 'text-neutral-300'}`}>
                                                           {c.unset > 0 ? c.unset.toLocaleString() : '-'}
                                                         </td>
                                                       )}
                                                       {months.map(m => (
-                                                        <td key={m} className={`text-center py-2 px-3 ${(c.byMonth[m] || 0) > 0 ? 'font-bold text-blue-700' : 'text-slate-300'}`}>
+                                                        <td key={m} className={`text-center py-2 px-3 ${(c.byMonth[m] || 0) > 0 ? 'font-black text-black' : 'text-neutral-300'}`}>
                                                           {(c.byMonth[m] || 0) > 0 ? c.byMonth[m].toLocaleString() : '-'}
                                                         </td>
                                                       ))}
-                                                      <td className="text-right py-2 px-3 font-bold text-slate-900 bg-yellow-50">{cTotal.toLocaleString()}</td>
+                                                      <td className="text-right py-2 px-3 font-black text-black bg-yellow-50">{cTotal.toLocaleString()}</td>
                                                     </tr>
                                                   );
                                                 })}
-                                                {/* 제품 합계 */}
-                                                <tr className="bg-purple-50 font-bold border-t-2 border-purple-300">
-                                                  <td colSpan={billingViewMode === 'billing' ? 3 : 2} className="py-2 px-3 text-purple-900">📊 합계</td>
+                                                {/* 제품 합계 (검정 + 카카오노란 강조) */}
+                                                <tr className="bg-black font-bold border-t-2 border-black">
+                                                  <td colSpan={billingViewMode === 'billing' ? 3 : 2} className="py-2 px-3 text-white font-black uppercase tracking-widest text-[11px]">📊 합계</td>
                                                   {months.map(m => (
-                                                    <td key={m} className="text-center py-2 px-3 text-purple-700">{(g.byMonth[m] || 0).toLocaleString()}</td>
+                                                    <td key={m} className="text-center py-2 px-3 text-white font-black tracking-tight">{(g.byMonth[m] || 0).toLocaleString()}</td>
                                                   ))}
-                                                  <td className="text-right py-2 px-3 text-purple-900 bg-yellow-100">{g.totalQty.toLocaleString()}</td>
+                                                  <td className="text-right py-2 px-3 font-black tracking-tight" style={{color:'#FEE500'}}>{g.totalQty.toLocaleString()}</td>
                                                 </tr>
                                               </tbody>
                                             </table>
