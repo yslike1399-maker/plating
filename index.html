@@ -832,6 +832,10 @@ ${list}` }]
           const [polishEditPopup, setPolishEditPopup] = useState(null); // 수정 팝업 (v09.11)
           const [reworkColorPopup, setReworkColorPopup] = useState(null); // 💠 v20260511: 재도금 색상 추가 모달
           const [productSortMode, setProductSortMode] = useState('frequency'); // 💠 v20260511: 1-2 제품 정렬 ('frequency' | 'alphabet')
+          const [productSelectValue, setProductSelectValue] = useState(''); // 💠 v20260512: 1-2 select controlled value (재렌더링 후에도 빈 값 유지)
+          // 💠 v20260512: 1-2 작업지시서 전용 이미지 매핑 (productId → base64) — 9-1과 격리, 영구 보존
+          const [workorderImages, setWorkorderImages] = useState(() => { try { return JSON.parse(localStorage.getItem('workorder_images')||'{}'); } catch { return {}; } });
+          const saveWorkorderImages = (d) => { setWorkorderImages(d); localStorage.setItem('workorder_images', JSON.stringify(d)); };
           // 💠 v20260511: 7번 중국 발주 - 다이캐스팅 주문 관리
           // chinaShipments: 수입 건 단위 (한 건에 여러 제품 + 청구파일)
           const [chinaShipments, setChinaShipments] = useState(() => { try { return JSON.parse(localStorage.getItem('china_shipments')||'[]'); } catch { return []; } });
@@ -1362,8 +1366,17 @@ ${list}` }]
             return new Promise((resolve, reject) => {
               const reader = new FileReader();
               reader.onload = (e) => {
+                // 💠 v20260512: file:// 환경에서 img.onload가 차단되는 경우 대비 3초 타임아웃 fallback
+                let resolved = false;
+                const fallbackTimer = setTimeout(() => {
+                  if (resolved) return;
+                  resolved = true;
+                  resolve(e.target.result); // 원본 base64 그대로 사용
+                }, 3000);
+                const finishOK = (data) => { if (resolved) return; resolved = true; clearTimeout(fallbackTimer); resolve(data); };
                 const img = new Image();
                 img.onload = () => {
+                  if (resolved) return;
                   let { width, height } = img;
                   // 비율 유지하며 최대 크기에 맞추기
                   if (width > maxSize || height > maxSize) {
@@ -1375,24 +1388,33 @@ ${list}` }]
                       height = maxSize;
                     }
                   }
-                  const canvas = document.createElement('canvas');
-                  canvas.width = width;
-                  canvas.height = height;
-                  const ctx = canvas.getContext('2d');
-                  ctx.fillStyle = '#FFFFFF'; // PNG 투명배경 -> 흰색
-                  ctx.fillRect(0, 0, width, height);
-                  ctx.drawImage(img, 0, 0, width, height);
-                  // JPEG로 변환 (PNG보다 훨씬 작음)
-                  const compressed = canvas.toDataURL('image/jpeg', quality);
-                  const originalKB = Math.round(file.size / 1024);
-                  const compressedKB = Math.round((compressed.length * 0.75) / 1024);
-                  console.log(`이미지 압축: ${originalKB}KB → ${compressedKB}KB (${Math.round(100 - (compressedKB/originalKB)*100)}% 감소)`);
-                  resolve(compressed);
+                  try {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.fillRect(0, 0, width, height);
+                    ctx.drawImage(img, 0, 0, width, height);
+                    const compressed = canvas.toDataURL('image/jpeg', quality);
+                    const originalKB = Math.round(file.size / 1024);
+                    const compressedKB = Math.round((compressed.length * 0.75) / 1024);
+                    console.log(`이미지 압축: ${originalKB}KB → ${compressedKB}KB`);
+                    finishOK(compressed);
+                  } catch (canvasErr) {
+                    console.warn('이미지 압축 실패, 원본 사용:', canvasErr);
+                    finishOK(e.target.result);
+                  }
                 };
-                img.onerror = () => reject(new Error('이미지 로드 실패'));
+                img.onerror = () => {
+                  if (resolved) return;
+                  finishOK(e.target.result); // 원본 fallback
+                };
                 img.src = e.target.result;
               };
-              reader.onerror = () => reject(new Error('파일 읽기 실패'));
+              reader.onerror = () => {
+                reject(new Error('파일 읽기 실패'));
+              };
               reader.readAsDataURL(file);
             });
           };
@@ -1770,47 +1792,48 @@ ${list}` }]
 
           const handleAddProductToOrder = (productId) => {
             if (!productId) return alert('제품을 선택하세요');
-            
+
             const product = products.find(p => p.id === productId);
-            
-            // 이미 추가된 연마 상태 찾기
-            const existingGrinds = orderForm.products
-              .filter(p => p.productId === productId)
-              .map(p => p.grind);
-            
-            // 사용 가능한 연마 상태 찾기
-            const availableGrind = GRIND_OPTIONS.find(g => !existingGrinds.includes(g));
-            
-            if (!availableGrind) {
-              return alert(`"${product.name}"의 모든 연마 상태가 이미 추가되었습니다.`);
-            }
-            
-            // 연마 필요 여부에 따라 기본값 설정
-            let defaultGrind = product.grindRequired ? '연마' : '연마 제외';
-            const grindToUse = existingGrinds.includes(defaultGrind) ? availableGrind : defaultGrind;
-            
-            setOrderForm({
-              ...orderForm,
-              products: [{
-                productId: product.id,
-                productName: product.name,
-                grindRequired: product.grindRequired,
-                grind: grindToUse,
-                image: product.image,
-                items: []
-              }, ...orderForm.products]
+            if (!product) return alert('제품 정보를 찾을 수 없습니다');
+
+            // 💠 v20260512: 함수형 setOrderForm으로 stale state 방지
+            let alertMsg = null;
+            setOrderForm(prev => {
+              const existingGrinds = prev.products
+                .filter(p => p.productId === productId)
+                .map(p => p.grind);
+              const availableGrind = GRIND_OPTIONS.find(g => !existingGrinds.includes(g));
+              if (!availableGrind) {
+                alertMsg = `"${product.name}"의 모든 연마 상태가 이미 추가되었습니다.`;
+                return prev;
+              }
+              const defaultGrind = product.grindRequired ? '연마' : '연마 제외';
+              const grindToUse = existingGrinds.includes(defaultGrind) ? availableGrind : defaultGrind;
+              if (grindToUse !== defaultGrind) {
+                alertMsg = `"${product.name} (${defaultGrind})"는 이미 추가되어\n자동으로 "${grindToUse}"로 추가되었습니다.`;
+              }
+              // 💠 v20260512: 작업지시서 전용 이미지 매핑 우선 사용 (이전 첨부 base64 자동 적용)
+              const savedImage = workorderImages[product.id];
+              return {
+                ...prev,
+                products: [{
+                  productId: product.id,
+                  productName: product.name,
+                  grindRequired: product.grindRequired,
+                  grind: grindToUse,
+                  image: savedImage || product.image,
+                  items: []
+                }, ...prev.products]
+              };
             });
-            
-            if (grindToUse !== defaultGrind) {
-              alert(`"${product.name} (${defaultGrind})"는 이미 추가되어\n자동으로 "${grindToUse}"로 추가되었습니다.`);
-            }
+            if (alertMsg) setTimeout(() => alert(alertMsg), 0);
           };
 
           const handleRemoveProductFromOrder = (productId, grind) => {
-            setOrderForm({
-              ...orderForm,
-              products: orderForm.products.filter(p => !(p.productId === productId && p.grind === grind))
-            });
+            setOrderForm(prev => ({
+              ...prev,
+              products: prev.products.filter(p => !(p.productId === productId && p.grind === grind))
+            }));
           };
 
           const updateGrind = (productId, oldGrind, newGrind) => {
@@ -1896,13 +1919,20 @@ ${list}` }]
               alert('제품을 추가하세요');
               return;
             }
-            
+
+            // 💠 v20260512: 엑셀 첨부 가능한 이미지(base64 data URI) 필수
+            const missingImage = orderForm.products.find(p => !p.image || !p.image.startsWith('data:image/'));
+            if (missingImage) {
+              alert(`⚠️ 작업지시서 엑셀에 첨부할 이미지가 없습니다.\n\n[${missingImage.productName}]의 이미지를 클릭해서 파일을 첨부해주세요.\n\n(외부 URL은 엑셀에 첨부되지 않아 빈칸으로 출력됩니다)`);
+              return;
+            }
+
             for (const product of orderForm.products) {
               if (product.items.length === 0) {
                 alert(`${product.productName} (${product.grind})에 색상을 추가하세요`);
                 return;
               }
-              
+
               const colorMap = new Map();
               for (const item of product.items) {
                 const colorKey = excelColorName(item.color, item.finish);
@@ -2942,7 +2972,7 @@ ${list}` }]
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260511.01</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260512.01</div>
                   </div>
                   
                   {/* v10.06: 헬퍼/봇 상태등 */}
@@ -3103,7 +3133,7 @@ ${list}` }]
                         labelPresets,                // ← 라벨 프리셋 (NEW)
                         nameChangeLogs,              // ← 상품명 변경이력 (v10.01)
                         exportDate: new Date().toISOString(),
-                        appVersion: 'v20260511.01'
+                        appVersion: 'v20260512.01'
                       };
                       const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
                       const url = URL.createObjectURL(blob);
@@ -4625,7 +4655,9 @@ ${list}` }]
                         </div>
                         <select id="productSelect" className="flex-1 min-w-[180px] px-3 py-2 border border-neutral-400 focus:border-black outline-none bg-white text-sm"
                           style={{borderRadius:'6px'}}
+                          value={productSelectValue}
                           onChange={(e) => {
+                            setProductSelectValue(e.target.value);
                             // 상품 선택 시 해당 재고 배지 표시 (v09.14: 정확한 ID 매칭)
                             const sel = e.target;
                             const selectedProductId = sel.value;
@@ -4688,15 +4720,14 @@ ${list}` }]
                           })()}
                         </select>
                         <button
+                          type="button"
                           onClick={() => {
-                            const select = document.getElementById('productSelect');
-                            const productId = parseInt(select.value);
-                            if (productId) {
-                              handleAddProductToOrder(productId);
-                              select.value = '';
-                              const badge = document.getElementById('polish-stock-badge');
-                              if (badge) badge.style.display='none';
-                            }
+                            const productId = parseInt(productSelectValue);
+                            if (!productId) return;
+                            handleAddProductToOrder(productId);
+                            setProductSelectValue(''); // 💠 v20260512: state로 확실히 초기화 (DOM 직접 조작 stale 문제 회피)
+                            const badge = document.getElementById('polish-stock-badge');
+                            if (badge) badge.style.display='none';
                           }}
                           className="px-4 py-2 bg-black hover:bg-neutral-800 text-white font-black text-xs uppercase tracking-widest transition-all flex items-center whitespace-nowrap shrink-0"
                           style={{borderRadius:'6px'}}
@@ -4730,13 +4761,51 @@ ${list}` }]
                           <div key={`${product.productId}-${product.grind}-${idx}`} className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8">
                             <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-200">
                               <div className="flex items-center space-x-4">
-                                {product.image ? (
-                                  <img src={product.image} alt={product.productName} className="w-24 h-24 rounded-xl object-cover border-2 border-slate-200" />
-                                ) : (
-                                  <div className="w-24 h-24 rounded-xl bg-slate-100 flex items-center justify-center">
-                                    <Package />
+                                {/* 💠 v20260512: 작업지시서용 이미지 첨부 (클릭으로 변경) */}
+                                <label className="relative cursor-pointer group shrink-0" title="클릭해서 작업지시서용 이미지 첨부/변경 (엑셀 첨부 보장)">
+                                  {product.image ? (
+                                    <img src={product.image} alt={product.productName} className="w-24 h-24 rounded-xl object-cover border-2 border-slate-200" />
+                                  ) : (
+                                    <div className="w-24 h-24 rounded-xl bg-slate-100 flex items-center justify-center">
+                                      <Package />
+                                    </div>
+                                  )}
+                                  {/* 인디케이터 (pointer-events-none으로 클릭 가로채기 방지) */}
+                                  {product.image && product.image.startsWith('data:image/') ? (
+                                    <div className="absolute -top-1 -right-1 bg-green-600 text-white text-[9px] font-black px-1.5 py-0.5 tracking-widest pointer-events-none" style={{borderRadius:'4px'}}>✓ 엑셀OK</div>
+                                  ) : (
+                                    <div className="absolute -top-1 -right-1 bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 tracking-widest animate-pulse pointer-events-none" style={{borderRadius:'4px'}}>⚠ 첨부필요</div>
+                                  )}
+                                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-all flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 rounded-xl pointer-events-none">
+                                    <span className="text-white text-[10px] font-black uppercase tracking-widest">📷 이미지</span>
+                                    <span className="text-white text-[10px] font-black uppercase tracking-widest">첨부/변경</span>
                                   </div>
-                                )}
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={async (e) => {
+                                      const file = e.target.files?.[0];
+                                      if (!file) return;
+                                      try {
+                                        const base64 = await compressImage(file);
+                                        setOrderForm(prev => ({
+                                          ...prev,
+                                          products: prev.products.map(p =>
+                                            p.productId === product.productId && p.grind === product.grind
+                                              ? {...p, image: base64}
+                                              : p
+                                          )
+                                        }));
+                                        // 💠 v20260512: 영구 보존 (다음 추가 시 자동 적용)
+                                        saveWorkorderImages({...workorderImages, [product.productId]: base64});
+                                        e.target.value = '';
+                                      } catch (err) {
+                                        alert('이미지 처리 실패: ' + err.message);
+                                      }
+                                    }}
+                                  />
+                                </label>
                                 <div>
                                   <div className="flex items-center gap-2 flex-wrap mb-1">
                                     <ProductIdBadge id={product.productId} size="md" />
@@ -4799,6 +4868,7 @@ ${list}` }]
                               })()}
 
                               <button
+                                type="button"
                                 onClick={() => handleRemoveProductFromOrder(product.productId, product.grind)}
                                 className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-all"
                               >
