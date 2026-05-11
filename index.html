@@ -833,9 +833,86 @@ ${list}` }]
           const [reworkColorPopup, setReworkColorPopup] = useState(null); // 💠 v20260511: 재도금 색상 추가 모달
           const [productSortMode, setProductSortMode] = useState('frequency'); // 💠 v20260511: 1-2 제품 정렬 ('frequency' | 'alphabet')
           const [productSelectValue, setProductSelectValue] = useState(''); // 💠 v20260512: 1-2 select controlled value (재렌더링 후에도 빈 값 유지)
-          // 💠 v20260512: 1-2 작업지시서 전용 이미지 매핑 (productId → base64) — 9-1과 격리, 영구 보존
-          const [workorderImages, setWorkorderImages] = useState(() => { try { return JSON.parse(localStorage.getItem('workorder_images')||'{}'); } catch { return {}; } });
-          const saveWorkorderImages = (d) => { setWorkorderImages(d); localStorage.setItem('workorder_images', JSON.stringify(d)); };
+          // 💠 v20260512.02: 1-2 작업지시서 전용 이미지 매핑 (productId → base64)
+          // localStorage(5MB) → IndexedDB(50MB+) 이전. 9-1과 격리.
+          const [workorderImages, setWorkorderImages] = useState({});
+          // IndexedDB 헬퍼 (workorder_images object store)
+          const idbOpen = () => new Promise((resolve, reject) => {
+            const req = indexedDB.open('laceroom_db', 1);
+            req.onupgradeneeded = (e) => {
+              const db = e.target.result;
+              if (!db.objectStoreNames.contains('workorder_images')) db.createObjectStore('workorder_images');
+            };
+            req.onsuccess = (e) => resolve(e.target.result);
+            req.onerror = () => reject(req.error);
+          });
+          const idbSet = async (key, value) => {
+            const db = await idbOpen();
+            return new Promise((resolve, reject) => {
+              const tx = db.transaction('workorder_images', 'readwrite');
+              tx.objectStore('workorder_images').put(value, String(key));
+              tx.oncomplete = () => resolve();
+              tx.onerror = () => reject(tx.error);
+            });
+          };
+          const idbGetAll = async () => {
+            const db = await idbOpen();
+            return new Promise((resolve, reject) => {
+              const tx = db.transaction('workorder_images', 'readonly');
+              const store = tx.objectStore('workorder_images');
+              const result = {};
+              const cursorReq = store.openCursor();
+              cursorReq.onsuccess = (e) => {
+                const c = e.target.result;
+                if (c) { result[c.key] = c.value; c.continue(); }
+                else resolve(result);
+              };
+              cursorReq.onerror = () => reject(cursorReq.error);
+            });
+          };
+          const idbDelete = async (key) => {
+            const db = await idbOpen();
+            return new Promise((resolve, reject) => {
+              const tx = db.transaction('workorder_images', 'readwrite');
+              tx.objectStore('workorder_images').delete(String(key));
+              tx.oncomplete = () => resolve();
+              tx.onerror = () => reject(tx.error);
+            });
+          };
+          // 페이지 로드 시 IndexedDB에서 로드 + localStorage 마이그레이션
+          React.useEffect(() => {
+            (async () => {
+              try {
+                let imgs = await idbGetAll();
+                // localStorage에 옛 데이터 있으면 IndexedDB로 이전 후 정리
+                const legacy = localStorage.getItem('workorder_images');
+                if (legacy) {
+                  try {
+                    const parsed = JSON.parse(legacy);
+                    for (const [pid, b64] of Object.entries(parsed)) {
+                      await idbSet(pid, b64);
+                      imgs[pid] = b64;
+                    }
+                    console.log(`[workorder_images] localStorage → IndexedDB 마이그레이션 ${Object.keys(parsed).length}개`);
+                  } catch (e) { console.warn('마이그레이션 파싱 실패:', e); }
+                  localStorage.removeItem('workorder_images');
+                }
+                setWorkorderImages(imgs);
+                console.log(`[workorder_images] IndexedDB 로드 완료: ${Object.keys(imgs).length}개`);
+              } catch (err) {
+                console.error('[workorder_images] IndexedDB 초기화 실패:', err);
+              }
+            })();
+          }, []);
+          // 단일 키 저장/삭제 API (IndexedDB 기반, localStorage quota 회피)
+          const setWorkorderImage = async (productId, base64) => {
+            setWorkorderImages(prev => ({...prev, [productId]: base64}));
+            try { await idbSet(productId, base64); }
+            catch (err) {
+              console.error('[workorder_images] 저장 실패:', err);
+              alert('이미지 저장 실패: ' + err.message);
+            }
+          };
           // 💠 v20260511: 7번 중국 발주 - 다이캐스팅 주문 관리
           // chinaShipments: 수입 건 단위 (한 건에 여러 제품 + 청구파일)
           const [chinaShipments, setChinaShipments] = useState(() => { try { return JSON.parse(localStorage.getItem('china_shipments')||'[]'); } catch { return []; } });
@@ -2972,7 +3049,7 @@ ${list}` }]
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260512.01</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260512.02</div>
                   </div>
                   
                   {/* v10.06: 헬퍼/봇 상태등 */}
@@ -3133,7 +3210,7 @@ ${list}` }]
                         labelPresets,                // ← 라벨 프리셋 (NEW)
                         nameChangeLogs,              // ← 상품명 변경이력 (v10.01)
                         exportDate: new Date().toISOString(),
-                        appVersion: 'v20260512.01'
+                        appVersion: 'v20260512.02'
                       };
                       const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
                       const url = URL.createObjectURL(blob);
@@ -4797,8 +4874,8 @@ ${list}` }]
                                               : p
                                           )
                                         }));
-                                        // 💠 v20260512: 영구 보존 (다음 추가 시 자동 적용)
-                                        saveWorkorderImages({...workorderImages, [product.productId]: base64});
+                                        // 💠 v20260512.02: IndexedDB 영구 보존 (다음 추가 시 자동 적용)
+                                        await setWorkorderImage(product.productId, base64);
                                         e.target.value = '';
                                       } catch (err) {
                                         alert('이미지 처리 실패: ' + err.message);
