@@ -1566,13 +1566,77 @@ ${list}` }]
             return () => { if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current); };
           }, [productForm.platingCosts, productForm.grindCost, productForm.injectionCost, productForm.springCost, productForm.pinCost, productForm.selectedMasterId]);
 
+          // 💠 v20260518: history.products[].image base64 자동 분리 (workorder_images에 별도 저장)
+          // localStorage quota 회피 — image는 workorderImages(IndexedDB) 또는 9-1 마스터에서 lookup
           const saveHistory = (data) => {
-            setHistory(data);
+            const lightData = (data || []).map(order => ({
+              ...order,
+              products: (order.products || []).map(p => {
+                const {image, productImage, ...rest} = p;
+                // image가 base64이면 제거, URL이면 보존 (옛 fallback용)
+                const isBase64 = (s) => typeof s === 'string' && s.startsWith('data:image/');
+                return {
+                  ...rest,
+                  ...(image && !isBase64(image) ? {image} : {}),
+                  ...(productImage && !isBase64(productImage) ? {productImage} : {})
+                };
+              })
+            }));
+            setHistory(lightData);
             try {
-              localStorage.setItem('plating_history', JSON.stringify(data));
+              localStorage.setItem('plating_history', JSON.stringify(lightData));
             } catch (e) {
-              console.error('저장 오류:', e);
+              console.error('history 저장 오류:', e);
+              if (e.name === 'QuotaExceededError' || /quota/i.test(e.message||'')) {
+                alert('⚠️ 저장 공간이 부족합니다.\n\n다른 백업 파일을 가져오거나 9-1 상품에서 이미지를 정리하세요.');
+              }
             }
+          };
+
+          // 💠 v20260518: 옛 history 마이그레이션 (한 번만) — base64 image를 workorder_images로 이전
+          React.useEffect(() => {
+            if (localStorage.getItem('history_image_migrated_v1')) return;
+            if (!history || history.length === 0) return;
+            const isBase64 = (s) => typeof s === 'string' && s.startsWith('data:image/');
+            let migrated = 0;
+            const lightHistory = history.map(order => ({
+              ...order,
+              products: (order.products || []).map(p => {
+                const oldImg = p.image || p.productImage;
+                const pid = p.productId;
+                if (pid && isBase64(oldImg) && (!workorderImages || !workorderImages[pid])) {
+                  // 비동기 IndexedDB 저장 (백그라운드)
+                  if (typeof setWorkorderImage === 'function') {
+                    setWorkorderImage(pid, oldImg).catch(()=>{});
+                    migrated++;
+                  }
+                }
+                const {image, productImage, ...rest} = p;
+                return {
+                  ...rest,
+                  ...(image && !isBase64(image) ? {image} : {}),
+                  ...(productImage && !isBase64(productImage) ? {productImage} : {})
+                };
+              })
+            }));
+            try {
+              localStorage.setItem('plating_history', JSON.stringify(lightHistory));
+              setHistory(lightHistory);
+              localStorage.setItem('history_image_migrated_v1', '1');
+              if (migrated > 0) console.log(`[history] base64 이미지 ${migrated}개 → workorder_images로 이전 + history 경량화`);
+            } catch (e) { console.error('마이그레이션 저장 실패:', e); }
+          }, [workorderImages]);
+
+          // 💠 v20260518: 제품 이미지 lookup 헬퍼 (history → workorderImages → 9-1 마스터 순)
+          const getProductImage = (product) => {
+            if (!product) return '';
+            if (product.image && typeof product.image === 'string' && product.image.startsWith('data:image/')) return product.image;
+            if (product.productImage && typeof product.productImage === 'string' && product.productImage.startsWith('data:image/')) return product.productImage;
+            const pid = product.productId || product.id;
+            if (pid && workorderImages && workorderImages[pid]) return workorderImages[pid];
+            const master = masterProducts.find(m => String(m.id) === String(pid) || String(m.legacyProductId) === String(pid));
+            if (master?.image) return master.image;
+            return product.image || product.productImage || '';
           };
 
           const saveReceivables = (data) => {
@@ -2532,7 +2596,7 @@ ${list}` }]
 
               // 이미지 추가 (v09.10: 9-1 마스터에서 폴백, base64 검증 강화)
               // 1-2 작성 시점의 이미지가 없거나 깨졌을 경우 9-1 마스터에서 최신 이미지 사용
-              let imageSource = product.image;
+              let imageSource = getProductImage(product);
               if (!imageSource) {
                 const matchedMp = masterProducts.find(mp =>
                   String(mp.id) === String(product.productId) ||
@@ -3102,7 +3166,7 @@ ${list}` }]
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260513.01</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260518.01</div>
                   </div>
                   
                   {/* v10.06: 헬퍼/봇 상태등 */}
@@ -3268,7 +3332,7 @@ ${list}` }]
                         chinaShipments, chinaOrders, chinaOrderCandidates, chinaDebtInitial,
                         timerSettings,
                         exportDate: new Date().toISOString(),
-                        appVersion: 'v20260513.01'
+                        appVersion: 'v20260518.01'
                       };
                       const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
                       const url = URL.createObjectURL(blob);
@@ -5410,8 +5474,8 @@ ${list}` }]
                                       {order.products.map((product, productIndex) => (
                                         <div key={productIndex} className="bg-neutral-50 border border-neutral-200 p-2" style={{borderRadius:'6px'}}>
                                           <div className="flex items-center gap-2 mb-2">
-                                            {(product.productImage || product.image) ? (
-                                              <img src={product.productImage || product.image} alt={product.productName} className="w-10 h-10 object-cover border border-neutral-300 shrink-0" style={{borderRadius:'4px'}}/>
+                                            {(getProductImage(product)) ? (
+                                              <img src={getProductImage(product)} alt={product.productName} className="w-10 h-10 object-cover border border-neutral-300 shrink-0" style={{borderRadius:'4px'}}/>
                                             ) : (
                                               <div className="w-10 h-10 bg-white border border-neutral-300 flex items-center justify-center text-base shrink-0" style={{borderRadius:'4px'}}>📦</div>
                                             )}
@@ -5667,8 +5731,8 @@ ${list}` }]
                                       {order.products.map((product, productIndex) => (
                                         <div key={productIndex} className="bg-neutral-50 border border-neutral-200 p-2" style={{borderRadius:'6px'}}>
                                           <div className="flex items-center gap-2 mb-2">
-                                            {(product.productImage || product.image) ? (
-                                              <img src={product.productImage || product.image} alt={product.productName} className="w-10 h-10 object-cover border border-neutral-300 shrink-0" style={{borderRadius:'4px'}}/>
+                                            {(getProductImage(product)) ? (
+                                              <img src={getProductImage(product)} alt={product.productName} className="w-10 h-10 object-cover border border-neutral-300 shrink-0" style={{borderRadius:'4px'}}/>
                                             ) : (
                                               <div className="w-10 h-10 bg-white border border-neutral-300 flex items-center justify-center text-base shrink-0" style={{borderRadius:'4px'}}>📦</div>
                                             )}
@@ -5819,8 +5883,8 @@ ${list}` }]
                                 {order.products.map((product, productIndex) => (
                                   <div key={productIndex} className="border-b border-neutral-200 last:border-0 pb-4 last:pb-0">
                                     <div className="flex items-center gap-3 mb-3">
-                                      {product.productImage || product.image ? (
-                                        <img src={product.productImage || product.image} alt={product.productName} className="w-14 h-14 object-cover border border-neutral-300 shrink-0" style={{borderRadius:'6px'}}/>
+                                      {getProductImage(product) ? (
+                                        <img src={getProductImage(product)} alt={product.productName} className="w-14 h-14 object-cover border border-neutral-300 shrink-0" style={{borderRadius:'6px'}}/>
                                       ) : (
                                         <div className="w-14 h-14 bg-neutral-100 border border-neutral-300 flex items-center justify-center shrink-0" style={{borderRadius:'6px'}}><Package /></div>
                                       )}
