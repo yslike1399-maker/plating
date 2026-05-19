@@ -1141,7 +1141,64 @@ ${list}` }]
             setTimerSettings(data);
             try { localStorage.setItem('timer_settings', JSON.stringify(data)); } catch (e) {}
           };
-          
+
+          // 💠 v20260520.02: 10번 원가/마진 설정 디폴트 (네이버 수수료, 법인세 구간, 택배/포장 등)
+          // 락(locks)은 각 항목별 boolean. true면 UI에서 수정 불가
+          function defaultCostMarginSettings() {
+            return {
+              naverFeePct: 5,                  // 네이버 스마트스토어 수수료 %
+              shippingCharged: 3000,            // 고객 부담 택배비
+              shippingContract: 2300,           // 우리 계약 택배비
+              packagingCost: 200,               // 포장비
+              // 법인세 매출 구간 (한국 2025 기준)
+              corpTaxBracket: 'mid',            // 'low' | 'mid' | 'high' | 'top'
+              corpTaxRates: {                   // 사용자가 직접 수정 가능
+                low: 9,                         // 2억 이하
+                mid: 19,                        // 2억~200억
+                high: 21,                       // 200억~3000억
+                top: 24                         // 3000억 초과
+              },
+              vatRate: 10,                      // 부가세율 (한국 표준 10%)
+              locks: {
+                naverFeePct: false,
+                shippingCharged: false,
+                shippingContract: false,
+                packagingCost: false,
+                corpTaxBracket: false,
+                corpTaxRates: false,
+                vatRate: false
+              }
+            };
+          }
+
+          // 💠 v20260520.02: 10번 원가/마진 탭 설정값 (네이버 수수료, 법인세 구간, 택배비, 포장비 + 락)
+          const [costMarginSettings, setCostMarginSettings] = useState(() => {
+            try {
+              const raw = localStorage.getItem('cost_margin_settings');
+              if (raw) {
+                const parsed = JSON.parse(raw);
+                return { ...defaultCostMarginSettings(), ...parsed };
+              }
+            } catch (e) { console.warn('cost_margin_settings 로드 실패:', e); }
+            return defaultCostMarginSettings();
+          });
+          const saveCostMarginSettings = (data) => {
+            setCostMarginSettings(data);
+            try { localStorage.setItem('cost_margin_settings', JSON.stringify(data)); } catch (e) {}
+          };
+
+          // 💠 v20260520.02: 10번 원가/마진 옵션 마스터 (실리콘논슬립 등 추가 매출/원가)
+          const [costMarginOptions, setCostMarginOptions] = useState(() => {
+            try {
+              const raw = localStorage.getItem('cost_margin_options');
+              return raw ? JSON.parse(raw) : [];
+            } catch { return []; }
+          });
+          const saveCostMarginOptions = (data) => {
+            setCostMarginOptions(data);
+            try { localStorage.setItem('cost_margin_options', JSON.stringify(data)); } catch (e) {}
+          };
+
           // 🟦 v20260502.11: 멜로디 재생 (Web Audio API)
           const playMelody = (type = 'chime') => {
             try {
@@ -3166,7 +3223,7 @@ ${list}` }]
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260518.01</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260520.02</div>
                   </div>
                   
                   {/* v10.06: 헬퍼/봇 상태등 */}
@@ -3188,7 +3245,7 @@ ${list}` }]
                   </button>
                 </div>
 
-                {/* 메인 탭 1~12 */}
+                {/* 메인 탭 1~14 */}
                 <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
                   {/* 대시보드 */}
                   <button
@@ -3212,10 +3269,11 @@ ${list}` }]
                     ['china', '중국발주', '7'],
                     ['memo', '중요메모기록', '8'],
                     ['productMgmt', '상품관리', '9'],
-                    ['fixedExpense', '고정지출', '10'],
-                    ['subsidy', '정부/지자체 지원사업', '11'],
-                    ['userMgmt', '설정', '12'],
-                    ['changeLog', '변경이력', '13'],
+                    ['costMargin', '원가/마진', '10'],
+                    ['fixedExpense', '고정지출', '11'],
+                    ['subsidy', '정부/지자체 지원사업', '12'],
+                    ['userMgmt', '설정', '13'],
+                    ['changeLog', '변경이력', '14'],
                   ].map(([tab, label, num]) => {
                     const hasUnreportedBonus = tab === 'salary' && salaryRecords.some(r => {
                       const paid = salaryPayments.filter(p => p.salaryRecordId === r.id).reduce((s, p) => s + p.amount, 0);
@@ -3331,8 +3389,10 @@ ${list}` }]
                         // 💠 v20260513: 7번 중국 발주 + 알림 설정 누락분 보완
                         chinaShipments, chinaOrders, chinaOrderCandidates, chinaDebtInitial,
                         timerSettings,
+                        // 💠 v20260520.02: 10번 원가/마진 설정 + 옵션 마스터
+                        costMarginSettings, costMarginOptions,
                         exportDate: new Date().toISOString(),
-                        appVersion: 'v20260518.01'
+                        appVersion: 'v20260520.02'
                       };
                       const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
                       const url = URL.createObjectURL(blob);
@@ -3425,6 +3485,9 @@ ${list}` }]
                             if (data.chinaOrderCandidates) saveChinaOrderCandidates(data.chinaOrderCandidates);
                             if (typeof data.chinaDebtInitial === 'number') saveChinaDebtInitial(data.chinaDebtInitial);
                             if (data.timerSettings) saveTimerSettings(data.timerSettings);
+                            // 💠 v20260520.02: 10번 원가/마진 설정 + 옵션 마스터 복원
+                            if (data.costMarginSettings) saveCostMarginSettings({ ...defaultCostMarginSettings(), ...data.costMarginSettings });
+                            if (Array.isArray(data.costMarginOptions)) saveCostMarginOptions(data.costMarginOptions);
                             // 💠 v20260513: 1-2 작업지시서 이미지 매핑 IndexedDB 복원 (PC 간 동기화)
                             if (data.workorderImages && typeof data.workorderImages === 'object') {
                               (async () => {
@@ -14485,6 +14548,55 @@ ${list}` }]
                                           </div>
                                         )}
 
+                                        {/* 💠 v20260520.02 Phase 2A-1: 판매가 (기본 + 색상별 오버라이드) */}
+                                        <div className="bg-neutral-50 border border-neutral-300 p-3" style={{borderRadius:'2px'}}>
+                                          <label className="block text-[11px] font-bold text-black mb-2 uppercase tracking-wider">💰 판매가</label>
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-[11px] font-bold text-neutral-700 w-24 shrink-0">기본 판매가</span>
+                                            <input type="number" min="0" step="100"
+                                              value={form.defaultSalePrice ?? ''}
+                                              onChange={e=>{
+                                                const v = e.target.value;
+                                                setForm(p=>({...p, defaultSalePrice: v === '' ? null : Number(v)}));
+                                              }}
+                                              placeholder="예: 12000"
+                                              className="flex-1 px-2 py-1.5 border border-neutral-300 focus:border-black outline-none text-sm text-right font-mono"
+                                              style={{borderRadius:'2px'}}/>
+                                            <span className="text-[11px] font-bold text-neutral-500 w-4">원</span>
+                                          </div>
+                                          {(form.colors||[]).length > 0 && (
+                                            <div className="mt-3 pt-3 border-t border-neutral-200">
+                                              <div className="text-[10px] font-black text-neutral-600 mb-2 uppercase tracking-wider">
+                                                색상별 예외 단가 <span className="font-normal normal-case tracking-normal text-neutral-400">(비우면 기본가 적용)</span>
+                                              </div>
+                                              <div className="space-y-1">
+                                                {(form.colors||[]).map(c => {
+                                                  const override = (form.salePriceOverrides||{})[c];
+                                                  return (
+                                                    <div key={c} className="flex items-center gap-2">
+                                                      <span className="text-[11px] text-neutral-700 w-32 shrink-0 truncate" title={c}>{c}</span>
+                                                      <input type="number" min="0" step="100"
+                                                        value={override == null ? '' : override}
+                                                        onChange={e=>{
+                                                          const v = e.target.value;
+                                                          setForm(p=>{
+                                                            const next = {...(p.salePriceOverrides||{})};
+                                                            if (v === '') delete next[c];
+                                                            else next[c] = Number(v);
+                                                            return {...p, salePriceOverrides: next};
+                                                          });
+                                                        }}
+                                                        placeholder="기본가"
+                                                        className="flex-1 px-2 py-1 border border-neutral-300 focus:border-black outline-none text-xs text-right font-mono"
+                                                        style={{borderRadius:'2px'}}/>
+                                                      <span className="text-[10px] font-bold text-neutral-500 w-4">원</span>
+                                                    </div>
+                                                  );
+                                                })}
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
                                         <div>
                                           <label className="block text-[11px] font-bold text-black mb-2 uppercase tracking-wider">메모</label>
                                           <input type="text" value={form.memo||''} onChange={e=>setForm(p=>({...p,memo:e.target.value}))}
@@ -14518,6 +14630,9 @@ ${list}` }]
                                         platingCosts: form.platingCosts||{},
                                         // v10.03: 색상별 도금단가 (신규 - 도금공장 청구 매칭용)
                                         colorPlatingCosts: form.colorPlatingCosts||{},
+                                        // 💠 v20260520.02 Phase 2A-1: 판매가 (기본 + 색상별 오버라이드)
+                                        defaultSalePrice: typeof form.defaultSalePrice === 'number' ? form.defaultSalePrice : null,
+                                        salePriceOverrides: form.salePriceOverrides || {},
                                         hasFabricInfo: form.type === 'gocchang' ? (form.hasFabricInfo !== false) : undefined,
                                         fabricMemo: form.fabricMemo||'',
                                         fabricSupplierId: form.fabricSupplierId||'',
@@ -14676,7 +14791,7 @@ ${list}` }]
                                       </div>
                                     ) : (
                                       <div className="bg-amber-50 border border-amber-300 p-3 text-[11px] text-amber-800 font-bold" style={{borderRadius:'2px'}}>
-                                        ⚠️ 위 {counts.total}건의 데이터에서 상품명이 일괄 변경됩니다. 변경이력은 13번 탭에서 확인할 수 있습니다.
+                                        ⚠️ 위 {counts.total}건의 데이터에서 상품명이 일괄 변경됩니다. 변경이력은 14번 탭에서 확인할 수 있습니다.
                                       </div>
                                     )}
                                   </div>
@@ -16481,6 +16596,364 @@ ${list}` }]
                   </div>
                 )}
 
+                {/* 원가/마진 탭 (v20260520.02 신규 - Phase 1/2B) */}
+                {activeMainTab === 'costMargin' && (() => {
+                  const cms = costMarginSettings;
+                  const locks = cms.locks || {};
+                  const updateCms = (patch) => saveCostMarginSettings({ ...cms, ...patch });
+                  const toggleLock = (key) => saveCostMarginSettings({
+                    ...cms,
+                    locks: { ...locks, [key]: !locks[key] }
+                  });
+                  const onNumChange = (key, raw) => {
+                    if (locks[key]) return;
+                    const v = raw === '' ? 0 : Number(raw);
+                    if (Number.isFinite(v) && v >= 0) updateCms({ [key]: v });
+                  };
+                  const lockBtn = (key) => (
+                    <button
+                      type="button"
+                      onClick={() => toggleLock(key)}
+                      title={locks[key] ? '잠금 해제' : '잠금'}
+                      className={`shrink-0 w-7 h-7 flex items-center justify-center text-sm border-2 transition-all ${locks[key] ? 'bg-black text-white border-black' : 'bg-white text-neutral-400 border-neutral-300 hover:border-black hover:text-black'}`}
+                      style={{borderRadius:'2px'}}
+                    >
+                      {locks[key] ? '🔒' : '🔓'}
+                    </button>
+                  );
+                  const corpTaxRate = (cms.corpTaxRates || {})[cms.corpTaxBracket] || 19;
+                  const bracketLabel = {
+                    low: '2억 이하',
+                    mid: '2억~200억',
+                    high: '200억~3000억',
+                    top: '3000억 초과'
+                  };
+
+                  return (
+                  <div className="flex-1 px-6 py-8">
+                    <div className="max-w-5xl mx-auto space-y-6">
+                      {/* 헤더 */}
+                      <div className="flex items-center justify-between border-b-2 border-black pb-4">
+                        <div>
+                          <h1 className="text-3xl font-black tracking-tight text-black uppercase">10. 원가/마진</h1>
+                          <p className="text-xs text-neutral-500 mt-1 tracking-widest">COST &amp; MARGIN ANALYSIS</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => alert('🔗 상품명 매칭\n\nPhase 5에서 구현 예정입니다.\n엑셀 상품명 ↔ 9-1 상품 매핑 테이블')}
+                          className="px-3 py-1.5 text-[11px] font-black uppercase tracking-widest bg-white border-2 border-black text-black hover:bg-black hover:text-white transition-all"
+                          style={{borderRadius:'2px'}}
+                        >
+                          🔗 상품명매칭
+                        </button>
+                      </div>
+
+                      {/* 세금/수수료 설정 카드 */}
+                      <div className="bg-white border-2 border-black p-5" style={{borderRadius:'6px'}}>
+                        <div className="flex items-center justify-between mb-4">
+                          <div>
+                            <div className="text-sm font-black tracking-widest uppercase text-black">💰 세금/수수료 설정</div>
+                            <div className="text-[10px] text-neutral-500 tracking-wider mt-0.5">FEES, TAX &amp; SHIPPING</div>
+                          </div>
+                          <div className="text-[10px] text-neutral-500 tracking-wider">🔒 잠금 = 수정 불가</div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
+                          {/* 네이버 수수료 */}
+                          <div className="flex items-center gap-2">
+                            <label className="w-32 text-xs font-bold text-neutral-700 shrink-0">네이버 수수료</label>
+                            <input
+                              type="number"
+                              step="0.1"
+                              min="0"
+                              max="100"
+                              disabled={locks.naverFeePct}
+                              value={cms.naverFeePct}
+                              onChange={(e) => onNumChange('naverFeePct', e.target.value)}
+                              className={`flex-1 border-2 border-neutral-300 px-2 py-1.5 text-sm text-right font-mono focus:border-black focus:outline-none ${locks.naverFeePct ? 'bg-neutral-100 text-neutral-400' : 'bg-white'}`}
+                              style={{borderRadius:'2px'}}
+                            />
+                            <span className="text-xs font-bold text-neutral-500 w-4">%</span>
+                            {lockBtn('naverFeePct')}
+                          </div>
+
+                          {/* 부가세율 */}
+                          <div className="flex items-center gap-2">
+                            <label className="w-32 text-xs font-bold text-neutral-700 shrink-0">부가세율</label>
+                            <input
+                              type="number"
+                              step="0.1"
+                              min="0"
+                              max="100"
+                              disabled={locks.vatRate}
+                              value={cms.vatRate}
+                              onChange={(e) => onNumChange('vatRate', e.target.value)}
+                              className={`flex-1 border-2 border-neutral-300 px-2 py-1.5 text-sm text-right font-mono focus:border-black focus:outline-none ${locks.vatRate ? 'bg-neutral-100 text-neutral-400' : 'bg-white'}`}
+                              style={{borderRadius:'2px'}}
+                            />
+                            <span className="text-xs font-bold text-neutral-500 w-4">%</span>
+                            {lockBtn('vatRate')}
+                          </div>
+
+                          {/* 택배비 (고객 부담) */}
+                          <div className="flex items-center gap-2">
+                            <label className="w-32 text-xs font-bold text-neutral-700 shrink-0">택배비 (고객)</label>
+                            <input
+                              type="number"
+                              step="100"
+                              min="0"
+                              disabled={locks.shippingCharged}
+                              value={cms.shippingCharged}
+                              onChange={(e) => onNumChange('shippingCharged', e.target.value)}
+                              className={`flex-1 border-2 border-neutral-300 px-2 py-1.5 text-sm text-right font-mono focus:border-black focus:outline-none ${locks.shippingCharged ? 'bg-neutral-100 text-neutral-400' : 'bg-white'}`}
+                              style={{borderRadius:'2px'}}
+                            />
+                            <span className="text-xs font-bold text-neutral-500 w-4">원</span>
+                            {lockBtn('shippingCharged')}
+                          </div>
+
+                          {/* 택배비 (계약) */}
+                          <div className="flex items-center gap-2">
+                            <label className="w-32 text-xs font-bold text-neutral-700 shrink-0">택배비 (계약)</label>
+                            <input
+                              type="number"
+                              step="100"
+                              min="0"
+                              disabled={locks.shippingContract}
+                              value={cms.shippingContract}
+                              onChange={(e) => onNumChange('shippingContract', e.target.value)}
+                              className={`flex-1 border-2 border-neutral-300 px-2 py-1.5 text-sm text-right font-mono focus:border-black focus:outline-none ${locks.shippingContract ? 'bg-neutral-100 text-neutral-400' : 'bg-white'}`}
+                              style={{borderRadius:'2px'}}
+                            />
+                            <span className="text-xs font-bold text-neutral-500 w-4">원</span>
+                            {lockBtn('shippingContract')}
+                          </div>
+
+                          {/* 포장비 */}
+                          <div className="flex items-center gap-2">
+                            <label className="w-32 text-xs font-bold text-neutral-700 shrink-0">포장비</label>
+                            <input
+                              type="number"
+                              step="50"
+                              min="0"
+                              disabled={locks.packagingCost}
+                              value={cms.packagingCost}
+                              onChange={(e) => onNumChange('packagingCost', e.target.value)}
+                              className={`flex-1 border-2 border-neutral-300 px-2 py-1.5 text-sm text-right font-mono focus:border-black focus:outline-none ${locks.packagingCost ? 'bg-neutral-100 text-neutral-400' : 'bg-white'}`}
+                              style={{borderRadius:'2px'}}
+                            />
+                            <span className="text-xs font-bold text-neutral-500 w-4">원</span>
+                            {lockBtn('packagingCost')}
+                          </div>
+
+                          {/* 택배차액 (자동 계산) */}
+                          <div className="flex items-center gap-2">
+                            <label className="w-32 text-xs font-bold text-neutral-500 shrink-0">택배차액 <span className="font-normal">(자동)</span></label>
+                            <div className="flex-1 border-2 border-dashed border-neutral-300 px-2 py-1.5 text-sm text-right font-mono bg-neutral-50 text-neutral-700">
+                              {((cms.shippingCharged||0) - (cms.shippingContract||0)).toLocaleString()}
+                            </div>
+                            <span className="text-xs font-bold text-neutral-500 w-4">원</span>
+                            <span className="shrink-0 w-7 h-7"></span>
+                          </div>
+                        </div>
+
+                        {/* 법인세 매출구간 */}
+                        <div className="mt-5 pt-4 border-t border-neutral-200">
+                          <div className="flex items-center justify-between mb-3">
+                            <label className="text-xs font-black uppercase tracking-widest text-neutral-700">📊 법인세 매출구간</label>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-neutral-500">현재 적용: <span className="text-black font-black">{corpTaxRate}%</span></span>
+                              {lockBtn('corpTaxBracket')}
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                            {['low', 'mid', 'high', 'top'].map(key => {
+                              const active = cms.corpTaxBracket === key;
+                              const rate = (cms.corpTaxRates || {})[key];
+                              return (
+                                <button
+                                  key={key}
+                                  type="button"
+                                  disabled={locks.corpTaxBracket}
+                                  onClick={() => updateCms({ corpTaxBracket: key })}
+                                  className={`p-3 border-2 text-left transition-all ${
+                                    active
+                                      ? 'bg-black text-white border-black'
+                                      : locks.corpTaxBracket
+                                        ? 'bg-neutral-50 text-neutral-400 border-neutral-200 cursor-not-allowed'
+                                        : 'bg-white text-neutral-700 border-neutral-300 hover:border-black hover:text-black'
+                                  }`}
+                                  style={{borderRadius:'2px'}}
+                                >
+                                  <div className="text-[10px] font-bold opacity-70 tracking-wider uppercase">{bracketLabel[key]}</div>
+                                  <div className="text-lg font-black mt-0.5">{rate}%</div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 옵션 마스터 카드 */}
+                      <div className="bg-white border-2 border-black p-5" style={{borderRadius:'6px'}}>
+                        <div className="flex items-center justify-between mb-4">
+                          <div>
+                            <div className="text-sm font-black tracking-widest uppercase text-black">🎀 옵션 마스터</div>
+                            <div className="text-[10px] text-neutral-500 tracking-wider mt-0.5">실리콘논슬립, 핀대업그레이드 등 추가 옵션</div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const name = prompt('옵션 이름 (예: 실리콘논슬립)');
+                              if (!name || !name.trim()) return;
+                              if (costMarginOptions.some(o => o.name === name.trim())) {
+                                alert('이미 같은 이름의 옵션이 있습니다.');
+                                return;
+                              }
+                              const addRevenueRaw = prompt(`"${name.trim()}" 추가 매출 (원) - 0이면 참고문구`, '0');
+                              if (addRevenueRaw === null) return;
+                              const addCostRaw = prompt(`"${name.trim()}" 추가 원가 (원, 부가세 포함)`, '0');
+                              if (addCostRaw === null) return;
+                              saveCostMarginOptions([
+                                ...costMarginOptions,
+                                {
+                                  id: Date.now(),
+                                  name: name.trim(),
+                                  addRevenue: Number(addRevenueRaw) || 0,
+                                  addCost: Number(addCostRaw) || 0,
+                                  locked: false
+                                }
+                              ]);
+                            }}
+                            className="px-3 py-1.5 text-[11px] font-black uppercase tracking-widest bg-black text-white border-2 border-black hover:bg-white hover:text-black transition-all"
+                            style={{borderRadius:'2px'}}
+                          >
+                            + 옵션 추가
+                          </button>
+                        </div>
+
+                        {costMarginOptions.length === 0 ? (
+                          <div className="text-center text-xs text-neutral-400 font-bold py-8 border-2 border-dashed border-neutral-200" style={{borderRadius:'4px'}}>
+                            등록된 옵션이 없습니다.<br/>[+ 옵션 추가] 버튼을 눌러 시작하세요.
+                          </div>
+                        ) : (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-xs">
+                              <thead>
+                                <tr className="border-b-2 border-black">
+                                  <th className="text-left py-2 px-2 font-black uppercase tracking-widest text-neutral-600">옵션명</th>
+                                  <th className="text-right py-2 px-2 font-black uppercase tracking-widest text-neutral-600">추가매출</th>
+                                  <th className="text-right py-2 px-2 font-black uppercase tracking-widest text-neutral-600">추가원가</th>
+                                  <th className="text-right py-2 px-2 font-black uppercase tracking-widest text-neutral-600">단위마진</th>
+                                  <th className="text-center py-2 px-2 font-black uppercase tracking-widest text-neutral-600 w-20">잠금</th>
+                                  <th className="text-center py-2 px-2 font-black uppercase tracking-widest text-neutral-600 w-16"></th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {costMarginOptions.map(opt => {
+                                  const unitMargin = (opt.addRevenue || 0) - (opt.addCost || 0);
+                                  return (
+                                    <tr key={opt.id} className="border-b border-neutral-200 hover:bg-neutral-50">
+                                      <td className="py-2 px-2 font-bold text-black">{opt.name}</td>
+                                      <td className="py-2 px-2 text-right font-mono">
+                                        <input
+                                          type="number"
+                                          disabled={opt.locked}
+                                          value={opt.addRevenue || 0}
+                                          onChange={(e) => {
+                                            if (opt.locked) return;
+                                            const v = Number(e.target.value) || 0;
+                                            saveCostMarginOptions(costMarginOptions.map(o => o.id === opt.id ? { ...o, addRevenue: v } : o));
+                                          }}
+                                          className={`w-24 border border-neutral-300 px-1 py-0.5 text-right font-mono text-xs ${opt.locked ? 'bg-neutral-100 text-neutral-400' : ''}`}
+                                          style={{borderRadius:'2px'}}
+                                        />
+                                      </td>
+                                      <td className="py-2 px-2 text-right font-mono">
+                                        <input
+                                          type="number"
+                                          disabled={opt.locked}
+                                          value={opt.addCost || 0}
+                                          onChange={(e) => {
+                                            if (opt.locked) return;
+                                            const v = Number(e.target.value) || 0;
+                                            saveCostMarginOptions(costMarginOptions.map(o => o.id === opt.id ? { ...o, addCost: v } : o));
+                                          }}
+                                          className={`w-24 border border-neutral-300 px-1 py-0.5 text-right font-mono text-xs ${opt.locked ? 'bg-neutral-100 text-neutral-400' : ''}`}
+                                          style={{borderRadius:'2px'}}
+                                        />
+                                      </td>
+                                      <td className={`py-2 px-2 text-right font-mono font-black ${unitMargin >= 0 ? 'text-black' : 'text-red-600'}`}>
+                                        {unitMargin.toLocaleString()}원
+                                      </td>
+                                      <td className="py-2 px-2 text-center">
+                                        <button
+                                          type="button"
+                                          onClick={() => saveCostMarginOptions(costMarginOptions.map(o => o.id === opt.id ? { ...o, locked: !o.locked } : o))}
+                                          className={`w-7 h-7 inline-flex items-center justify-center border-2 text-sm ${opt.locked ? 'bg-black text-white border-black' : 'bg-white border-neutral-300 hover:border-black'}`}
+                                          style={{borderRadius:'2px'}}
+                                        >
+                                          {opt.locked ? '🔒' : '🔓'}
+                                        </button>
+                                      </td>
+                                      <td className="py-2 px-2 text-center">
+                                        <button
+                                          type="button"
+                                          disabled={opt.locked}
+                                          onClick={() => {
+                                            if (opt.locked) return;
+                                            if (confirm(`"${opt.name}" 옵션을 삭제하시겠습니까?`)) {
+                                              saveCostMarginOptions(costMarginOptions.filter(o => o.id !== opt.id));
+                                            }
+                                          }}
+                                          className={`text-xs font-black ${opt.locked ? 'text-neutral-300 cursor-not-allowed' : 'text-red-600 hover:text-red-800'}`}
+                                        >
+                                          삭제
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+
+                        <div className="mt-3 text-[10px] text-neutral-500 tracking-wider leading-relaxed">
+                          • 추가매출 = 옵션 추가 시 고객에게 받는 금액 (예: 실리콘논슬립 +1000원)<br/>
+                          • 추가원가 = 그 옵션 제공에 드는 원가 (부가세 포함, 도금 없음)<br/>
+                          • 추가매출이 0이면 단순 참고문구로 취급 (Phase 5 매칭 시 무시)
+                        </div>
+                      </div>
+
+                      {/* Phase 진행 상황 */}
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        {[
+                          ['Phase 1', '탭 골격', true],
+                          ['Phase 2B', '세금/옵션 설정', true],
+                          ['Phase 2A-1', '판매가 (기본+색상별)', true],
+                          ['Phase 2A-2', '매입가/부가세 라벨', false],
+                          ['Phase 2A-3', '금형비 필드', false],
+                          ['Phase 3', '제품별 마진 계산기', false],
+                          ['Phase 4', '금형비 회수 / BEP', false],
+                          ['Phase 5', '엑셀 업로드 일마진', false],
+                        ].map(([phase, label, done]) => (
+                          <div
+                            key={phase}
+                            className={`p-3 border-2 ${done ? 'bg-black text-white border-black' : 'bg-white text-neutral-400 border-neutral-300'}`}
+                            style={{borderRadius:'6px'}}
+                          >
+                            <div className="text-[10px] font-black tracking-widest uppercase opacity-70">{phase}</div>
+                            <div className="text-sm font-bold mt-0.5">{label}</div>
+                            <div className="text-[10px] mt-1 opacity-80">{done ? '✓ 완료' : '대기'}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  );
+                })()}
+
                 {/* 고정지출 탭 */}
                 {activeMainTab === 'fixedExpense' && (
                   <div className="flex-1 px-6 py-8">
@@ -16491,11 +16964,11 @@ ${list}` }]
                       <div className="bg-white rounded-2xl border border-slate-200 p-2 flex gap-2">
                         <button onClick={() => setFixedExpenseTab('life')}
                           className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all ${fixedExpenseTab==='life'?'bg-rose-500 text-white shadow':'text-slate-500 hover:bg-slate-100'}`}>
-                          🏠 10-1 생활비 고정지출
+                          🏠 11-1 생활비 고정지출
                         </button>
                         <button onClick={() => setFixedExpenseTab('biz')}
                           className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all ${fixedExpenseTab==='biz'?'bg-blue-600 text-white shadow':'text-slate-500 hover:bg-slate-100'}`}>
-                          🏢 10-2 사업 고정지출
+                          🏢 11-2 사업 고정지출
                         </button>
                       </div>
 
@@ -17321,7 +17794,7 @@ ${list}` }]
                   </div>
                 )}
 
-                {/* 13번 변경이력 (v10.01) */}
+                {/* 14번 변경이력 (v10.01) */}
                 {activeMainTab === 'changeLog' && (
                   <main className="flex-1 px-6 py-6">
                     <div className="space-y-4">
