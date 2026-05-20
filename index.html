@@ -1219,6 +1219,15 @@ ${list}` }]
           // 💠 v20260521.01 Phase 5-B-2-a: 누적 일별 결과 카드의 상세 토글
           const [expandedDailyKey, setExpandedDailyKey] = useState(null);
 
+          // 💠 v20260521.02 Phase 3: 제품별 마진 계산기 입력값 (모두 메모리만, 저장 안 함)
+          const [pmcProductId, setPmcProductId] = useState('');
+          const [pmcColor, setPmcColor] = useState('');
+          const [pmcOptionIds, setPmcOptionIds] = useState([]);
+          const [pmcQty, setPmcQty] = useState(1);
+          // 사용자가 판매가를 임의로 수정하면 여기에 저장 (null이면 9-1 단가 자동 사용)
+          const [pmcSalePriceOverride, setPmcSalePriceOverride] = useState(null);
+          const [pmcChannel, setPmcChannel] = useState('smartstore');
+
           // 💠 v20260521.01 Phase 5-B-2-a: 일별 마진 결과 누적 저장
           // 키: YYYY-MM-DD (저장 시점 엑셀의 발송일자)
           // 값: { fileName, dateRange, channels:{smartstore:{...},...}, total:{...}, savedAt }
@@ -3272,7 +3281,7 @@ ${list}` }]
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260521.01</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260521.07</div>
                   </div>
                   
                   {/* v10.06: 헬퍼/봇 상태등 */}
@@ -14198,9 +14207,10 @@ ${list}` }]
                                           </div>
                                         </div>
 
-                                        {form.type === 'hairpin' && (
+                                        {/* 💠 v20260521.04: 셀룰로오스도 집게핀(헤어핀)과 동일 부속 구조 */}
+                                        {(form.type === 'hairpin' || form.type === 'cellulose') && (
                                           <div className="bg-neutral-50 border border-neutral-300 p-3 space-y-3" style={{borderRadius:'2px'}}>
-                                            <div className="text-[11px] font-bold text-black mb-1 uppercase tracking-wider border-b border-neutral-300 pb-2">헤어핀 전용 · 도금 속성</div>
+                                            <div className="text-[11px] font-bold text-black mb-1 uppercase tracking-wider border-b border-neutral-300 pb-2">집게핀 ({form.type === 'cellulose' ? '셀룰로오스' : '헤어핀'}) · 도금 / 연마 / 다이케스팅</div>
 
                                             <div>
                                               <label className="flex items-center gap-2 cursor-pointer">
@@ -14211,12 +14221,22 @@ ${list}` }]
                                               </label>
                                             </div>
 
-                                            <div>
-                                              <label className="block text-[10px] font-bold text-neutral-600 mb-1 uppercase tracking-wider">연마 원가 <span className="text-[9px] text-neutral-500 normal-case tracking-normal font-medium">(부가세 별도)</span></label>
-                                              <input type="number" value={form.grindCost||''}
-                                                onChange={e=>setForm(p=>({...p, grindCost: e.target.value}))}
-                                                placeholder="원 (도금공장 청구 매칭용)"
-                                                className="w-full px-2 py-1.5 border border-neutral-300 focus:border-black outline-none text-sm bg-white" style={{borderRadius:'2px'}}/>
+                                            <div className="grid grid-cols-2 gap-2">
+                                              <div>
+                                                <label className="block text-[10px] font-bold text-neutral-600 mb-1 uppercase tracking-wider">연마 원가 <span className="text-[9px] text-neutral-500 normal-case tracking-normal font-medium">(부가세 별도)</span></label>
+                                                <input type="number" value={form.grindCost||''}
+                                                  onChange={e=>setForm(p=>({...p, grindCost: e.target.value}))}
+                                                  placeholder="원 (도금공장 청구 매칭용)"
+                                                  className="w-full px-2 py-1.5 border border-neutral-300 focus:border-black outline-none text-sm bg-white" style={{borderRadius:'2px'}}/>
+                                              </div>
+                                              {/* 💠 v20260521.03 Phase 3-fix: 다이케스팅 원가 */}
+                                              <div>
+                                                <label className="block text-[10px] font-bold text-neutral-600 mb-1 uppercase tracking-wider">다이케스팅 원가 <span className="text-[9px] text-neutral-500 normal-case tracking-normal font-medium">(부가세 별도)</span></label>
+                                                <input type="number" value={form.dieCastingCost||''}
+                                                  onChange={e=>setForm(p=>({...p, dieCastingCost: e.target.value}))}
+                                                  placeholder="원 (상품 1개당)"
+                                                  className="w-full px-2 py-1.5 border border-neutral-300 focus:border-black outline-none text-sm bg-white" style={{borderRadius:'2px'}}/>
+                                              </div>
                                             </div>
 
                                             {/* v10.03: 색상카드의 도금 단가 요약 (읽기전용) */}
@@ -14605,6 +14625,39 @@ ${list}` }]
                                           </div>
                                         )}
 
+                                        {/* 💠 v20260521.04 정정: 봉재공임/라벨은 곱창밴드만 (셀룰로오스는 집게핀 그룹) */}
+                                        {form.type === 'gocchang' && (
+                                          <div className="bg-neutral-50 border border-neutral-300 p-3 space-y-3" style={{borderRadius:'2px'}}>
+                                            <div className="text-[11px] font-bold text-black mb-1 uppercase tracking-wider border-b border-neutral-300 pb-2">곱창밴드 · 공임 / 라벨 원가</div>
+                                            <div>
+                                              <label className="block text-[10px] font-bold text-neutral-600 mb-1 uppercase tracking-wider">봉재공임 <span className="text-[9px] text-neutral-500 normal-case tracking-normal font-medium">(부가세 별도 · 상품 1개당)</span></label>
+                                              <input type="number" value={form.sewingCost||''}
+                                                onChange={e=>setForm(p=>({...p, sewingCost: e.target.value}))}
+                                                placeholder="원"
+                                                className="w-full px-2 py-1.5 border border-neutral-300 focus:border-black outline-none text-sm bg-white" style={{borderRadius:'2px'}}/>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-2">
+                                              <div>
+                                                <label className="block text-[10px] font-bold text-neutral-600 mb-1 uppercase tracking-wider">일반라벨 <span className="text-[9px] text-neutral-500 normal-case tracking-normal font-medium">(부가세 별도)</span></label>
+                                                <input type="number" value={form.labelPlainCost||''}
+                                                  onChange={e=>setForm(p=>({...p, labelPlainCost: e.target.value}))}
+                                                  placeholder="원 (0=미사용)"
+                                                  className="w-full px-2 py-1.5 border border-neutral-300 focus:border-black outline-none text-sm bg-white" style={{borderRadius:'2px'}}/>
+                                              </div>
+                                              <div>
+                                                <label className="block text-[10px] font-bold text-neutral-600 mb-1 uppercase tracking-wider">금속라벨 <span className="text-[9px] text-neutral-500 normal-case tracking-normal font-medium">(부가세 별도)</span></label>
+                                                <input type="number" value={form.labelMetalCost||''}
+                                                  onChange={e=>setForm(p=>({...p, labelMetalCost: e.target.value}))}
+                                                  placeholder="원 (0=미사용)"
+                                                  className="w-full px-2 py-1.5 border border-neutral-300 focus:border-black outline-none text-sm bg-white" style={{borderRadius:'2px'}}/>
+                                              </div>
+                                            </div>
+                                            <div className="text-[10px] text-neutral-500">
+                                              💡 두 라벨 모두 입력하면 함께 합산됩니다. 한쪽만 쓰는 상품은 사용 안 하는 쪽을 0(또는 빈칸)으로 둬요.
+                                            </div>
+                                          </div>
+                                        )}
+
                                         {/* 💠 v20260520.02 Phase 2A-1: 판매가 (기본 + 색상별 오버라이드) */}
                                         {/* 💠 v20260520.03 Phase 2A-2: (부가세 포함) 라벨 + 부가세 일괄 적용 안내 */}
                                         <div className="bg-neutral-50 border border-neutral-300 p-3" style={{borderRadius:'2px'}}>
@@ -14686,6 +14739,12 @@ ${list}` }]
                                         grindRequired: form.grindRequired||false,
                                         image: form.image||null,
                                         grindCost: form.grindCost||'',
+                                        // 💠 v20260521.03 Phase 3-fix: 다이케스팅 원가 (헤어핀 전용, 상품별 1개당)
+                                        dieCastingCost: form.dieCastingCost||'',
+                                        // 💠 v20260521.03 Phase 3-fix: 봉재공임/라벨 (곱창·셀룰로오스, 상품별)
+                                        sewingCost: form.sewingCost||'',
+                                        labelPlainCost: form.labelPlainCost||'',
+                                        labelMetalCost: form.labelMetalCost||'',
                                         // v10.03: 사출/스프링/핀대는 UI에서 제거되었으나 기존 데이터 보존 (레거시)
                                         injectionCost: form.injectionCost||'',
                                         springCost: form.springCost||'',
@@ -16886,24 +16945,32 @@ ${list}` }]
                     return Number(product.defaultSalePrice) || 0;
                   };
 
+                  // 💠 v20260521.04 정정: 집게핀(헤어핀/셀룰로오스) 공통 부속 — 전부 동일 적용
+                  const SPRING_COST = 100;  // 스프링 (집게핀 1개당)
+                  const PIN_COST = 200;     // 핀대 (집게핀 1개당)
+
                   // 9-1 상품에서 색상별 본 상품 원가(VAT 별도) 추출
-                  // · 헤어핀: colorPlatingCosts[색상] + (grindRequired ? grindCost : 0)
-                  // · 곱창밴드/셀룰로오스: yardsPerUnit × fabricPrice
-                  // · 기타: 0
+                  // 💠 v20260521.04 정정: 셀룰로오스를 집게핀 그룹으로 이동, 스프링/핀대 자동 가산
+                  // · 집게핀(헤어핀/셀룰로오스): 도금[색상] + 연마(grindRequired면) + 다이케스팅 + 스프링 + 핀대
+                  // · 곱창밴드: 원단(yardsPerUnit × fabricPrice) + 도금[색상] + 봉재공임 + 라벨일반 + 라벨금속
+                  // · 모두 부가세 별도 (Phase 2A-2 정책)
                   const getProductCostExVat = (product, color) => {
                     if (!product) return 0;
                     const cpc = product.colorPlatingCosts || {};
-                    if (product.type === 'hairpin') {
+                    if (product.type === 'hairpin' || product.type === 'cellulose') {
                       const plating = Number(cpc[color]) || 0;
                       const grind = product.grindRequired ? (Number(product.grindCost) || 0) : 0;
-                      return plating + grind;
+                      const dieCasting = Number(product.dieCastingCost) || 0;
+                      return plating + grind + dieCasting + SPRING_COST + PIN_COST;
                     }
-                    if (product.type === 'gocchang' || product.type === 'cellulose') {
+                    if (product.type === 'gocchang') {
                       const ypu = Number(product.yardsPerUnit) || 0;
                       const fp = Number(product.fabricPrice) || 0;
-                      // 곱창/셀룰로오스도 도금이 있는 케이스(셀룰로오스 복합)는 색상별 도금비도 더함
                       const plating = Number(cpc[color]) || 0;
-                      return ypu * fp + plating;
+                      const sewing = Number(product.sewingCost) || 0;
+                      const labelPlain = Number(product.labelPlainCost) || 0;
+                      const labelMetal = Number(product.labelMetalCost) || 0;
+                      return ypu * fp + plating + sewing + labelPlain + labelMetal;
                     }
                     // 기타 타입: 일단 0
                     return 0;
@@ -16933,6 +17000,8 @@ ${list}` }]
                   };
 
                   // 행(주문) 단위 마진 계산
+                  // 💠 v20260521.07: 법인세 제거 (연결산 변수가 많아 일별 분석에 부적합 — 대장님 결정).
+                  //                  부가세 납부 추가 (매출VAT − 매입VAT = 실제 납부액. 환급이면 음수)
                   const calcRowMargin = (rowSlices, channel) => {
                     // rowSlices: [{ text, ... }] — 같은 rowIdx의 조각들
                     const aliases = productNameAliases || {};
@@ -16944,13 +17013,19 @@ ${list}` }]
                     });
                     const vatRate = Number(cms.vatRate) || 0;
                     const costIncVat = costExVat * (1 + vatRate / 100);
+                    // 매출 VAT (매출에 이미 포함된 부가세) = 매출 × VAT / (100 + VAT)
+                    const salesVat = revenue * (vatRate / (100 + vatRate));
+                    // 매입 VAT = 원가(공급가) × VAT%
+                    const purchaseVat = costIncVat - costExVat;
+                    // 부가세 납부 (양수면 납부, 음수면 환급)
+                    const vatPayable = salesVat - purchaseVat;
                     const feeRate = getChannelFeeRate(channel);
                     const fee = revenue * (feeRate / 100);
                     // 배송 손익 = 고객 부담 - 우리 계약 (음수면 우리가 손실 부담)
                     const shippingNet = (Number(cms.shippingCharged) || 0) - (Number(cms.shippingContract) || 0);
                     const packaging = Number(cms.packagingCost) || 0;
-                    const netMargin = revenue - costIncVat - fee + shippingNet - packaging;
-                    return { revenue, costExVat, costIncVat, fee, shippingNet, packaging, netMargin };
+                    const netMargin = revenue - costIncVat - fee + shippingNet - packaging - vatPayable;
+                    return { revenue, costExVat, costIncVat, salesVat, purchaseVat, vatPayable, fee, shippingNet, packaging, netMargin };
                   };
 
                   // 일별 합계 (채널별 분리 + 전체)
@@ -16965,16 +17040,17 @@ ${list}` }]
                       rowMap.get(s.rowIdx).slices.push(s);
                     });
                     // 채널별 누적 + 전체 누적
-                    const empty = () => ({ orders: 0, revenue: 0, costIncVat: 0, fee: 0, shippingNet: 0, packaging: 0, netMargin: 0 });
+                    // 💠 v20260521.07: 법인세 제거, vatPayable 누적
+                    const empty = () => ({ orders: 0, revenue: 0, costIncVat: 0, vatPayable: 0, fee: 0, shippingNet: 0, packaging: 0, netMargin: 0 });
                     const byChannel = { smartstore: empty(), zigzag: empty(), kakao: empty(), etc: empty() };
                     const total = empty();
                     rowMap.forEach(({ channel, slices }) => {
                       const m = calcRowMargin(slices, channel);
                       const bucket = byChannel[channel] || byChannel.etc;
-                      ['orders'].forEach(()=>{});
                       bucket.orders += 1;
                       bucket.revenue += m.revenue;
                       bucket.costIncVat += m.costIncVat;
+                      bucket.vatPayable += m.vatPayable;
                       bucket.fee += m.fee;
                       bucket.shippingNet += m.shippingNet;
                       bucket.packaging += m.packaging;
@@ -16982,6 +17058,7 @@ ${list}` }]
                       total.orders += 1;
                       total.revenue += m.revenue;
                       total.costIncVat += m.costIncVat;
+                      total.vatPayable += m.vatPayable;
                       total.fee += m.fee;
                       total.shippingNet += m.shippingNet;
                       total.packaging += m.packaging;
@@ -17191,8 +17268,9 @@ ${list}` }]
                                 <div className="text-lg font-black text-neutral-700 mt-0.5 font-mono">{fmt(agg.total.costIncVat)}<span className="text-[10px] ml-0.5">원</span></div>
                               </div>
                               <div className="border-2 border-amber-600 p-2 text-center bg-amber-50" style={{borderRadius:'2px'}}>
-                                <div className="text-[10px] font-black tracking-widest uppercase text-amber-700">수수료+배송+포장</div>
-                                <div className="text-lg font-black text-amber-800 mt-0.5 font-mono">{fmt(agg.total.fee - agg.total.shippingNet + agg.total.packaging)}<span className="text-[10px] ml-0.5">원</span></div>
+                                <div className="text-[10px] font-black tracking-widest uppercase text-amber-700">수수료+배송+포장+VAT</div>
+                                <div className="text-lg font-black text-amber-800 mt-0.5 font-mono">{fmt(agg.total.fee - agg.total.shippingNet + agg.total.packaging + agg.total.vatPayable)}<span className="text-[10px] ml-0.5">원</span></div>
+                                <div className="text-[9px] text-amber-700 mt-0.5">(부가세 납부 {fmt(agg.total.vatPayable)})</div>
                               </div>
                               <div className={`border-2 p-2 text-center ${agg.total.netMargin >= 0 ? 'border-green-700 bg-green-50' : 'border-red-600 bg-red-50'}`} style={{borderRadius:'2px'}}>
                                 <div className={`text-[10px] font-black tracking-widest uppercase ${agg.total.netMargin >= 0 ? 'text-green-800' : 'text-red-700'}`}>순마진 ({pct(agg.total.netMargin, agg.total.revenue)})</div>
@@ -17212,6 +17290,7 @@ ${list}` }]
                                     <th className="text-right px-2 py-2">수수료</th>
                                     <th className="text-right px-2 py-2">배송손익</th>
                                     <th className="text-right px-2 py-2">포장</th>
+                                    <th className="text-right px-2 py-2">부가세 납부</th>
                                     <th className="text-right px-2 py-2">순마진</th>
                                     <th className="text-right px-2 py-2">마진율</th>
                                   </tr>
@@ -17231,6 +17310,7 @@ ${list}` }]
                                       <td className="text-right px-2 py-2 font-mono text-amber-700">{fmt(row.fee)}</td>
                                       <td className={`text-right px-2 py-2 font-mono ${row.shippingNet < 0 ? 'text-red-600' : 'text-neutral-600'}`}>{fmt(row.shippingNet)}</td>
                                       <td className="text-right px-2 py-2 font-mono text-neutral-600">{fmt(row.packaging)}</td>
+                                      <td className={`text-right px-2 py-2 font-mono ${row.vatPayable < 0 ? 'text-green-700' : 'text-purple-700'}`}>{fmt(row.vatPayable||0)}</td>
                                       <td className={`text-right px-2 py-2 font-mono ${negative(row.netMargin)}`}>{fmt(row.netMargin)}</td>
                                       <td className={`text-right px-2 py-2 font-mono font-bold ${negative(row.netMargin)}`}>{pct(row.netMargin, row.revenue)}</td>
                                     </tr>
@@ -17243,6 +17323,7 @@ ${list}` }]
                                     <td className="text-right px-2 py-2 font-mono">{fmt(agg.total.fee)}</td>
                                     <td className={`text-right px-2 py-2 font-mono ${agg.total.shippingNet < 0 ? 'text-red-600' : ''}`}>{fmt(agg.total.shippingNet)}</td>
                                     <td className="text-right px-2 py-2 font-mono">{fmt(agg.total.packaging)}</td>
+                                    <td className={`text-right px-2 py-2 font-mono ${agg.total.vatPayable < 0 ? 'text-green-700' : 'text-purple-700'}`}>{fmt(agg.total.vatPayable||0)}</td>
                                     <td className={`text-right px-2 py-2 font-mono ${negative(agg.total.netMargin)}`}>{fmt(agg.total.netMargin)}</td>
                                     <td className={`text-right px-2 py-2 font-mono ${negative(agg.total.netMargin)}`}>{pct(agg.total.netMargin, agg.total.revenue)}</td>
                                   </tr>
@@ -17256,7 +17337,9 @@ ${list}` }]
                               · 매출 = 9-1 판매가({Object.entries(productNameAliases).filter(([,a])=>a.productId).length}개 본 상품) + 옵션 추가매출<br/>
                               · 원가(VAT포함) = (도금/원단/연마/옵션) 합계 × (1 + {cms.vatRate}%)<br/>
                               · 수수료 = 매출 × {cms.naverFeePct}% (모든 채널 동일 · 추후 채널별 분리 예정)<br/>
-                              · 배송손익 = 고객부담({fmt(cms.shippingCharged)}) − 우리계약({fmt(cms.shippingContract)}) = <span className={cms.shippingCharged - cms.shippingContract < 0 ? 'text-red-600 font-bold' : 'text-black font-bold'}>{fmt(cms.shippingCharged - cms.shippingContract)}원/주문</span> · 포장비 = {fmt(cms.packagingCost)}원/주문
+                              · 배송손익 = 고객부담({fmt(cms.shippingCharged)}) − 우리계약({fmt(cms.shippingContract)}) = <span className={cms.shippingCharged - cms.shippingContract < 0 ? 'text-red-600 font-bold' : 'text-black font-bold'}>{fmt(cms.shippingCharged - cms.shippingContract)}원/주문</span> · 포장비 = {fmt(cms.packagingCost)}원/주문<br/>
+                              · <strong className="text-purple-700">부가세 납부 = 매출VAT(매출×{cms.vatRate}/110) − 매입VAT(원가공급가×{cms.vatRate}%)</strong> · 음수면 환급 (녹색 표시)<br/>
+                              · <strong className="text-neutral-700">법인세는 마진 계산에서 제외</strong> (연결산 변수 많아 일별 분석에 부적합)
                             </div>
                           </div>
                         );
@@ -17268,8 +17351,8 @@ ${list}` }]
                         const dateKeys = Object.keys(dr).sort((a, b) => b.localeCompare(a)); // 최신순
                         const fmt = (n) => Math.round(Number(n)||0).toLocaleString();
                         const pct = (m, r) => r > 0 ? ((m / r) * 100).toFixed(1) + '%' : '—';
-                        // 전체 누적 합계
-                        const sum = { orders: 0, revenue: 0, costIncVat: 0, fee: 0, shippingNet: 0, packaging: 0, netMargin: 0 };
+                        // 전체 누적 합계 (💠 v20260521.07: vatPayable 포함, corpTax 제거)
+                        const sum = { orders: 0, revenue: 0, costIncVat: 0, fee: 0, shippingNet: 0, packaging: 0, vatPayable: 0, netMargin: 0 };
                         dateKeys.forEach(k => {
                           const t = dr[k]?.total || {};
                           sum.orders += Number(t.orders)||0;
@@ -17278,6 +17361,7 @@ ${list}` }]
                           sum.fee += Number(t.fee)||0;
                           sum.shippingNet += Number(t.shippingNet)||0;
                           sum.packaging += Number(t.packaging)||0;
+                          sum.vatPayable += Number(t.vatPayable)||0;
                           sum.netMargin += Number(t.netMargin)||0;
                         });
                         return (
@@ -17292,6 +17376,7 @@ ${list}` }]
                                   <span className="text-[11px] text-neutral-700 font-bold">누적 순마진 = </span>
                                   <span className={`font-mono font-black text-base ${sum.netMargin < 0 ? 'text-red-600' : 'text-black'}`}>{fmt(sum.netMargin)}원</span>
                                   <span className="text-[10px] text-neutral-500">({pct(sum.netMargin, sum.revenue)})</span>
+                                  <span className={`text-[10px] ml-2 ${sum.vatPayable < 0 ? 'text-green-700' : 'text-purple-700'}`}>· 부가세 {sum.vatPayable < 0 ? '환급' : '납부'} 누적 {fmt(Math.abs(sum.vatPayable))}원</span>
                                 </div>
                               )}
                             </div>
@@ -17313,6 +17398,7 @@ ${list}` }]
                                       <th className="text-right px-2 py-2">수수료</th>
                                       <th className="text-right px-2 py-2">배송손익</th>
                                       <th className="text-right px-2 py-2">포장</th>
+                                      <th className="text-right px-2 py-2">부가세 납부</th>
                                       <th className="text-right px-2 py-2">순마진</th>
                                       <th className="text-right px-2 py-2">마진율</th>
                                       <th className="text-center px-2 py-2"></th>
@@ -17332,6 +17418,7 @@ ${list}` }]
                                             <td className="text-right px-2 py-2 font-mono text-amber-700">{fmt(t.fee)}</td>
                                             <td className={`text-right px-2 py-2 font-mono ${t.shippingNet < 0 ? 'text-red-600' : 'text-neutral-600'}`}>{fmt(t.shippingNet)}</td>
                                             <td className="text-right px-2 py-2 font-mono text-neutral-600">{fmt(t.packaging)}</td>
+                                            <td className={`text-right px-2 py-2 font-mono ${(t.vatPayable||0) < 0 ? 'text-green-700' : 'text-purple-700'}`}>{fmt(t.vatPayable||0)}</td>
                                             <td className={`text-right px-2 py-2 font-mono ${t.netMargin < 0 ? 'text-red-600 font-black' : 'text-black font-bold'}`}>{fmt(t.netMargin)}</td>
                                             <td className={`text-right px-2 py-2 font-mono font-bold ${t.netMargin < 0 ? 'text-red-600' : ''}`}>{pct(t.netMargin, t.revenue)}</td>
                                             <td className="text-center px-2 py-2 whitespace-nowrap">
@@ -17353,7 +17440,7 @@ ${list}` }]
                                           </tr>
                                           {expandedDailyKey === k && (
                                             <tr className="bg-neutral-100 border-b border-neutral-200">
-                                              <td colSpan={10} className="px-3 py-3">
+                                              <td colSpan={11} className="px-3 py-3">
                                                 <div className="text-[10px] text-neutral-600 mb-2">
                                                   📄 파일: <strong className="text-black">{rec.fileName}</strong> · 저장: {new Date(rec.savedAt).toLocaleString('ko-KR')} · 적용 VAT {rec.vatRate}% / 수수료 {rec.naverFeePct}% / 택배 고객 {fmt(rec.shippingCharged)} - 계약 {fmt(rec.shippingContract)} / 포장 {fmt(rec.packagingCost)}
                                                 </div>
@@ -17367,6 +17454,7 @@ ${list}` }]
                                                       <th className="text-right px-2 py-1">수수료</th>
                                                       <th className="text-right px-2 py-1">배송</th>
                                                       <th className="text-right px-2 py-1">포장</th>
+                                                      <th className="text-right px-2 py-1">부가세</th>
                                                       <th className="text-right px-2 py-1">순마진</th>
                                                       <th className="text-right px-2 py-1">마진율</th>
                                                     </tr>
@@ -17387,6 +17475,7 @@ ${list}` }]
                                                           <td className="text-right px-2 py-1 font-mono text-amber-700">{fmt(c.fee)}</td>
                                                           <td className={`text-right px-2 py-1 font-mono ${c.shippingNet < 0 ? 'text-red-600' : ''}`}>{fmt(c.shippingNet)}</td>
                                                           <td className="text-right px-2 py-1 font-mono text-neutral-600">{fmt(c.packaging)}</td>
+                                                          <td className={`text-right px-2 py-1 font-mono ${(c.vatPayable||0) < 0 ? 'text-green-700' : 'text-purple-700'}`}>{fmt(c.vatPayable||0)}</td>
                                                           <td className={`text-right px-2 py-1 font-mono ${c.netMargin < 0 ? 'text-red-600 font-black' : 'text-black font-bold'}`}>{fmt(c.netMargin)}</td>
                                                           <td className={`text-right px-2 py-1 font-mono font-bold ${c.netMargin < 0 ? 'text-red-600' : ''}`}>{pct(c.netMargin, c.revenue)}</td>
                                                         </tr>
@@ -17409,6 +17498,7 @@ ${list}` }]
                                       <td className="text-right px-2 py-2 font-mono">{fmt(sum.fee)}</td>
                                       <td className={`text-right px-2 py-2 font-mono ${sum.shippingNet < 0 ? 'text-red-600' : ''}`}>{fmt(sum.shippingNet)}</td>
                                       <td className="text-right px-2 py-2 font-mono">{fmt(sum.packaging)}</td>
+                                      <td className={`text-right px-2 py-2 font-mono ${sum.vatPayable < 0 ? 'text-green-700' : 'text-purple-700'}`}>{fmt(sum.vatPayable)}</td>
                                       <td className={`text-right px-2 py-2 font-mono ${sum.netMargin < 0 ? 'text-red-600' : 'text-black'}`}>{fmt(sum.netMargin)}</td>
                                       <td className={`text-right px-2 py-2 font-mono ${sum.netMargin < 0 ? 'text-red-600' : ''}`}>{pct(sum.netMargin, sum.revenue)}</td>
                                       <td></td>
@@ -17417,6 +17507,318 @@ ${list}` }]
                                 </table>
                               </div>
                             )}
+                          </div>
+                        );
+                      })()}
+
+                      {/* 💠 v20260521.02 Phase 3: 제품별 마진 계산기 (단일 상품 시뮬레이션) */}
+                      {(() => {
+                        const products = masterProducts || [];
+                        const options = costMarginOptions || [];
+                        const selectedProduct = products.find(p => String(p.id) === String(pmcProductId));
+                        const availableColors = selectedProduct?.colors || [];
+                        const autoSalePrice = selectedProduct ? getSalePrice(selectedProduct, pmcColor) : 0;
+                        const effectiveSalePrice = pmcSalePriceOverride != null ? Number(pmcSalePriceOverride) : autoSalePrice;
+                        const productCostExVat = selectedProduct && pmcColor ? getProductCostExVat(selectedProduct, pmcColor) : 0;
+                        const qty = Math.max(1, Number(pmcQty) || 1);
+                        // 옵션 매출/원가 합 (1개당)
+                        const optMargin = (pmcOptionIds || []).reduce((acc, oid) => {
+                          const opt = options.find(o => String(o.id) === String(oid));
+                          if (opt) {
+                            acc.rev += Number(opt.addRevenue) || 0;
+                            acc.cost += Number(opt.addCost) || 0;
+                          }
+                          return acc;
+                        }, { rev: 0, cost: 0 });
+                        // 1개당
+                        const revPerUnit = effectiveSalePrice + optMargin.rev;
+                        const costExVatPerUnit = productCostExVat + optMargin.cost;
+                        const vatRate = Number(cms.vatRate) || 0;
+                        const costIncVatPerUnit = costExVatPerUnit * (1 + vatRate / 100);
+                        // 총합 (수량 적용 — 수수료는 매출 비례라 매출×qty에 fee% 적용 = unit×fee%×qty와 같음)
+                        const revenue = revPerUnit * qty;
+                        const costExVat = costExVatPerUnit * qty;
+                        const costIncVat = costIncVatPerUnit * qty;
+                        const vatGap = costIncVat - costExVat;
+                        const feeRate = getChannelFeeRate(pmcChannel);
+                        const fee = revenue * (feeRate / 100);
+                        // 배송/포장은 "한 주문 1번" 정책 — 수량과 무관
+                        const shippingNet = (Number(cms.shippingCharged) || 0) - (Number(cms.shippingContract) || 0);
+                        const packaging = Number(cms.packagingCost) || 0;
+                        // 💠 v20260521.07: 부가세 납부 추가 (매출VAT − 매입VAT), 법인세 제거
+                        const salesVat = revenue * (vatRate / (100 + vatRate));
+                        const purchaseVat = costIncVat - costExVat;
+                        const vatPayable = salesVat - purchaseVat;
+                        const netMargin = revenue - costIncVat - fee + shippingNet - packaging - vatPayable;
+                        const marginPct = revenue > 0 ? (netMargin / revenue) * 100 : 0;
+                        // BEP 판매가 (현재 옵션/수량/채널 기준 본 상품 단가) — 순마진 0 기준
+                        // netMargin = 0 → revenue - costIncVat - fee + shippingNet - packaging - (salesVat - purchaseVat) = 0
+                        //  = revenue(1 - r - vat/(100+vat)) - costExVat - shippingNet*-1... (단순화 어려움)
+                        // 수치해석으로 단순 근사: 매출 증분 1원당 순마진 증분 = 1 - r - vat/(100+vat)
+                        // BEP 본 상품 판매가 = 현재 본 상품 판매가 - (netMargin / (qty × (1 - r - vat/(100+vat))))
+                        const r = feeRate / 100;
+                        const vatRatio = vatRate / (100 + vatRate);
+                        const marginPerSalesWon = 1 - r - vatRatio;
+                        let bep = null;
+                        if (qty > 0 && marginPerSalesWon > 0) {
+                          const targetSaleAdjust = -netMargin / (qty * marginPerSalesWon);
+                          bep = effectiveSalePrice + targetSaleAdjust;
+                          if (!Number.isFinite(bep)) bep = null;
+                        }
+                        const fmt = (n) => Math.round(Number(n)||0).toLocaleString();
+                        const fmtSign = (n) => (n >= 0 ? '+' : '') + fmt(n);
+                        const isOverride = pmcSalePriceOverride != null && Number(pmcSalePriceOverride) !== autoSalePrice;
+
+                        return (
+                          <div className="bg-white border-2 border-black p-5" style={{borderRadius:'6px'}}>
+                            <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
+                              <div>
+                                <div className="text-sm font-black tracking-widest uppercase text-black">🧮 제품별 마진 계산기</div>
+                                <div className="text-[10px] text-neutral-500 tracking-wider mt-0.5">PRODUCT MARGIN SIMULATOR · 신상품 가격 결정 / 매핑 결과 검증</div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-black tracking-widest uppercase text-neutral-500">채널</span>
+                                <select value={pmcChannel}
+                                  onChange={(e) => setPmcChannel(e.target.value)}
+                                  className="px-2 py-1 border-2 border-neutral-300 focus:border-black outline-none text-xs bg-white font-bold"
+                                  style={{borderRadius:'2px'}}>
+                                  <option value="smartstore">스마트스토어</option>
+                                  <option value="zigzag">지그재그 (임시)</option>
+                                  <option value="kakao">카카오선물하기 (임시)</option>
+                                  <option value="etc">기타</option>
+                                </select>
+                                <button type="button"
+                                  onClick={() => {
+                                    setPmcProductId('');
+                                    setPmcColor('');
+                                    setPmcOptionIds([]);
+                                    setPmcQty(1);
+                                    setPmcSalePriceOverride(null);
+                                  }}
+                                  className="px-2 py-1 text-[10px] font-bold border border-neutral-300 text-neutral-600 hover:border-black hover:text-black"
+                                  style={{borderRadius:'2px'}}>초기화</button>
+                              </div>
+                            </div>
+
+                            {/* 입력 영역 */}
+                            <div className="grid grid-cols-1 md:grid-cols-12 gap-2 mb-4">
+                              <div className="md:col-span-5">
+                                <label className="block text-[10px] font-black tracking-widest uppercase text-neutral-500 mb-1">9-1 상품</label>
+                                <select value={pmcProductId}
+                                  onChange={(e) => { setPmcProductId(e.target.value); setPmcColor(''); setPmcSalePriceOverride(null); }}
+                                  className="w-full px-2 py-1.5 border border-neutral-300 focus:border-black outline-none text-xs bg-white"
+                                  style={{borderRadius:'2px'}}>
+                                  <option value="">— 상품 선택 —</option>
+                                  {products.map(p => (
+                                    <option key={p.id} value={p.id}>[{p.type || '?'}] {p.name}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div className="md:col-span-3">
+                                <label className="block text-[10px] font-black tracking-widest uppercase text-neutral-500 mb-1">색상</label>
+                                <select value={pmcColor}
+                                  disabled={!pmcProductId}
+                                  onChange={(e) => { setPmcColor(e.target.value); setPmcSalePriceOverride(null); }}
+                                  className={`w-full px-2 py-1.5 border outline-none text-xs ${pmcProductId ? 'bg-white border-neutral-300 focus:border-black' : 'bg-neutral-100 border-neutral-200 text-neutral-400'}`}
+                                  style={{borderRadius:'2px'}}>
+                                  <option value="">— 색상 선택 —</option>
+                                  {availableColors.map(c => (<option key={c} value={c}>{c}</option>))}
+                                </select>
+                              </div>
+                              <div className="md:col-span-2">
+                                <label className="block text-[10px] font-black tracking-widest uppercase text-neutral-500 mb-1">수량</label>
+                                <input type="number" min="1" step="1" value={pmcQty}
+                                  onChange={(e) => setPmcQty(Math.max(1, Number(e.target.value)||1))}
+                                  className="w-full px-2 py-1.5 border border-neutral-300 focus:border-black outline-none text-xs text-right font-mono"
+                                  style={{borderRadius:'2px'}}/>
+                              </div>
+                              <div className="md:col-span-2">
+                                <label className="block text-[10px] font-black tracking-widest uppercase text-neutral-500 mb-1">
+                                  판매가/개 {isOverride && <span className="text-amber-700 normal-case text-[9px]">(수정됨)</span>}
+                                </label>
+                                <div className="flex items-center gap-1">
+                                  <input type="number" min="0" step="100"
+                                    value={effectiveSalePrice}
+                                    onChange={(e) => setPmcSalePriceOverride(e.target.value === '' ? 0 : Number(e.target.value))}
+                                    disabled={!selectedProduct || !pmcColor}
+                                    className={`flex-1 px-2 py-1.5 border outline-none text-xs text-right font-mono ${(!selectedProduct || !pmcColor) ? 'bg-neutral-100 border-neutral-200 text-neutral-400' : (isOverride ? 'bg-amber-50 border-amber-400 text-amber-900 font-bold' : 'bg-white border-neutral-300 focus:border-black')}`}
+                                    style={{borderRadius:'2px'}}/>
+                                  {isOverride && (
+                                    <button type="button" onClick={() => setPmcSalePriceOverride(null)}
+                                      className="text-[10px] text-amber-700 hover:text-amber-900 underline shrink-0" title="9-1 자동값으로 되돌림">↺</button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* 옵션 다중선택 */}
+                            {options.length > 0 && (
+                              <div className="mb-4">
+                                <label className="block text-[10px] font-black tracking-widest uppercase text-neutral-500 mb-1">옵션 (다중)</label>
+                                <div className="flex flex-wrap gap-1">
+                                  {options.map(opt => {
+                                    const checked = pmcOptionIds.includes(opt.id);
+                                    return (
+                                      <button key={opt.id} type="button"
+                                        onClick={() => {
+                                          const cur = new Set(pmcOptionIds);
+                                          if (cur.has(opt.id)) cur.delete(opt.id); else cur.add(opt.id);
+                                          setPmcOptionIds(Array.from(cur));
+                                        }}
+                                        className={`px-2 py-1 text-[10px] font-bold border ${checked ? 'bg-black text-white border-black' : 'bg-white text-neutral-700 border-neutral-300 hover:border-black'}`}
+                                        style={{borderRadius:'2px'}}
+                                        title={`+${(opt.addRevenue||0).toLocaleString()}원 매출 / ${(opt.addCost||0).toLocaleString()}원 원가`}
+                                      >
+                                        {opt.name} <span className="opacity-70">+{fmt(opt.addRevenue||0)}/{fmt(opt.addCost||0)}</span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* 입력 미완성 안내 / 결과 */}
+                            {(!selectedProduct || !pmcColor) && (pmcOptionIds||[]).length === 0 ? (
+                              <div className="bg-neutral-50 border border-dashed border-neutral-300 p-6 text-center text-xs text-neutral-500" style={{borderRadius:'4px'}}>
+                                상품 + 색상을 선택하거나 옵션을 1개 이상 선택하면 마진이 계산됩니다.
+                              </div>
+                            ) : (
+                              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                                {/* 좌: 원가 breakdown */}
+                                <div className="border-2 border-neutral-300 p-3 bg-neutral-50" style={{borderRadius:'4px'}}>
+                                  <div className="text-[10px] font-black tracking-widest uppercase text-neutral-500 mb-2">원가 BREAKDOWN (1개 기준)</div>
+                                  <table className="w-full text-[11px]">
+                                    <tbody>
+                                      {selectedProduct && pmcColor && (
+                                        <>
+                                          <tr className="border-b border-neutral-200">
+                                            <td className="py-1 text-neutral-600">본 상품 ({selectedProduct.type})</td>
+                                            <td className="py-1 text-right font-mono">{fmt(productCostExVat)}원</td>
+                                          </tr>
+                                          {(selectedProduct.type === 'hairpin' || selectedProduct.type === 'cellulose') && (() => {
+                                            const dcRaw = selectedProduct.dieCastingCost;
+                                            const dcNum = Number(dcRaw) || 0;
+                                            const dcEmpty = dcRaw == null || dcRaw === '' || dcNum === 0;
+                                            return (
+                                              <>
+                                                <tr><td className="py-0.5 pl-3 text-[10px] text-neutral-500">· 도금단가 [{pmcColor}]</td><td className="py-0.5 text-right font-mono text-[10px] text-neutral-500">{fmt(Number((selectedProduct.colorPlatingCosts||{})[pmcColor])||0)}원</td></tr>
+                                                {selectedProduct.grindRequired && (<tr><td className="py-0.5 pl-3 text-[10px] text-neutral-500">· 연마비</td><td className="py-0.5 text-right font-mono text-[10px] text-neutral-500">{fmt(Number(selectedProduct.grindCost)||0)}원</td></tr>)}
+                                                {/* 💠 v20260521.05: 다이케스팅은 집게핀 필수 항목 → 항상 표시 (0이면 빨간 미입력 안내) */}
+                                                <tr>
+                                                  <td className={`py-0.5 pl-3 text-[10px] ${dcEmpty ? 'text-red-600 font-bold' : 'text-neutral-500'}`}>· 다이케스팅 {dcEmpty && <span className="text-[9px] font-normal">(미입력 — 9-1에서 입력하세요)</span>}</td>
+                                                  <td className={`py-0.5 text-right font-mono text-[10px] ${dcEmpty ? 'text-red-600 font-bold' : 'text-neutral-500'}`}>{fmt(dcNum)}원</td>
+                                                </tr>
+                                                {/* 💠 v20260521.04: 스프링/핀대 자동 가산 (전부 동일) */}
+                                                <tr><td className="py-0.5 pl-3 text-[10px] text-neutral-400 italic">· 스프링 (자동)</td><td className="py-0.5 text-right font-mono text-[10px] text-neutral-400 italic">{fmt(SPRING_COST)}원</td></tr>
+                                                <tr><td className="py-0.5 pl-3 text-[10px] text-neutral-400 italic">· 핀대 (자동)</td><td className="py-0.5 text-right font-mono text-[10px] text-neutral-400 italic">{fmt(PIN_COST)}원</td></tr>
+                                              </>
+                                            );
+                                          })()}
+                                          {selectedProduct.type === 'gocchang' && (
+                                            <>
+                                              <tr><td className="py-0.5 pl-3 text-[10px] text-neutral-500">· 원단 ({selectedProduct.yardsPerUnit||0}Y × {fmt(selectedProduct.fabricPrice)}원)</td><td className="py-0.5 text-right font-mono text-[10px] text-neutral-500">{fmt((Number(selectedProduct.yardsPerUnit)||0) * (Number(selectedProduct.fabricPrice)||0))}원</td></tr>
+                                              {((selectedProduct.colorPlatingCosts||{})[pmcColor]) > 0 && (<tr><td className="py-0.5 pl-3 text-[10px] text-neutral-500">· 도금단가 [{pmcColor}]</td><td className="py-0.5 text-right font-mono text-[10px] text-neutral-500">{fmt(Number((selectedProduct.colorPlatingCosts||{})[pmcColor])||0)}원</td></tr>)}
+                                              {Number(selectedProduct.sewingCost) > 0 && (<tr><td className="py-0.5 pl-3 text-[10px] text-neutral-500">· 봉재공임</td><td className="py-0.5 text-right font-mono text-[10px] text-neutral-500">{fmt(Number(selectedProduct.sewingCost)||0)}원</td></tr>)}
+                                              {Number(selectedProduct.labelPlainCost) > 0 && (<tr><td className="py-0.5 pl-3 text-[10px] text-neutral-500">· 일반라벨</td><td className="py-0.5 text-right font-mono text-[10px] text-neutral-500">{fmt(Number(selectedProduct.labelPlainCost)||0)}원</td></tr>)}
+                                              {Number(selectedProduct.labelMetalCost) > 0 && (<tr><td className="py-0.5 pl-3 text-[10px] text-neutral-500">· 금속라벨</td><td className="py-0.5 text-right font-mono text-[10px] text-neutral-500">{fmt(Number(selectedProduct.labelMetalCost)||0)}원</td></tr>)}
+                                            </>
+                                          )}
+                                        </>
+                                      )}
+                                      {(pmcOptionIds||[]).map(oid => {
+                                        const opt = options.find(o => String(o.id) === String(oid));
+                                        if (!opt) return null;
+                                        return (
+                                          <tr key={oid} className="border-b border-neutral-200">
+                                            <td className="py-1 text-blue-700">옵션: {opt.name}</td>
+                                            <td className="py-1 text-right font-mono text-blue-700">{fmt(opt.addCost||0)}원</td>
+                                          </tr>
+                                        );
+                                      })}
+                                      <tr className="border-t-2 border-neutral-400">
+                                        <td className="py-1 font-bold">원가 (VAT 별도)</td>
+                                        <td className="py-1 text-right font-mono font-bold">{fmt(costExVatPerUnit)}원</td>
+                                      </tr>
+                                      <tr>
+                                        <td className="py-1 text-[10px] text-neutral-500">+ VAT {vatRate}%</td>
+                                        <td className="py-1 text-right font-mono text-[10px] text-neutral-500">+{fmt(costIncVatPerUnit - costExVatPerUnit)}원</td>
+                                      </tr>
+                                      <tr className="border-t border-neutral-300">
+                                        <td className="py-1 font-bold text-neutral-700">원가 (VAT 포함)</td>
+                                        <td className="py-1 text-right font-mono font-black text-neutral-700">{fmt(costIncVatPerUnit)}원</td>
+                                      </tr>
+                                    </tbody>
+                                  </table>
+                                </div>
+
+                                {/* 우: 결과 */}
+                                <div className="border-2 border-black p-3" style={{borderRadius:'4px'}}>
+                                  <div className="text-[10px] font-black tracking-widest uppercase text-neutral-500 mb-2">손익 ({qty}개 · {channelLabel[pmcChannel]})</div>
+                                  <table className="w-full text-[11px]">
+                                    <tbody>
+                                      <tr>
+                                        <td className="py-1 text-neutral-700">매출</td>
+                                        <td className="py-1 text-right font-mono font-bold">{fmt(revenue)}원</td>
+                                      </tr>
+                                      <tr className="border-b border-neutral-200">
+                                        <td className="py-1 text-neutral-600">- 원가 (VAT 포함)</td>
+                                        <td className="py-1 text-right font-mono text-neutral-600">-{fmt(costIncVat)}원</td>
+                                      </tr>
+                                      <tr>
+                                        <td className="py-1 text-amber-700">- 수수료 ({feeRate}%)</td>
+                                        <td className="py-1 text-right font-mono text-amber-700">-{fmt(fee)}원</td>
+                                      </tr>
+                                      <tr>
+                                        <td className={`py-1 ${shippingNet < 0 ? 'text-red-600' : 'text-neutral-600'}`}>{shippingNet >= 0 ? '+' : ''} 배송 손익</td>
+                                        <td className={`py-1 text-right font-mono ${shippingNet < 0 ? 'text-red-600' : 'text-neutral-600'}`}>{fmtSign(shippingNet)}원</td>
+                                      </tr>
+                                      <tr className="border-b border-neutral-200">
+                                        <td className="py-1 text-neutral-600">- 포장</td>
+                                        <td className="py-1 text-right font-mono text-neutral-600">-{fmt(packaging)}원</td>
+                                      </tr>
+                                      {/* 💠 v20260521.07: 부가세 납부 (매출VAT − 매입VAT). 환급이면 음수 → +로 표시 */}
+                                      <tr className="border-b border-neutral-200">
+                                        <td className="py-1 text-purple-700">
+                                          {vatPayable >= 0 ? '- 부가세 납부' : '+ 부가세 환급'}
+                                          <span className="text-[9px] text-neutral-400 ml-1">(매출VAT {fmt(salesVat)} − 매입VAT {fmt(purchaseVat)})</span>
+                                        </td>
+                                        <td className={`py-1 text-right font-mono ${vatPayable >= 0 ? 'text-purple-700' : 'text-green-700'}`}>
+                                          {vatPayable >= 0 ? '-' : '+'}{fmt(Math.abs(vatPayable))}원
+                                        </td>
+                                      </tr>
+                                      <tr className={`border-t-2 ${netMargin < 0 ? 'border-red-600' : 'border-black'}`}>
+                                        <td className={`py-2 font-black text-sm ${netMargin < 0 ? 'text-red-600' : 'text-black'}`}>순마진</td>
+                                        <td className={`py-2 text-right font-mono font-black text-sm ${netMargin < 0 ? 'text-red-600' : 'text-black'}`}>{fmtSign(netMargin)}원</td>
+                                      </tr>
+                                      <tr>
+                                        <td className={`py-1 font-bold ${netMargin < 0 ? 'text-red-600' : 'text-neutral-700'}`}>마진율</td>
+                                        <td className={`py-1 text-right font-mono font-bold ${netMargin < 0 ? 'text-red-600' : 'text-neutral-700'}`}>{marginPct.toFixed(1)}%</td>
+                                      </tr>
+                                    </tbody>
+                                  </table>
+                                  {/* BEP 판매가 */}
+                                  {bep != null && selectedProduct && pmcColor && (
+                                    <div className="mt-3 pt-3 border-t border-neutral-300 bg-neutral-50 -mx-3 -mb-3 px-3 py-2.5" style={{borderRadius:'0 0 4px 4px'}}>
+                                      <div className="flex items-center justify-between">
+                                        <div className="text-[10px] font-black tracking-widest uppercase text-neutral-500">⚖ BEP 판매가/개</div>
+                                        <div className="text-base font-black text-black font-mono">{fmt(bep)}원</div>
+                                      </div>
+                                      <div className="text-[10px] text-neutral-500 mt-0.5">
+                                        현재 옵션/수량/채널 기준 본 상품 판매가가 <strong className="text-black">{fmt(bep)}원</strong>이면 순마진 0
+                                        {effectiveSalePrice > bep && <span className="text-green-700 font-bold ml-1">· 현재 +{fmt(effectiveSalePrice - bep)}원 여유</span>}
+                                        {effectiveSalePrice < bep && <span className="text-red-600 font-bold ml-1">· 현재 -{fmt(bep - effectiveSalePrice)}원 손실</span>}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* 하단 안내 */}
+                            <div className="mt-3 text-[10px] text-neutral-500 leading-relaxed">
+                              💡 본 도구는 9-1 상품의 입력값(판매가/도금단가/원단가/연마비)과 옵션 마스터, 세금/수수료 설정을 기반으로 합니다.
+                              판매가는 카드 우상단에서 임시로 수정해 시뮬레이션 가능합니다 (저장 안 됨, [↺]로 9-1 자동값 복원).
+                            </div>
                           </div>
                         );
                       })()}
@@ -17709,9 +18111,9 @@ ${list}` }]
                           ['Phase 5-A', '엑셀 업로드+매칭', true],
                           ['Phase 5-B-1', '일별 마진 계산', true],
                           ['Phase 5-B-2-a', '일별 결과 누적', true],
+                          ['Phase 3', '제품별 마진 계산기', true],
                           ['Phase 5-B-2-b', '주문 상세/정밀화', false],
                           ['Phase 2A-3', '금형비 필드', false],
-                          ['Phase 3', '제품별 마진 계산기', false],
                           ['Phase 4', '금형비 회수 / BEP', false],
                         ].map(([phase, label, done]) => (
                           <div
