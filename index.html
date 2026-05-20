@@ -1199,6 +1199,35 @@ ${list}` }]
             try { localStorage.setItem('cost_margin_options', JSON.stringify(data)); } catch (e) {}
           };
 
+          // 💠 v20260520.05 Phase 5-A: 상품명 별칭(매핑) 테이블
+          // 키: 엑셀 상품명 ☞ split 조각 텍스트 (원본 그대로, 트림만)
+          // 값: { productId, color, optionIds:[], ignored:bool }
+          //  - productId/color 매핑되면 본 상품으로 인식 (도금/원단/연마 원가 산출)
+          //  - optionIds: 옵션 마스터에서 선택된 id 배열 (추가매출/추가원가)
+          //  - ignored:true → 참고문구로 취급 (매출/원가 0)
+          const [productNameAliases, setProductNameAliases] = useState(() => {
+            try {
+              const raw = localStorage.getItem('product_name_alias');
+              return raw ? JSON.parse(raw) : {};
+            } catch { return {}; }
+          });
+          const saveProductNameAliases = (data) => {
+            setProductNameAliases(data);
+            try { localStorage.setItem('product_name_alias', JSON.stringify(data)); } catch (e) {}
+          };
+
+          // 💠 v20260520.05 Phase 5-A: 일마진 엑셀 업로드 임시 상태 (메모리만, localStorage 저장 안 함)
+          // { fileName, sheetName, dateRange, totalRows, channels, allSlices:[{rowIdx,sliceIdx,text,channel,amount,qty}], mappedCount, unmappedSlices:[조각텍스트] }
+          const [excelUploadResult, setExcelUploadResult] = useState(null);
+          // 매칭 모달 열림 여부
+          const [aliasMatchOpen, setAliasMatchOpen] = useState(false);
+          // 모달 모드: 'new' (미매핑 입력, 입력 완료 즉시 사라짐) / 'manage' (기존 매핑 관리, 카드 유지)
+          const [aliasMatchMode, setAliasMatchMode] = useState('new');
+          // 매칭 입력 드래프트 (new 모드 전용): { 조각텍스트: { productId, color, optionIds, ignored } }
+          const [aliasMatchDraft, setAliasMatchDraft] = useState({});
+          // 매핑 관리 모드 검색어
+          const [aliasMatchSearch, setAliasMatchSearch] = useState('');
+
           // 🟦 v20260502.11: 멜로디 재생 (Web Audio API)
           const playMelody = (type = 'chime') => {
             try {
@@ -3223,7 +3252,7 @@ ${list}` }]
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260520.03</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260520.05</div>
                   </div>
                   
                   {/* v10.06: 헬퍼/봇 상태등 */}
@@ -3391,8 +3420,10 @@ ${list}` }]
                         timerSettings,
                         // 💠 v20260520.02: 10번 원가/마진 설정 + 옵션 마스터
                         costMarginSettings, costMarginOptions,
+                        // 💠 v20260520.05 Phase 5-A: 상품명 매핑 테이블 (엑셀 조각 → 9-1)
+                        productNameAliases,
                         exportDate: new Date().toISOString(),
-                        appVersion: 'v20260520.03'
+                        appVersion: 'v20260520.05'
                       };
                       const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
                       const url = URL.createObjectURL(blob);
@@ -3488,6 +3519,8 @@ ${list}` }]
                             // 💠 v20260520.02: 10번 원가/마진 설정 + 옵션 마스터 복원
                             if (data.costMarginSettings) saveCostMarginSettings({ ...defaultCostMarginSettings(), ...data.costMarginSettings });
                             if (Array.isArray(data.costMarginOptions)) saveCostMarginOptions(data.costMarginOptions);
+                            // 💠 v20260520.05 Phase 5-A: 상품명 매핑 테이블 복원
+                            if (data.productNameAliases && typeof data.productNameAliases === 'object') saveProductNameAliases(data.productNameAliases);
                             // 💠 v20260513: 1-2 작업지시서 이미지 매핑 IndexedDB 복원 (PC 간 동기화)
                             if (data.workorderImages && typeof data.workorderImages === 'object') {
                               (async () => {
@@ -16635,6 +16668,178 @@ ${list}` }]
                     top: '3000억 초과'
                   };
 
+                  // 💠 v20260520.05 Phase 5-A: 채널 분류 (메모리 정책 — 표기가 다양해서 includes 매칭)
+                  const classifyChannel = (s) => {
+                    const t = String(s||'');
+                    if (t.includes('스마트스토어')) return 'smartstore';
+                    if (t.includes('지그재그')) return 'zigzag';
+                    if (t.includes('카카오')) return 'kakao';
+                    return 'etc';
+                  };
+                  const channelLabel = { smartstore: '스마트스토어', zigzag: '지그재그', kakao: '카카오선물하기', etc: '기타' };
+
+                  // 💠 v20260520.05 Phase 5-A fix: 한국어 BIFF .xls codepage 949 지원
+                  // SheetJS 0.20의 xlsx.full.min.js에는 cpexcel이 빠져있어, dynamic import로 보충
+                  // (한 번 import 후 window에 캐시 → 재호출 시 즉시 반환)
+                  const ensureCpexcel = async () => {
+                    if (window.__cpexcelTried) return !!window.__cpexcelLoaded;
+                    window.__cpexcelTried = true;
+                    try {
+                      const cp = await import('https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/cpexcel.full.mjs');
+                      if (XLSX.set_cptable) {
+                        XLSX.set_cptable(cp);
+                        window.__cpexcelLoaded = true;
+                        console.log('✓ cpexcel 로드 완료 (한글 .xls 디코딩 지원)');
+                        return true;
+                      }
+                    } catch (e) {
+                      console.warn('cpexcel 동적 로드 실패 (file:// CORS 등) — 후처리 디코딩으로 대체:', e);
+                    }
+                    return false;
+                  };
+                  // cpexcel 로드 실패 시 fallback: cp1252로 잘못 디코딩된 한국어 문자열을 cp949로 복구
+                  // SheetJS는 codepage 미지원 시 8-bit를 그대로 charCode로 저장 → 그 바이트를 다시 cp949 decode
+                  const recoverKoreanText = (s) => {
+                    if (typeof s !== 'string' || !s) return s;
+                    let hasNonAscii = false, hasHangul = false;
+                    for (let i = 0; i < s.length; i++) {
+                      const c = s.charCodeAt(i);
+                      if (c > 0xff) { return s; } // UTF-16 영역까지 갔으면 이미 정상 또는 손쓸 수 없음
+                      if (c > 0x7f) hasNonAscii = true;
+                      if (c >= 0xac00 && c <= 0xd7a3) hasHangul = true;
+                    }
+                    if (!hasNonAscii || hasHangul) return s;
+                    try {
+                      const bytes = new Uint8Array(s.length);
+                      for (let i = 0; i < s.length; i++) bytes[i] = s.charCodeAt(i) & 0xff;
+                      return new TextDecoder('euc-kr', { fatal: false }).decode(bytes);
+                    } catch { return s; }
+                  };
+
+                  // 💠 v20260520.05 Phase 5-A: 엑셀 파싱 + 조각 추출
+                  const handleUploadMarginExcel = async (file) => {
+                    if (!file) return;
+                    try {
+                      const cpLoaded = await ensureCpexcel();
+                      const buf = await file.arrayBuffer();
+                      const wb = XLSX.read(buf, { type: 'array', codepage: 949 });
+                      const sheetName = wb.SheetNames[0];
+                      const ws = wb.Sheets[sheetName];
+                      let rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+                      if (!cpLoaded) {
+                        // cpexcel 없이 파싱된 경우 한국어 셀 복구
+                        rows = rows.map(r => Array.isArray(r) ? r.map(c => recoverKoreanText(c)) : r);
+                      }
+                      // 1행=타이틀, 2행=헤더, 3행~ 데이터
+                      const titleCell = String(rows[0]?.[0] || '');
+                      const dateMatch = titleCell.match(/\((\d{4}-\d{2}-\d{2})~?(\d{4}-\d{2}-\d{2})?\)/);
+                      const dateRange = dateMatch ? (dateMatch[1] === dateMatch[2] || !dateMatch[2] ? dateMatch[1] : `${dateMatch[1]} ~ ${dateMatch[2]}`) : '날짜 미상';
+
+                      const allSlices = [];        // [{ rowIdx, sliceIdx, text, channel, amount, qty, productName }]
+                      const channelCounts = { smartstore: 0, zigzag: 0, kakao: 0, etc: 0 };
+
+                      for (let r = 2; r < rows.length; r++) {
+                        const row = rows[r];
+                        if (!row || row.length === 0) continue;
+                        const amount = Number(row[4]) || 0;
+                        const channelRaw = String(row[7]||'');
+                        const productName = String(row[10]||'').trim();
+                        const qty = Number(row[11]) || 0;
+                        if (!productName) continue;
+                        const channel = classifyChannel(channelRaw);
+                        channelCounts[channel]++;
+                        // ☞로 split → 각 조각 트림
+                        const slices = productName.split('☞').map(s => s.trim()).filter(Boolean);
+                        slices.forEach((text, si) => {
+                          allSlices.push({ rowIdx: r, sliceIdx: si, text, channel, amount, qty, sliceCount: slices.length });
+                        });
+                      }
+
+                      // 매핑 조회
+                      const aliases = productNameAliases || {};
+                      const unmappedSet = new Set();
+                      let mappedCount = 0;
+                      allSlices.forEach(s => {
+                        if (aliases[s.text]) mappedCount++;
+                        else unmappedSet.add(s.text);
+                      });
+                      const unmappedSlices = Array.from(unmappedSet);
+
+                      const result = {
+                        fileName: file.name,
+                        sheetName,
+                        dateRange,
+                        totalRows: rows.length - 2,
+                        totalSlices: allSlices.length,
+                        channels: channelCounts,
+                        allSlices,
+                        mappedCount,
+                        unmappedSlices,
+                      };
+                      setExcelUploadResult(result);
+
+                      // 미매핑 1건이라도 있으면 매칭 모달 자동 열기 (A안)
+                      if (unmappedSlices.length > 0) {
+                        // 드래프트 초기화 (기존 미매핑 조각만)
+                        const draft = {};
+                        unmappedSlices.forEach(t => {
+                          draft[t] = { productId: '', color: '', optionIds: [], ignored: false };
+                        });
+                        setAliasMatchMode('new');
+                        setAliasMatchDraft(draft);
+                        setAliasMatchOpen(true);
+                        alert(`엑셀 분석 완료\n\n총 ${result.totalRows}건 주문 / ${result.totalSlices}개 조각\n매핑됨: ${mappedCount}개\n미매핑: ${unmappedSlices.length}개\n\n미매핑 조각을 먼저 매칭해주세요.`);
+                      } else {
+                        alert(`엑셀 분석 완료 ✓\n\n총 ${result.totalRows}건 주문 / ${result.totalSlices}개 조각 모두 매핑됨\n\n(마진 계산 결과 화면은 Phase 5-B에서 구현 예정)`);
+                      }
+                    } catch (err) {
+                      console.error('엑셀 파싱 실패:', err);
+                      alert('엑셀 파싱에 실패했습니다.\n\n' + (err?.message || err));
+                    }
+                  };
+
+                  // 💠 v20260520.05 Phase 5-A: 매칭 드래프트 저장
+                  const saveAliasMatchDraft = () => {
+                    const draft = aliasMatchDraft || {};
+                    // 유효성: ignored=false면 productId+color 필수
+                    const invalid = [];
+                    Object.entries(draft).forEach(([text, d]) => {
+                      if (d.ignored) return;
+                      if (!d.productId || !d.color) invalid.push(text);
+                    });
+                    if (invalid.length > 0) {
+                      alert(`${invalid.length}개 조각의 상품/색상이 비어있습니다.\n\n참고문구라면 "참고문구로 무시" 체크 후 저장하세요.`);
+                      return;
+                    }
+                    const next = { ...productNameAliases };
+                    Object.entries(draft).forEach(([text, d]) => {
+                      next[text] = {
+                        productId: d.ignored ? '' : d.productId,
+                        color: d.ignored ? '' : d.color,
+                        optionIds: d.ignored ? [] : (d.optionIds || []),
+                        ignored: !!d.ignored,
+                      };
+                    });
+                    saveProductNameAliases(next);
+                    setAliasMatchOpen(false);
+                    // 결과 재계산 (방금 저장한 매핑 반영)
+                    if (excelUploadResult) {
+                      const allSlices = excelUploadResult.allSlices;
+                      let mappedCount = 0;
+                      const unmappedSet = new Set();
+                      allSlices.forEach(s => {
+                        if (next[s.text]) mappedCount++;
+                        else unmappedSet.add(s.text);
+                      });
+                      setExcelUploadResult({
+                        ...excelUploadResult,
+                        mappedCount,
+                        unmappedSlices: Array.from(unmappedSet),
+                      });
+                    }
+                    alert(`매핑 ${Object.keys(draft).length}개 저장 완료 ✓`);
+                  };
+
                   return (
                   <div className="flex-1 px-6 py-8">
                     <div className="max-w-5xl mx-auto space-y-6">
@@ -16644,14 +16849,123 @@ ${list}` }]
                           <h1 className="text-3xl font-black tracking-tight text-black uppercase">10. 원가/마진</h1>
                           <p className="text-xs text-neutral-500 mt-1 tracking-widest">COST &amp; MARGIN ANALYSIS</p>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => alert('🔗 상품명 매칭\n\nPhase 5에서 구현 예정입니다.\n엑셀 상품명 ↔ 9-1 상품 매핑 테이블')}
-                          className="px-3 py-1.5 text-[11px] font-black uppercase tracking-widest bg-white border-2 border-black text-black hover:bg-black hover:text-white transition-all"
-                          style={{borderRadius:'2px'}}
-                        >
-                          🔗 상품명매칭
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const aliases = productNameAliases || {};
+                              const count = Object.keys(aliases).length;
+                              if (count === 0) { alert('등록된 상품명 매핑이 없습니다.\n\n일마진 엑셀을 업로드하면 미매핑 조각을 자동으로 매칭 화면에 띄워줍니다.'); return; }
+                              setAliasMatchMode('manage');
+                              setAliasMatchSearch('');
+                              setAliasMatchDraft({});
+                              setAliasMatchOpen(true);
+                            }}
+                            className="px-3 py-1.5 text-[11px] font-black uppercase tracking-widest bg-white border-2 border-black text-black hover:bg-black hover:text-white transition-all"
+                            style={{borderRadius:'2px'}}
+                          >
+                            🔗 매핑관리 ({Object.keys(productNameAliases||{}).length})
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* 💠 v20260520.05 Phase 5-A: 일마진 엑셀 업로드 카드 */}
+                      <div className="bg-white border-2 border-black p-5" style={{borderRadius:'6px'}}>
+                        <div className="flex items-center justify-between mb-4">
+                          <div>
+                            <div className="text-sm font-black tracking-widest uppercase text-black">📂 일마진 엑셀 처리</div>
+                            <div className="text-[10px] text-neutral-500 tracking-wider mt-0.5">DAILY MARGIN EXCEL — STS_BAESONGDETAIL</div>
+                          </div>
+                          <label className="px-3 py-1.5 text-[11px] font-black uppercase tracking-widest bg-black text-white border-2 border-black hover:bg-white hover:text-black transition-all cursor-pointer" style={{borderRadius:'2px'}}>
+                            📁 파일 선택
+                            <input type="file" accept=".xls,.xlsx" className="hidden"
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (f) handleUploadMarginExcel(f);
+                                e.target.value = ''; // 같은 파일 재업로드 가능하게
+                              }}
+                            />
+                          </label>
+                        </div>
+
+                        {!excelUploadResult ? (
+                          <div className="bg-neutral-50 border border-dashed border-neutral-300 p-6 text-center text-xs text-neutral-500" style={{borderRadius:'4px'}}>
+                            발송 일자별 엑셀 파일(.xls/.xlsx)을 업로드하세요.<br/>
+                            <span className="text-[10px] text-neutral-400">예: 마진계산.xls · 시트명 sts_baesongDetail_YYYYMMDD_HHMM</span>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {/* 분석 결과 헤더 */}
+                            <div className="bg-neutral-50 border border-neutral-300 p-3 flex items-center justify-between" style={{borderRadius:'4px'}}>
+                              <div className="text-xs">
+                                <div className="font-bold text-black truncate" title={excelUploadResult.fileName}>📄 {excelUploadResult.fileName}</div>
+                                <div className="text-[10px] text-neutral-500 mt-0.5">{excelUploadResult.dateRange} · 시트 {excelUploadResult.sheetName}</div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setExcelUploadResult(null)}
+                                className="text-[10px] text-neutral-500 hover:text-black underline"
+                              >초기화</button>
+                            </div>
+                            {/* 통계 */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                              <div className="border-2 border-black p-2 text-center" style={{borderRadius:'2px'}}>
+                                <div className="text-[10px] font-black tracking-widest uppercase text-neutral-500">주문 수</div>
+                                <div className="text-xl font-black text-black mt-0.5">{excelUploadResult.totalRows.toLocaleString()}</div>
+                              </div>
+                              <div className="border-2 border-black p-2 text-center" style={{borderRadius:'2px'}}>
+                                <div className="text-[10px] font-black tracking-widest uppercase text-neutral-500">조각 수</div>
+                                <div className="text-xl font-black text-black mt-0.5">{excelUploadResult.totalSlices.toLocaleString()}</div>
+                              </div>
+                              <div className="border-2 border-green-700 bg-green-50 p-2 text-center" style={{borderRadius:'2px'}}>
+                                <div className="text-[10px] font-black tracking-widest uppercase text-green-800">매핑됨</div>
+                                <div className="text-xl font-black text-green-800 mt-0.5">{excelUploadResult.mappedCount.toLocaleString()}</div>
+                              </div>
+                              <div className={`border-2 p-2 text-center ${excelUploadResult.unmappedSlices.length > 0 ? 'border-red-600 bg-red-50' : 'border-neutral-300 bg-neutral-50'}`} style={{borderRadius:'2px'}}>
+                                <div className={`text-[10px] font-black tracking-widest uppercase ${excelUploadResult.unmappedSlices.length > 0 ? 'text-red-700' : 'text-neutral-400'}`}>미매핑</div>
+                                <div className={`text-xl font-black mt-0.5 ${excelUploadResult.unmappedSlices.length > 0 ? 'text-red-700' : 'text-neutral-400'}`}>{excelUploadResult.unmappedSlices.length.toLocaleString()}</div>
+                              </div>
+                            </div>
+                            {/* 채널별 분류 */}
+                            <div className="flex flex-wrap gap-2 text-[10px]">
+                              {Object.entries(excelUploadResult.channels).filter(([,n])=>n>0).map(([ch, n]) => (
+                                <span key={ch} className={`px-2 py-1 border font-bold ${ch==='smartstore'?'bg-black text-white border-black':'bg-amber-50 border-amber-300 text-amber-800'}`} style={{borderRadius:'2px'}}>
+                                  {channelLabel[ch]}: {n}건{ch!=='smartstore'?' (임시처리)':''}
+                                </span>
+                              ))}
+                            </div>
+                            {/* 미매핑 안내 / 매칭 모달 진입 */}
+                            {excelUploadResult.unmappedSlices.length > 0 ? (
+                              <div className="bg-red-50 border-2 border-red-600 p-3 flex items-center justify-between" style={{borderRadius:'4px'}}>
+                                <div className="text-xs">
+                                  <div className="font-black text-red-800">⚠ 미매핑 조각 {excelUploadResult.unmappedSlices.length}개</div>
+                                  <div className="text-[10px] text-red-600 mt-0.5">A안 정책: 미매핑 1건이라도 있으면 마진 계산 불가</div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const draft = {};
+                                    excelUploadResult.unmappedSlices.forEach(t => {
+                                      draft[t] = { productId: '', color: '', optionIds: [], ignored: false };
+                                    });
+                                    setAliasMatchMode('new');
+                                    setAliasMatchDraft(draft);
+                                    setAliasMatchOpen(true);
+                                  }}
+                                  className="px-3 py-1.5 text-[11px] font-black uppercase tracking-widest bg-red-600 text-white border-2 border-red-600 hover:bg-red-700 transition-all"
+                                  style={{borderRadius:'2px'}}
+                                >
+                                  매칭 화면 열기
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="bg-green-50 border-2 border-green-700 p-3 text-xs text-green-800" style={{borderRadius:'4px'}}>
+                                ✓ 모든 조각이 매핑되었습니다.
+                                <span className="text-[10px] text-green-700 ml-2">(일별 마진 계산 결과 화면은 Phase 5-B에서 구현 예정)</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       {/* 세금/수수료 설정 카드 */}
@@ -16939,10 +17253,11 @@ ${list}` }]
                           ['Phase 2B', '세금/옵션 설정', true],
                           ['Phase 2A-1', '판매가 (기본+색상별)', true],
                           ['Phase 2A-2', '매입가/부가세 라벨', true],
+                          ['Phase 5-A', '엑셀 업로드+매칭', true],
+                          ['Phase 5-B', '일별 마진 계산', false],
                           ['Phase 2A-3', '금형비 필드', false],
                           ['Phase 3', '제품별 마진 계산기', false],
                           ['Phase 4', '금형비 회수 / BEP', false],
-                          ['Phase 5', '엑셀 업로드 일마진', false],
                         ].map(([phase, label, done]) => (
                           <div
                             key={phase}
@@ -16956,6 +17271,332 @@ ${list}` }]
                         ))}
                       </div>
                     </div>
+
+                    {/* 💠 v20260520.05 Phase 5-A: 매칭 모달 (new=미매핑 입력 / manage=기존 매핑 관리) */}
+                    {aliasMatchOpen && (() => {
+                      const isManage = aliasMatchMode === 'manage';
+                      // 표시 데이터 소스 분기
+                      const sourceEntries = isManage
+                        ? Object.entries(productNameAliases || {})
+                        : Object.entries(aliasMatchDraft || {});
+                      // 검색 필터 (manage 모드)
+                      const searchQ = (aliasMatchSearch || '').trim().toLowerCase();
+                      const entries = isManage && searchQ
+                        ? sourceEntries.filter(([text, d]) => {
+                            if (text.toLowerCase().includes(searchQ)) return true;
+                            const prod = (masterProducts||[]).find(p => String(p.id)===String(d.productId));
+                            if (prod?.name?.toLowerCase().includes(searchQ)) return true;
+                            if (d.color?.toLowerCase().includes(searchQ)) return true;
+                            return false;
+                          })
+                        : sourceEntries;
+
+                      // 통계 즉시 갱신 헬퍼 (공통)
+                      const refreshUploadStats = (nextSaved) => {
+                        if (!excelUploadResult) return;
+                        const allSlices = excelUploadResult.allSlices || [];
+                        let mc = 0;
+                        const um = new Set();
+                        allSlices.forEach(s => {
+                          if (nextSaved[s.text]) mc++;
+                          else um.add(s.text);
+                        });
+                        setExcelUploadResult({
+                          ...excelUploadResult,
+                          mappedCount: mc,
+                          unmappedSlices: Array.from(um),
+                        });
+                      };
+
+                      // 입력 변경 핸들러 (모드별 분기)
+                      const updateDraft = (text, patch) => {
+                        if (isManage) {
+                          // manage 모드: 영구 매핑 직접 즉시 갱신, 카드는 사라지지 않음
+                          const cur = productNameAliases[text] || {};
+                          const updated = { ...cur, ...patch };
+                          // 옵션 전용 매핑 허용 (productId/color 없이 optionIds만)
+                          const next = { ...productNameAliases, [text]: normalizeAlias(updated) };
+                          saveProductNameAliases(next);
+                          refreshUploadStats(next);
+                          return;
+                        }
+                        // new 모드: draft에만 갱신 (사라지지 않음 → 옵션 다중선택 시간 확보)
+                        // 확정은 [✓ 확정] 버튼으로 명시적으로
+                        setAliasMatchDraft(prev => ({ ...prev, [text]: { ...prev[text], ...patch } }));
+                      };
+
+                      // 💠 v20260520.05: 확정 가능 조건 (3종) — 참고문구 / 본 상품(상품+색상) / 옵션 전용(옵션만)
+                      const isDraftReady = (d) => {
+                        if (!d) return false;
+                        if (d.ignored) return true;
+                        if (d.productId && d.color) return true;
+                        if (Array.isArray(d.optionIds) && d.optionIds.length > 0) return true;
+                        return false;
+                      };
+                      // 매핑 모드(본 상품 / 옵션 전용 / 참고문구) 추론
+                      const detectMatchKind = (d) => {
+                        if (!d) return 'empty';
+                        if (d.ignored) return 'ignored';
+                        if (d.productId && d.color) return 'product';
+                        if (Array.isArray(d.optionIds) && d.optionIds.length > 0) return 'optionOnly';
+                        return 'empty';
+                      };
+                      // 데이터 정규화 (모드별 빈 값 보장)
+                      const normalizeAlias = (d) => {
+                        if (d?.ignored) return { productId: '', color: '', optionIds: [], ignored: true };
+                        const hasProduct = !!d?.productId && !!d?.color;
+                        const optionIds = Array.isArray(d?.optionIds) ? d.optionIds : [];
+                        if (hasProduct) {
+                          return { productId: d.productId, color: d.color, optionIds, ignored: false };
+                        }
+                        // 옵션 전용 — productId/color 비워둠
+                        return { productId: '', color: '', optionIds, ignored: false };
+                      };
+
+                      // 💠 v20260520.05: new 모드에서 사용자가 [✓ 확정] 누르면 영구 저장 + draft에서 제거
+                      const commitDraft = (text) => {
+                        const d = aliasMatchDraft[text] || {};
+                        if (!isDraftReady(d)) {
+                          alert('확정 가능 조건을 충족하지 않습니다.\n\n다음 중 하나를 만족해야 합니다:\n· 상품 + 색상 모두 선택\n· 옵션 1개 이상 선택 (옵션 전용 매핑)\n· "참고문구로 무시" 체크');
+                          return;
+                        }
+                        const nextSaved = { ...productNameAliases };
+                        nextSaved[text] = normalizeAlias(d);
+                        saveProductNameAliases(nextSaved);
+                        const nextDraft = { ...aliasMatchDraft };
+                        delete nextDraft[text];
+                        setAliasMatchDraft(nextDraft);
+                        refreshUploadStats(nextSaved);
+                      };
+
+                      // 💠 v20260520.05: 일괄 확정 (입력 완성된 모든 항목 한 번에 저장)
+                      const commitAllReady = () => {
+                        const ready = Object.entries(aliasMatchDraft).filter(([t, d]) => isDraftReady(d));
+                        if (ready.length === 0) {
+                          alert('확정할 항목이 없습니다.\n\n각 카드에서 상품+색상 선택, 옵션 1개 이상 선택, 또는 "참고문구로 무시" 체크 중 하나가 필요합니다.');
+                          return;
+                        }
+                        if (!confirm(`완성된 ${ready.length}개 매핑을 한 번에 확정합니까?`)) return;
+                        const nextSaved = { ...productNameAliases };
+                        const nextDraft = { ...aliasMatchDraft };
+                        ready.forEach(([text, d]) => {
+                          nextSaved[text] = normalizeAlias(d);
+                          delete nextDraft[text];
+                        });
+                        saveProductNameAliases(nextSaved);
+                        setAliasMatchDraft(nextDraft);
+                        refreshUploadStats(nextSaved);
+                      };
+
+                      // 매핑 제거 (두 모드 공통)
+                      const removeFromDraft = (text) => {
+                        if (!confirm(`"${text.slice(0,60)}${text.length>60?'...':''}"\n\n매핑을 삭제하시겠습니까?\n(다음에 같은 조각이 엑셀에 나오면 다시 미매핑으로 잡힙니다)`)) return;
+                        const nextSaved = { ...productNameAliases };
+                        delete nextSaved[text];
+                        saveProductNameAliases(nextSaved);
+                        if (!isManage) {
+                          const nextDraft = { ...aliasMatchDraft };
+                          delete nextDraft[text];
+                          setAliasMatchDraft(nextDraft);
+                        }
+                        refreshUploadStats(nextSaved);
+                      };
+                      return (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.6)'}}>
+                          <div className="bg-white w-full max-w-5xl max-h-[90vh] flex flex-col border-2 border-black" style={{borderRadius:'6px'}}>
+                            {/* 헤더 */}
+                            <div className="flex items-center justify-between px-5 py-3 border-b-2 border-black">
+                              <div>
+                                <div className="text-sm font-black tracking-widest uppercase text-black">
+                                  {isManage ? '🔗 매핑 관리' : '🔗 상품명 매칭'}
+                                </div>
+                                <div className="text-[10px] text-neutral-500 mt-0.5">
+                                  {isManage
+                                    ? `등록된 매핑 ${Object.keys(productNameAliases||{}).length}개${searchQ?` · 검색결과 ${entries.length}개`:''} · 변경은 즉시 저장됨`
+                                    : `조각 ${entries.length}개 · 한 번 등록하면 이후 같은 텍스트는 자동 인식`}
+                                </div>
+                              </div>
+                              <button type="button" onClick={() => setAliasMatchOpen(false)} className="text-xl font-bold text-neutral-400 hover:text-black">✕</button>
+                            </div>
+                            {/* 검색바 (manage 모드 전용) */}
+                            {isManage && (
+                              <div className="px-5 py-2 border-b border-neutral-200 bg-neutral-50">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] font-black tracking-widest uppercase text-neutral-500 shrink-0">🔍 검색</span>
+                                  <input type="text" value={aliasMatchSearch}
+                                    onChange={e => setAliasMatchSearch(e.target.value)}
+                                    placeholder="조각 텍스트 / 9-1 상품명 / 색상으로 필터링"
+                                    className="flex-1 px-2 py-1 border border-neutral-300 focus:border-black outline-none text-xs bg-white"
+                                    style={{borderRadius:'2px'}}/>
+                                  {aliasMatchSearch && (
+                                    <button type="button" onClick={() => setAliasMatchSearch('')}
+                                      className="text-[10px] text-neutral-500 hover:text-black underline shrink-0">초기화</button>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                            {/* 본문 */}
+                            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2">
+                              {entries.length === 0 ? (
+                                <div className="text-center text-xs text-neutral-500 py-10">
+                                  {isManage
+                                    ? (searchQ ? '검색 결과가 없습니다.' : '등록된 매핑이 없습니다.')
+                                    : '매핑할 조각이 없습니다.'}
+                                </div>
+                              ) : entries.map(([text, d]) => {
+                                const selectedProduct = (masterProducts || []).find(p => String(p.id) === String(d.productId));
+                                const availableColors = selectedProduct?.colors || [];
+                                const options = costMarginOptions || [];
+                                return (
+                                  <div key={text} className={`border p-3 ${d.ignored ? 'bg-neutral-100 border-neutral-300 opacity-70' : 'bg-white border-neutral-300'}`} style={{borderRadius:'4px'}}>
+                                    {/* 조각 텍스트 */}
+                                    <div className="flex items-start gap-2 mb-2">
+                                      <span className="text-[10px] font-black tracking-widest uppercase text-neutral-500 shrink-0 mt-0.5">조각</span>
+                                      <div className="flex-1 text-xs text-black font-mono leading-relaxed break-all">{text}</div>
+                                      {/* manage 모드: 매핑 종류 배지 */}
+                                      {isManage && (() => {
+                                        const kind = detectMatchKind(d);
+                                        if (kind === 'ignored') return <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 bg-amber-100 text-amber-800 border border-amber-300 shrink-0" style={{borderRadius:'2px'}}>참고문구</span>;
+                                        if (kind === 'optionOnly') return <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 bg-blue-100 text-blue-800 border border-blue-300 shrink-0" style={{borderRadius:'2px'}}>옵션 전용</span>;
+                                        if (kind === 'product') return <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 bg-neutral-100 text-neutral-700 border border-neutral-400 shrink-0" style={{borderRadius:'2px'}}>상품{(d.optionIds||[]).length>0?'+옵션':''}</span>;
+                                        return <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 bg-red-100 text-red-700 border border-red-300 shrink-0" style={{borderRadius:'2px'}}>미완성</span>;
+                                      })()}
+                                      <button type="button" onClick={() => removeFromDraft(text)} className="text-[10px] text-red-600 hover:underline shrink-0">삭제</button>
+                                    </div>
+                                    {/* 참고문구 토글 */}
+                                    <label className="flex items-center gap-2 mb-2 cursor-pointer">
+                                      <input type="checkbox" checked={!!d.ignored}
+                                        onChange={e => updateDraft(text, { ignored: e.target.checked })}
+                                        className="w-3.5 h-3.5 accent-black"/>
+                                      <span className="text-[11px] font-bold text-neutral-700">참고문구로 무시 (매출/원가 0)</span>
+                                    </label>
+                                    {/* 💠 v20260520.05 Phase 5-A: new 모드 진행 상태 (3종 모드 표시) */}
+                                    {!isManage && (() => {
+                                      const ready = isDraftReady(d);
+                                      const kind = detectMatchKind(d);
+                                      const optCount = (d.optionIds||[]).length;
+                                      return (
+                                        <div className="text-[10px] text-neutral-500 mb-2 flex items-center gap-2 flex-wrap">
+                                          {d.ignored ? (
+                                            <span className="text-amber-700 font-bold">⊘ 참고문구 무시</span>
+                                          ) : (
+                                            <>
+                                              <span className={d.productId ? 'text-green-700 font-bold' : 'text-neutral-400'}>{d.productId ? '✓' : '○'} 상품</span>
+                                              <span className={d.color ? 'text-green-700 font-bold' : 'text-neutral-400'}>{d.color ? '✓' : '○'} 색상</span>
+                                              <span className={optCount > 0 ? 'text-blue-700 font-bold' : 'text-neutral-400'}>옵션 {optCount}개</span>
+                                              {kind === 'optionOnly' && (
+                                                <span className="text-blue-700 font-black uppercase tracking-wider text-[9px] px-1.5 py-0.5 bg-blue-50 border border-blue-300" style={{borderRadius:'2px'}}>옵션 전용</span>
+                                              )}
+                                              {kind === 'product' && optCount > 0 && (
+                                                <span className="text-black font-black uppercase tracking-wider text-[9px] px-1.5 py-0.5 bg-neutral-100 border border-neutral-400" style={{borderRadius:'2px'}}>상품+옵션</span>
+                                              )}
+                                            </>
+                                          )}
+                                          <span className="ml-auto">{ready ? <span className="text-black font-black">→ 확정 가능</span> : <span className="text-neutral-400">상품+색상 / 옵션만 / 참고문구 中 1</span>}</span>
+                                        </div>
+                                      );
+                                    })()}
+                                    {/* 상품/색상/옵션 */}
+                                    {!d.ignored && (
+                                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                                        <div>
+                                          <label className="block text-[10px] font-black tracking-widest uppercase text-neutral-500 mb-1">9-1 상품</label>
+                                          <select value={d.productId || ''}
+                                            onChange={e => updateDraft(text, { productId: e.target.value, color: '' })}
+                                            className="w-full px-2 py-1.5 border border-neutral-300 focus:border-black outline-none text-xs bg-white" style={{borderRadius:'2px'}}>
+                                            <option value="">— 선택 —</option>
+                                            {(masterProducts || []).map(p => (
+                                              <option key={p.id} value={p.id}>[{p.type || '?'}] {p.name}</option>
+                                            ))}
+                                          </select>
+                                        </div>
+                                        <div>
+                                          <label className="block text-[10px] font-black tracking-widest uppercase text-neutral-500 mb-1">9-1 색상</label>
+                                          <select value={d.color || ''}
+                                            disabled={!d.productId}
+                                            onChange={e => updateDraft(text, { color: e.target.value })}
+                                            className={`w-full px-2 py-1.5 border outline-none text-xs ${d.productId ? 'bg-white border-neutral-300 focus:border-black' : 'bg-neutral-100 border-neutral-200 text-neutral-400'}`} style={{borderRadius:'2px'}}>
+                                            <option value="">— 선택 —</option>
+                                            {availableColors.map(c => (<option key={c} value={c}>{c}</option>))}
+                                          </select>
+                                        </div>
+                                        <div>
+                                          <label className="block text-[10px] font-black tracking-widest uppercase text-neutral-500 mb-1">옵션 (다중)</label>
+                                          {options.length === 0 ? (
+                                            <div className="px-2 py-1.5 border border-neutral-200 bg-neutral-50 text-[10px] text-neutral-400" style={{borderRadius:'2px'}}>옵션 마스터 비어있음</div>
+                                          ) : (
+                                            <div className="flex flex-wrap gap-1">
+                                              {options.map(opt => {
+                                                const checked = (d.optionIds || []).includes(opt.id);
+                                                return (
+                                                  <button key={opt.id} type="button"
+                                                    onClick={() => {
+                                                      const cur = new Set(d.optionIds || []);
+                                                      if (cur.has(opt.id)) cur.delete(opt.id); else cur.add(opt.id);
+                                                      updateDraft(text, { optionIds: Array.from(cur) });
+                                                    }}
+                                                    className={`px-2 py-0.5 text-[10px] font-bold border ${checked ? 'bg-black text-white border-black' : 'bg-white text-neutral-700 border-neutral-300 hover:border-black'}`}
+                                                    style={{borderRadius:'2px'}}
+                                                    title={`+${(opt.addRevenue||0).toLocaleString()}원 / 원가 ${(opt.addCost||0).toLocaleString()}원`}
+                                                  >
+                                                    {opt.name}
+                                                  </button>
+                                                );
+                                              })}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {/* 💠 v20260520.05 Phase 5-A: new 모드 한정 [✓ 확정] 버튼 */}
+                                    {!isManage && (() => {
+                                      const ready = isDraftReady(d);
+                                      return (
+                                        <div className="mt-3 pt-3 border-t border-neutral-200 flex justify-end">
+                                          <button type="button"
+                                            disabled={!ready}
+                                            onClick={() => commitDraft(text)}
+                                            className={`px-4 py-1.5 text-[11px] font-black uppercase tracking-widest border-2 transition-all ${ready ? 'bg-black text-white border-black hover:bg-neutral-800' : 'bg-neutral-100 text-neutral-400 border-neutral-200 cursor-not-allowed'}`}
+                                            style={{borderRadius:'2px'}}>
+                                            ✓ 확정
+                                          </button>
+                                        </div>
+                                      );
+                                    })()}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            {/* 푸터 */}
+                            <div className="px-5 py-3 border-t-2 border-black flex items-center justify-between gap-2">
+                              <div className="text-[10px] text-neutral-500 leading-relaxed flex-1 min-w-0">
+                                {isManage ? (
+                                  <>
+                                    💡 <strong className="text-black">변경은 즉시 저장</strong>됩니다. 잘못 매핑된 항목은 우측 <strong className="text-red-600">[삭제]</strong> 버튼으로 제거하세요.<br/>
+                                    · 삭제 후 같은 조각이 다시 엑셀에 나오면 미매핑으로 잡혀 다시 매칭 화면이 뜹니다
+                                  </>
+                                ) : (
+                                  <>
+                                    💡 매핑 3종 모드 — 카드의 <strong className="text-black">[✓ 확정]</strong> 버튼으로 저장:<br/>
+                                    · <strong className="text-black">상품</strong> = 상품 + 색상 (옵션 선택 가능) · <strong className="text-blue-700">옵션 전용</strong> = 옵션만 선택 (실리콘논슬립 같은 단독 옵션) · <strong className="text-amber-700">참고문구</strong> = "참고문구로 무시" 체크
+                                  </>
+                                )}
+                              </div>
+                              <div className="flex gap-2 shrink-0">
+                                {!isManage && entries.length > 0 && (
+                                  <button type="button" onClick={commitAllReady}
+                                    className="px-3 py-2 text-[11px] font-black uppercase tracking-widest bg-white text-black border-2 border-black hover:bg-black hover:text-white transition-all"
+                                    style={{borderRadius:'2px'}}>✓ 완성된 항목 일괄 확정</button>
+                                )}
+                                <button type="button" onClick={() => setAliasMatchOpen(false)}
+                                  className="px-4 py-2 text-[11px] font-black uppercase tracking-widest bg-black text-white border-2 border-black hover:bg-neutral-800"
+                                  style={{borderRadius:'2px'}}>닫기</button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                   );
                 })()}
