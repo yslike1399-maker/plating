@@ -1216,6 +1216,26 @@ ${list}` }]
             try { localStorage.setItem('product_name_alias', JSON.stringify(data)); } catch (e) {}
           };
 
+          // 💠 v20260521.01 Phase 5-B-2-a: 누적 일별 결과 카드의 상세 토글
+          const [expandedDailyKey, setExpandedDailyKey] = useState(null);
+
+          // 💠 v20260521.01 Phase 5-B-2-a: 일별 마진 결과 누적 저장
+          // 키: YYYY-MM-DD (저장 시점 엑셀의 발송일자)
+          // 값: { fileName, dateRange, channels:{smartstore:{...},...}, total:{...}, savedAt }
+          //   - channels[ch] = { orders, revenue, costIncVat, fee, shippingNet, packaging, netMargin }
+          //   - total = 같은 구조
+          //   - 원본 엑셀은 저장 안 함 (메모리 정책 — quota 회피, 결과값만 보관)
+          const [costMarginDailyResults, setCostMarginDailyResults] = useState(() => {
+            try {
+              const raw = localStorage.getItem('cost_margin_daily_results');
+              return raw ? JSON.parse(raw) : {};
+            } catch { return {}; }
+          });
+          const saveCostMarginDailyResults = (data) => {
+            setCostMarginDailyResults(data);
+            try { localStorage.setItem('cost_margin_daily_results', JSON.stringify(data)); } catch (e) {}
+          };
+
           // 💠 v20260520.05 Phase 5-A: 일마진 엑셀 업로드 임시 상태 (메모리만, localStorage 저장 안 함)
           // { fileName, sheetName, dateRange, totalRows, channels, allSlices:[{rowIdx,sliceIdx,text,channel,amount,qty}], mappedCount, unmappedSlices:[조각텍스트] }
           const [excelUploadResult, setExcelUploadResult] = useState(null);
@@ -3252,7 +3272,7 @@ ${list}` }]
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260520.06</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260521.01</div>
                   </div>
                   
                   {/* v10.06: 헬퍼/봇 상태등 */}
@@ -3422,8 +3442,10 @@ ${list}` }]
                         costMarginSettings, costMarginOptions,
                         // 💠 v20260520.05 Phase 5-A: 상품명 매핑 테이블 (엑셀 조각 → 9-1)
                         productNameAliases,
+                        // 💠 v20260521.01 Phase 5-B-2-a: 일별 마진 결과 누적
+                        costMarginDailyResults,
                         exportDate: new Date().toISOString(),
-                        appVersion: 'v20260520.06'
+                        appVersion: 'v20260521.01'
                       };
                       const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
                       const url = URL.createObjectURL(blob);
@@ -3521,6 +3543,8 @@ ${list}` }]
                             if (Array.isArray(data.costMarginOptions)) saveCostMarginOptions(data.costMarginOptions);
                             // 💠 v20260520.05 Phase 5-A: 상품명 매핑 테이블 복원
                             if (data.productNameAliases && typeof data.productNameAliases === 'object') saveProductNameAliases(data.productNameAliases);
+                            // 💠 v20260521.01 Phase 5-B-2-a: 일별 결과 누적 복원
+                            if (data.costMarginDailyResults && typeof data.costMarginDailyResults === 'object') saveCostMarginDailyResults(data.costMarginDailyResults);
                             // 💠 v20260513: 1-2 작업지시서 이미지 매핑 IndexedDB 복원 (PC 간 동기화)
                             if (data.workorderImages && typeof data.workorderImages === 'object') {
                               (async () => {
@@ -17107,12 +17131,53 @@ ${list}` }]
                         const negative = (n) => n < 0 ? 'text-red-600 font-black' : 'text-black font-bold';
                         return (
                           <div className="bg-white border-2 border-black p-5" style={{borderRadius:'6px'}}>
-                            <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
                               <div>
                                 <div className="text-sm font-black tracking-widest uppercase text-black">💰 일별 마진 결과</div>
                                 <div className="text-[10px] text-neutral-500 tracking-wider mt-0.5">{excelUploadResult.dateRange} · DAILY MARGIN SUMMARY</div>
                               </div>
-                              <div className="text-[10px] text-neutral-500 tracking-wider">VAT {cms.vatRate}% 일괄 가산 · 수수료 {cms.naverFeePct}%</div>
+                              <div className="flex items-center gap-3">
+                                <div className="text-[10px] text-neutral-500 tracking-wider">VAT {cms.vatRate}% · 수수료 {cms.naverFeePct}%</div>
+                                {/* 💠 v20260521.01 Phase 5-B-2-a: 이날 결과 저장 버튼 */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    // 날짜 키 추출: dateRange가 단일 날짜 또는 범위 — 단일 날짜만 저장 허용
+                                    const range = excelUploadResult.dateRange || '';
+                                    const dateMatch = range.match(/^\s*(\d{4}-\d{2}-\d{2})\s*$/);
+                                    if (!dateMatch) {
+                                      alert(`날짜 저장 불가\n\n엑셀 발송일자가 단일 날짜가 아닙니다: "${range}"\n\n날짜 범위(여러 일자) 엑셀은 분할해서 업로드해주세요.`);
+                                      return;
+                                    }
+                                    const dateKey = dateMatch[1];
+                                    const existing = costMarginDailyResults[dateKey];
+                                    if (existing) {
+                                      if (!confirm(`${dateKey} 결과가 이미 저장되어 있습니다.\n\n저장 일시: ${new Date(existing.savedAt).toLocaleString('ko-KR')}\n파일: ${existing.fileName}\n\n덮어쓰시겠습니까?`)) return;
+                                    }
+                                    const record = {
+                                      fileName: excelUploadResult.fileName,
+                                      dateRange: excelUploadResult.dateRange,
+                                      channels: agg.byChannel,
+                                      total: agg.total,
+                                      vatRate: cms.vatRate,
+                                      naverFeePct: cms.naverFeePct,
+                                      shippingCharged: cms.shippingCharged,
+                                      shippingContract: cms.shippingContract,
+                                      packagingCost: cms.packagingCost,
+                                      savedAt: new Date().toISOString(),
+                                    };
+                                    saveCostMarginDailyResults({
+                                      ...costMarginDailyResults,
+                                      [dateKey]: record,
+                                    });
+                                    alert(`${dateKey} 결과 저장 완료 ✓\n\n순마진: ${Math.round(agg.total.netMargin).toLocaleString()}원\n주문 ${agg.total.orders}건`);
+                                  }}
+                                  className="px-3 py-1.5 text-[11px] font-black uppercase tracking-widest bg-black text-white border-2 border-black hover:bg-white hover:text-black transition-all"
+                                  style={{borderRadius:'2px'}}
+                                >
+                                  💾 이날 결과 저장
+                                </button>
+                              </div>
                             </div>
 
                             {/* 전체 합계 하이라이트 카드 */}
@@ -17193,6 +17258,165 @@ ${list}` }]
                               · 수수료 = 매출 × {cms.naverFeePct}% (모든 채널 동일 · 추후 채널별 분리 예정)<br/>
                               · 배송손익 = 고객부담({fmt(cms.shippingCharged)}) − 우리계약({fmt(cms.shippingContract)}) = <span className={cms.shippingCharged - cms.shippingContract < 0 ? 'text-red-600 font-bold' : 'text-black font-bold'}>{fmt(cms.shippingCharged - cms.shippingContract)}원/주문</span> · 포장비 = {fmt(cms.packagingCost)}원/주문
                             </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* 💠 v20260521.01 Phase 5-B-2-a: 누적 일별 결과 조회 카드 */}
+                      {(() => {
+                        const dr = costMarginDailyResults || {};
+                        const dateKeys = Object.keys(dr).sort((a, b) => b.localeCompare(a)); // 최신순
+                        const fmt = (n) => Math.round(Number(n)||0).toLocaleString();
+                        const pct = (m, r) => r > 0 ? ((m / r) * 100).toFixed(1) + '%' : '—';
+                        // 전체 누적 합계
+                        const sum = { orders: 0, revenue: 0, costIncVat: 0, fee: 0, shippingNet: 0, packaging: 0, netMargin: 0 };
+                        dateKeys.forEach(k => {
+                          const t = dr[k]?.total || {};
+                          sum.orders += Number(t.orders)||0;
+                          sum.revenue += Number(t.revenue)||0;
+                          sum.costIncVat += Number(t.costIncVat)||0;
+                          sum.fee += Number(t.fee)||0;
+                          sum.shippingNet += Number(t.shippingNet)||0;
+                          sum.packaging += Number(t.packaging)||0;
+                          sum.netMargin += Number(t.netMargin)||0;
+                        });
+                        return (
+                          <div className="bg-white border-2 border-black p-5" style={{borderRadius:'6px'}}>
+                            <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
+                              <div>
+                                <div className="text-sm font-black tracking-widest uppercase text-black">📅 누적 일별 결과</div>
+                                <div className="text-[10px] text-neutral-500 tracking-wider mt-0.5">SAVED DAILY RESULTS · 저장된 일자 {dateKeys.length}개</div>
+                              </div>
+                              {dateKeys.length > 0 && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[11px] text-neutral-700 font-bold">누적 순마진 = </span>
+                                  <span className={`font-mono font-black text-base ${sum.netMargin < 0 ? 'text-red-600' : 'text-black'}`}>{fmt(sum.netMargin)}원</span>
+                                  <span className="text-[10px] text-neutral-500">({pct(sum.netMargin, sum.revenue)})</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {dateKeys.length === 0 ? (
+                              <div className="bg-neutral-50 border border-dashed border-neutral-300 p-6 text-center text-xs text-neutral-500" style={{borderRadius:'4px'}}>
+                                저장된 일별 결과가 없습니다.<br/>
+                                <span className="text-[10px] text-neutral-400">일마진 엑셀을 업로드한 뒤 결과 카드에서 [💾 이날 결과 저장]을 누르세요.</span>
+                              </div>
+                            ) : (
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-xs">
+                                  <thead>
+                                    <tr className="border-b-2 border-black text-[10px] font-black uppercase tracking-widest text-neutral-700">
+                                      <th className="text-left px-2 py-2">날짜</th>
+                                      <th className="text-right px-2 py-2">주문</th>
+                                      <th className="text-right px-2 py-2">매출</th>
+                                      <th className="text-right px-2 py-2">원가(VAT포함)</th>
+                                      <th className="text-right px-2 py-2">수수료</th>
+                                      <th className="text-right px-2 py-2">배송손익</th>
+                                      <th className="text-right px-2 py-2">포장</th>
+                                      <th className="text-right px-2 py-2">순마진</th>
+                                      <th className="text-right px-2 py-2">마진율</th>
+                                      <th className="text-center px-2 py-2"></th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {dateKeys.map((k, idx) => {
+                                      const rec = dr[k];
+                                      const t = rec?.total || {};
+                                      return (
+                                        <React.Fragment key={k}>
+                                          <tr className={`border-b border-neutral-200 ${idx % 2 === 0 ? 'bg-white' : 'bg-neutral-50'} hover:bg-neutral-100`}>
+                                            <td className="text-left px-2 py-2 font-bold font-mono">{k}</td>
+                                            <td className="text-right px-2 py-2 font-mono">{fmt(t.orders)}</td>
+                                            <td className="text-right px-2 py-2 font-mono">{fmt(t.revenue)}</td>
+                                            <td className="text-right px-2 py-2 font-mono text-neutral-600">{fmt(t.costIncVat)}</td>
+                                            <td className="text-right px-2 py-2 font-mono text-amber-700">{fmt(t.fee)}</td>
+                                            <td className={`text-right px-2 py-2 font-mono ${t.shippingNet < 0 ? 'text-red-600' : 'text-neutral-600'}`}>{fmt(t.shippingNet)}</td>
+                                            <td className="text-right px-2 py-2 font-mono text-neutral-600">{fmt(t.packaging)}</td>
+                                            <td className={`text-right px-2 py-2 font-mono ${t.netMargin < 0 ? 'text-red-600 font-black' : 'text-black font-bold'}`}>{fmt(t.netMargin)}</td>
+                                            <td className={`text-right px-2 py-2 font-mono font-bold ${t.netMargin < 0 ? 'text-red-600' : ''}`}>{pct(t.netMargin, t.revenue)}</td>
+                                            <td className="text-center px-2 py-2 whitespace-nowrap">
+                                              <button type="button"
+                                                onClick={() => setExpandedDailyKey(prev => prev === k ? null : k)}
+                                                className="text-[10px] text-neutral-600 hover:text-black underline mr-2">
+                                                {expandedDailyKey === k ? '닫기' : '상세'}
+                                              </button>
+                                              <button type="button"
+                                                onClick={() => {
+                                                  if (!confirm(`${k} 저장 결과를 삭제할까요?\n\n순마진 ${fmt(t.netMargin)}원 / 주문 ${fmt(t.orders)}건`)) return;
+                                                  const next = { ...costMarginDailyResults };
+                                                  delete next[k];
+                                                  saveCostMarginDailyResults(next);
+                                                  if (expandedDailyKey === k) setExpandedDailyKey(null);
+                                                }}
+                                                className="text-[10px] text-red-600 hover:underline">삭제</button>
+                                            </td>
+                                          </tr>
+                                          {expandedDailyKey === k && (
+                                            <tr className="bg-neutral-100 border-b border-neutral-200">
+                                              <td colSpan={10} className="px-3 py-3">
+                                                <div className="text-[10px] text-neutral-600 mb-2">
+                                                  📄 파일: <strong className="text-black">{rec.fileName}</strong> · 저장: {new Date(rec.savedAt).toLocaleString('ko-KR')} · 적용 VAT {rec.vatRate}% / 수수료 {rec.naverFeePct}% / 택배 고객 {fmt(rec.shippingCharged)} - 계약 {fmt(rec.shippingContract)} / 포장 {fmt(rec.packagingCost)}
+                                                </div>
+                                                <table className="w-full text-[11px]">
+                                                  <thead>
+                                                    <tr className="border-b border-neutral-300 text-[10px] font-black uppercase tracking-wider text-neutral-500">
+                                                      <th className="text-left px-2 py-1">채널</th>
+                                                      <th className="text-right px-2 py-1">주문</th>
+                                                      <th className="text-right px-2 py-1">매출</th>
+                                                      <th className="text-right px-2 py-1">원가</th>
+                                                      <th className="text-right px-2 py-1">수수료</th>
+                                                      <th className="text-right px-2 py-1">배송</th>
+                                                      <th className="text-right px-2 py-1">포장</th>
+                                                      <th className="text-right px-2 py-1">순마진</th>
+                                                      <th className="text-right px-2 py-1">마진율</th>
+                                                    </tr>
+                                                  </thead>
+                                                  <tbody>
+                                                    {['smartstore','zigzag','kakao','etc'].filter(ch => (rec.channels?.[ch]?.orders||0) > 0).map(ch => {
+                                                      const c = rec.channels[ch];
+                                                      return (
+                                                        <tr key={ch} className="border-b border-neutral-200">
+                                                          <td className="text-left px-2 py-1">
+                                                            <span className={`inline-block px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider ${ch === 'smartstore' ? 'bg-black text-white' : 'bg-amber-100 text-amber-800 border border-amber-300'}`} style={{borderRadius:'2px'}}>
+                                                              {channelLabel[ch]}
+                                                            </span>
+                                                          </td>
+                                                          <td className="text-right px-2 py-1 font-mono">{fmt(c.orders)}</td>
+                                                          <td className="text-right px-2 py-1 font-mono">{fmt(c.revenue)}</td>
+                                                          <td className="text-right px-2 py-1 font-mono text-neutral-600">{fmt(c.costIncVat)}</td>
+                                                          <td className="text-right px-2 py-1 font-mono text-amber-700">{fmt(c.fee)}</td>
+                                                          <td className={`text-right px-2 py-1 font-mono ${c.shippingNet < 0 ? 'text-red-600' : ''}`}>{fmt(c.shippingNet)}</td>
+                                                          <td className="text-right px-2 py-1 font-mono text-neutral-600">{fmt(c.packaging)}</td>
+                                                          <td className={`text-right px-2 py-1 font-mono ${c.netMargin < 0 ? 'text-red-600 font-black' : 'text-black font-bold'}`}>{fmt(c.netMargin)}</td>
+                                                          <td className={`text-right px-2 py-1 font-mono font-bold ${c.netMargin < 0 ? 'text-red-600' : ''}`}>{pct(c.netMargin, c.revenue)}</td>
+                                                        </tr>
+                                                      );
+                                                    })}
+                                                  </tbody>
+                                                </table>
+                                              </td>
+                                            </tr>
+                                          )}
+                                        </React.Fragment>
+                                      );
+                                    })}
+                                    {/* 누적 합계 행 */}
+                                    <tr className="border-t-2 border-black bg-neutral-100 font-black">
+                                      <td className="text-left px-2 py-2 uppercase tracking-widest text-[10px]">누적</td>
+                                      <td className="text-right px-2 py-2 font-mono">{fmt(sum.orders)}</td>
+                                      <td className="text-right px-2 py-2 font-mono">{fmt(sum.revenue)}</td>
+                                      <td className="text-right px-2 py-2 font-mono">{fmt(sum.costIncVat)}</td>
+                                      <td className="text-right px-2 py-2 font-mono">{fmt(sum.fee)}</td>
+                                      <td className={`text-right px-2 py-2 font-mono ${sum.shippingNet < 0 ? 'text-red-600' : ''}`}>{fmt(sum.shippingNet)}</td>
+                                      <td className="text-right px-2 py-2 font-mono">{fmt(sum.packaging)}</td>
+                                      <td className={`text-right px-2 py-2 font-mono ${sum.netMargin < 0 ? 'text-red-600' : 'text-black'}`}>{fmt(sum.netMargin)}</td>
+                                      <td className={`text-right px-2 py-2 font-mono ${sum.netMargin < 0 ? 'text-red-600' : ''}`}>{pct(sum.netMargin, sum.revenue)}</td>
+                                      <td></td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
                           </div>
                         );
                       })()}
@@ -17484,7 +17708,8 @@ ${list}` }]
                           ['Phase 2A-2', '매입가/부가세 라벨', true],
                           ['Phase 5-A', '엑셀 업로드+매칭', true],
                           ['Phase 5-B-1', '일별 마진 계산', true],
-                          ['Phase 5-B-2', '일별 결과 누적/상세', false],
+                          ['Phase 5-B-2-a', '일별 결과 누적', true],
+                          ['Phase 5-B-2-b', '주문 상세/정밀화', false],
                           ['Phase 2A-3', '금형비 필드', false],
                           ['Phase 3', '제품별 마진 계산기', false],
                           ['Phase 4', '금형비 회수 / BEP', false],
