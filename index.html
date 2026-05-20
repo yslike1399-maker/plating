@@ -3223,7 +3223,7 @@ ${list}` }]
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260520.02</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260520.03</div>
                   </div>
                   
                   {/* v10.06: 헬퍼/봇 상태등 */}
@@ -3392,7 +3392,7 @@ ${list}` }]
                         // 💠 v20260520.02: 10번 원가/마진 설정 + 옵션 마스터
                         costMarginSettings, costMarginOptions,
                         exportDate: new Date().toISOString(),
-                        appVersion: 'v20260520.02'
+                        appVersion: 'v20260520.03'
                       };
                       const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
                       const url = URL.createObjectURL(blob);
@@ -13468,7 +13468,7 @@ ${list}` }]
                                                 const selCount = (form._selectedColors||[]).length;
                                                 return (
                                                   <div className="flex items-center gap-2 bg-amber-50 border border-amber-300 p-2" style={{borderRadius:'2px'}}>
-                                                    <span className="text-[10px] font-bold text-amber-900 uppercase tracking-wider shrink-0">일괄 도금단가</span>
+                                                    <span className="text-[10px] font-bold text-amber-900 uppercase tracking-wider shrink-0">일괄 도금단가 <span className="text-[9px] text-amber-700 normal-case tracking-normal font-medium">(부가세 별도)</span></span>
                                                     <input type="number" value={form._bulkPlatingCost||''}
                                                       onChange={e=>setForm(p=>({...p, _bulkPlatingCost: e.target.value}))}
                                                       placeholder="단가(원)"
@@ -14155,7 +14155,7 @@ ${list}` }]
                                             </div>
 
                                             <div>
-                                              <label className="block text-[10px] font-bold text-neutral-600 mb-1 uppercase tracking-wider">연마 원가</label>
+                                              <label className="block text-[10px] font-bold text-neutral-600 mb-1 uppercase tracking-wider">연마 원가 <span className="text-[9px] text-neutral-500 normal-case tracking-normal font-medium">(부가세 별도)</span></label>
                                               <input type="number" value={form.grindCost||''}
                                                 onChange={e=>setForm(p=>({...p, grindCost: e.target.value}))}
                                                 placeholder="원 (도금공장 청구 매칭용)"
@@ -14185,7 +14185,7 @@ ${list}` }]
                                               return (
                                                 <div className="bg-white border border-neutral-300 p-3 mt-2" style={{borderRadius:'2px'}}>
                                                   <div className="flex items-center justify-between mb-2">
-                                                    <span className="text-[11px] font-bold text-black uppercase tracking-wider">색상별 도금 단가 ({enteredColors.length}/{allColors.length}색)</span>
+                                                    <span className="text-[11px] font-bold text-black uppercase tracking-wider">색상별 도금 단가 ({enteredColors.length}/{allColors.length}색) <span className="text-[9px] text-neutral-500 normal-case tracking-normal font-medium">(부가세 별도)</span></span>
                                                     <span className="text-[10px] text-neutral-500">↑ 색상카드에서 입력</span>
                                                   </div>
                                                   {allColors.length === 0 ? (
@@ -14322,7 +14322,7 @@ ${list}` }]
                                                   <p className="text-xs text-slate-400 mt-0.5">4-3 요척계산기 참조</p>
                                                 </div>
                                                 <div>
-                                                  <label className="block text-xs font-semibold text-slate-600 mb-1">1개당 원단원가</label>
+                                                  <label className="block text-xs font-semibold text-slate-600 mb-1">1개당 원단원가 <span className="text-[10px] text-slate-400 font-medium">(부가세 별도)</span></label>
                                                   <div className="px-3 py-2 rounded-lg bg-white border-2 border-blue-200 text-sm font-bold text-blue-700">
                                                     {form.yardsPerUnit && form.fabricPrice ? `${(form.yardsPerUnit * form.fabricPrice).toFixed(1)}원` : '—'}
                                                   </div>
@@ -14549,8 +14549,9 @@ ${list}` }]
                                         )}
 
                                         {/* 💠 v20260520.02 Phase 2A-1: 판매가 (기본 + 색상별 오버라이드) */}
+                                        {/* 💠 v20260520.03 Phase 2A-2: (부가세 포함) 라벨 + 부가세 일괄 적용 안내 */}
                                         <div className="bg-neutral-50 border border-neutral-300 p-3" style={{borderRadius:'2px'}}>
-                                          <label className="block text-[11px] font-bold text-black mb-2 uppercase tracking-wider">💰 판매가</label>
+                                          <label className="block text-[11px] font-bold text-black mb-2 uppercase tracking-wider">💰 판매가 <span className="text-[9px] text-neutral-500 normal-case tracking-normal font-medium">(부가세 포함 · 네이버 등록가)</span></label>
                                           <div className="flex items-center gap-2">
                                             <span className="text-[11px] font-bold text-neutral-700 w-24 shrink-0">기본 판매가</span>
                                             <input type="number" min="0" step="100"
@@ -14567,7 +14568,7 @@ ${list}` }]
                                           {(form.colors||[]).length > 0 && (
                                             <div className="mt-3 pt-3 border-t border-neutral-200">
                                               <div className="text-[10px] font-black text-neutral-600 mb-2 uppercase tracking-wider">
-                                                색상별 예외 단가 <span className="font-normal normal-case tracking-normal text-neutral-400">(비우면 기본가 적용)</span>
+                                                색상별 예외 단가 <span className="font-normal normal-case tracking-normal text-neutral-400">(비우면 기본가 적용 · 부가세 포함)</span>
                                               </div>
                                               <div className="space-y-1">
                                                 {(form.colors||[]).map(c => {
@@ -14596,6 +14597,11 @@ ${list}` }]
                                               </div>
                                             </div>
                                           )}
+                                          {/* 💠 v20260520.03 Phase 2A-2: 부가세 일괄 적용 안내 */}
+                                          <div className="mt-3 pt-3 border-t border-neutral-200 text-[10px] text-neutral-500 leading-relaxed">
+                                            💡 <strong className="text-neutral-700">부가세 처리 규칙</strong> · <span className="text-black font-bold">판매가</span>는 부가세 포함(네이버 등록가), <span className="text-black font-bold">매입가</span>(도금/연마/원단)는 부가세 별도로 입력합니다.
+                                            <br/>· 10번 원가/마진 탭에서 마진 계산 시 <strong className="text-neutral-700">매입가 합계에 부가세 10%가 일괄 가산</strong>되어 순매입가로 환산됩니다.
+                                          </div>
                                         </div>
                                         <div>
                                           <label className="block text-[11px] font-bold text-black mb-2 uppercase tracking-wider">메모</label>
@@ -16932,7 +16938,7 @@ ${list}` }]
                           ['Phase 1', '탭 골격', true],
                           ['Phase 2B', '세금/옵션 설정', true],
                           ['Phase 2A-1', '판매가 (기본+색상별)', true],
-                          ['Phase 2A-2', '매입가/부가세 라벨', false],
+                          ['Phase 2A-2', '매입가/부가세 라벨', true],
                           ['Phase 2A-3', '금형비 필드', false],
                           ['Phase 3', '제품별 마진 계산기', false],
                           ['Phase 4', '금형비 회수 / BEP', false],
