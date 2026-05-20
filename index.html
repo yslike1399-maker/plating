@@ -3252,7 +3252,7 @@ ${list}` }]
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260520.05</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260520.06</div>
                   </div>
                   
                   {/* v10.06: 헬퍼/봇 상태등 */}
@@ -3423,7 +3423,7 @@ ${list}` }]
                         // 💠 v20260520.05 Phase 5-A: 상품명 매핑 테이블 (엑셀 조각 → 9-1)
                         productNameAliases,
                         exportDate: new Date().toISOString(),
-                        appVersion: 'v20260520.05'
+                        appVersion: 'v20260520.06'
                       };
                       const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
                       const url = URL.createObjectURL(blob);
@@ -16790,7 +16790,7 @@ ${list}` }]
                         setAliasMatchOpen(true);
                         alert(`엑셀 분석 완료\n\n총 ${result.totalRows}건 주문 / ${result.totalSlices}개 조각\n매핑됨: ${mappedCount}개\n미매핑: ${unmappedSlices.length}개\n\n미매핑 조각을 먼저 매칭해주세요.`);
                       } else {
-                        alert(`엑셀 분석 완료 ✓\n\n총 ${result.totalRows}건 주문 / ${result.totalSlices}개 조각 모두 매핑됨\n\n(마진 계산 결과 화면은 Phase 5-B에서 구현 예정)`);
+                        alert(`엑셀 분석 완료 ✓\n\n총 ${result.totalRows}건 주문 / ${result.totalSlices}개 조각 모두 매핑됨\n\n아래 [💰 일별 마진 결과] 카드에 계산 결과가 표시됩니다.`);
                       }
                     } catch (err) {
                       console.error('엑셀 파싱 실패:', err);
@@ -16838,6 +16838,132 @@ ${list}` }]
                       });
                     }
                     alert(`매핑 ${Object.keys(draft).length}개 저장 완료 ✓`);
+                  };
+
+                  // ─────────────────────────────────────────────────────────────
+                  // 💠 v20260520.06 Phase 5-B-1: 일별 마진 계산 로직
+                  // 정책 (메모리 + Phase 2A-2):
+                  //  · 매입가는 모두 부가세 별도(공급가액). 마지막에 (1+vatRate/100) 일괄 가산
+                  //  · 채널은 현재 모두 동일 처리. 추후 지그재그/카카오 별도 처리 위해 getChannelFeeRate로 분리
+                  //  · 한 조각 = 1개 가정 (행 단위 수량 분배는 5-B-2에서 정밀화)
+                  // ─────────────────────────────────────────────────────────────
+
+                  // 채널별 수수료율 (확장 포인트 — 추후 지그재그/카카오 다른 처리)
+                  const getChannelFeeRate = (channel) => {
+                    // TODO: 채널별 분리. 현재는 메모리 정책에 따라 모두 naverFeePct 동일 적용
+                    return cms.naverFeePct || 0;
+                  };
+
+                  // 9-1 상품에서 색상별 판매가 추출
+                  const getSalePrice = (product, color) => {
+                    if (!product) return 0;
+                    const overrides = product.salePriceOverrides || {};
+                    if (color && overrides[color] != null) return Number(overrides[color]) || 0;
+                    return Number(product.defaultSalePrice) || 0;
+                  };
+
+                  // 9-1 상품에서 색상별 본 상품 원가(VAT 별도) 추출
+                  // · 헤어핀: colorPlatingCosts[색상] + (grindRequired ? grindCost : 0)
+                  // · 곱창밴드/셀룰로오스: yardsPerUnit × fabricPrice
+                  // · 기타: 0
+                  const getProductCostExVat = (product, color) => {
+                    if (!product) return 0;
+                    const cpc = product.colorPlatingCosts || {};
+                    if (product.type === 'hairpin') {
+                      const plating = Number(cpc[color]) || 0;
+                      const grind = product.grindRequired ? (Number(product.grindCost) || 0) : 0;
+                      return plating + grind;
+                    }
+                    if (product.type === 'gocchang' || product.type === 'cellulose') {
+                      const ypu = Number(product.yardsPerUnit) || 0;
+                      const fp = Number(product.fabricPrice) || 0;
+                      // 곱창/셀룰로오스도 도금이 있는 케이스(셀룰로오스 복합)는 색상별 도금비도 더함
+                      const plating = Number(cpc[color]) || 0;
+                      return ypu * fp + plating;
+                    }
+                    // 기타 타입: 일단 0
+                    return 0;
+                  };
+
+                  // 조각 단위 매출/원가 (VAT 별도) 계산
+                  const calcSliceMargin = (slice, alias) => {
+                    if (!alias || alias.ignored) return { revenue: 0, costExVat: 0 };
+                    const opts = costMarginOptions || [];
+                    const optionIds = alias.optionIds || [];
+                    let revenue = 0, costExVat = 0;
+                    // 본 상품
+                    if (alias.productId && alias.color) {
+                      const product = (masterProducts || []).find(p => String(p.id) === String(alias.productId));
+                      revenue += getSalePrice(product, alias.color);
+                      costExVat += getProductCostExVat(product, alias.color);
+                    }
+                    // 옵션 (본 상품 + 옵션 또는 옵션 전용 둘 다 동일 처리)
+                    optionIds.forEach(oid => {
+                      const opt = opts.find(o => String(o.id) === String(oid));
+                      if (opt) {
+                        revenue += Number(opt.addRevenue) || 0;
+                        costExVat += Number(opt.addCost) || 0;
+                      }
+                    });
+                    return { revenue, costExVat };
+                  };
+
+                  // 행(주문) 단위 마진 계산
+                  const calcRowMargin = (rowSlices, channel) => {
+                    // rowSlices: [{ text, ... }] — 같은 rowIdx의 조각들
+                    const aliases = productNameAliases || {};
+                    let revenue = 0, costExVat = 0;
+                    rowSlices.forEach(s => {
+                      const sm = calcSliceMargin(s, aliases[s.text]);
+                      revenue += sm.revenue;
+                      costExVat += sm.costExVat;
+                    });
+                    const vatRate = Number(cms.vatRate) || 0;
+                    const costIncVat = costExVat * (1 + vatRate / 100);
+                    const feeRate = getChannelFeeRate(channel);
+                    const fee = revenue * (feeRate / 100);
+                    // 배송 손익 = 고객 부담 - 우리 계약 (음수면 우리가 손실 부담)
+                    const shippingNet = (Number(cms.shippingCharged) || 0) - (Number(cms.shippingContract) || 0);
+                    const packaging = Number(cms.packagingCost) || 0;
+                    const netMargin = revenue - costIncVat - fee + shippingNet - packaging;
+                    return { revenue, costExVat, costIncVat, fee, shippingNet, packaging, netMargin };
+                  };
+
+                  // 일별 합계 (채널별 분리 + 전체)
+                  // excelUploadResult.allSlices를 rowIdx별로 묶어서 행 단위 계산 → 채널별 합산
+                  const computeDailyAggregate = () => {
+                    if (!excelUploadResult) return null;
+                    const allSlices = excelUploadResult.allSlices || [];
+                    // rowIdx → { channel, slices:[] }
+                    const rowMap = new Map();
+                    allSlices.forEach(s => {
+                      if (!rowMap.has(s.rowIdx)) rowMap.set(s.rowIdx, { channel: s.channel, slices: [] });
+                      rowMap.get(s.rowIdx).slices.push(s);
+                    });
+                    // 채널별 누적 + 전체 누적
+                    const empty = () => ({ orders: 0, revenue: 0, costIncVat: 0, fee: 0, shippingNet: 0, packaging: 0, netMargin: 0 });
+                    const byChannel = { smartstore: empty(), zigzag: empty(), kakao: empty(), etc: empty() };
+                    const total = empty();
+                    rowMap.forEach(({ channel, slices }) => {
+                      const m = calcRowMargin(slices, channel);
+                      const bucket = byChannel[channel] || byChannel.etc;
+                      ['orders'].forEach(()=>{});
+                      bucket.orders += 1;
+                      bucket.revenue += m.revenue;
+                      bucket.costIncVat += m.costIncVat;
+                      bucket.fee += m.fee;
+                      bucket.shippingNet += m.shippingNet;
+                      bucket.packaging += m.packaging;
+                      bucket.netMargin += m.netMargin;
+                      total.orders += 1;
+                      total.revenue += m.revenue;
+                      total.costIncVat += m.costIncVat;
+                      total.fee += m.fee;
+                      total.shippingNet += m.shippingNet;
+                      total.packaging += m.packaging;
+                      total.netMargin += m.netMargin;
+                    });
+                    return { byChannel, total };
                   };
 
                   return (
@@ -16961,12 +17087,115 @@ ${list}` }]
                             ) : (
                               <div className="bg-green-50 border-2 border-green-700 p-3 text-xs text-green-800" style={{borderRadius:'4px'}}>
                                 ✓ 모든 조각이 매핑되었습니다.
-                                <span className="text-[10px] text-green-700 ml-2">(일별 마진 계산 결과 화면은 Phase 5-B에서 구현 예정)</span>
+                                <span className="text-[10px] text-green-700 ml-2">아래 [💰 일별 마진 결과] 카드 확인</span>
                               </div>
                             )}
                           </div>
                         )}
                       </div>
+
+                      {/* 💠 v20260520.06 Phase 5-B-1: 일별 마진 결과 카드 (매핑 모두 완료 시에만 표시) */}
+                      {excelUploadResult && excelUploadResult.unmappedSlices.length === 0 && (() => {
+                        const agg = computeDailyAggregate();
+                        if (!agg) return null;
+                        const fmt = (n) => Math.round(n).toLocaleString();
+                        const pct = (m, r) => r > 0 ? ((m / r) * 100).toFixed(1) + '%' : '—';
+                        const channelOrder = ['smartstore', 'zigzag', 'kakao', 'etc'];
+                        const channelRows = channelOrder
+                          .filter(ch => agg.byChannel[ch].orders > 0)
+                          .map(ch => [ch, agg.byChannel[ch]]);
+                        const negative = (n) => n < 0 ? 'text-red-600 font-black' : 'text-black font-bold';
+                        return (
+                          <div className="bg-white border-2 border-black p-5" style={{borderRadius:'6px'}}>
+                            <div className="flex items-center justify-between mb-4">
+                              <div>
+                                <div className="text-sm font-black tracking-widest uppercase text-black">💰 일별 마진 결과</div>
+                                <div className="text-[10px] text-neutral-500 tracking-wider mt-0.5">{excelUploadResult.dateRange} · DAILY MARGIN SUMMARY</div>
+                              </div>
+                              <div className="text-[10px] text-neutral-500 tracking-wider">VAT {cms.vatRate}% 일괄 가산 · 수수료 {cms.naverFeePct}%</div>
+                            </div>
+
+                            {/* 전체 합계 하이라이트 카드 */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+                              <div className="border-2 border-black p-2 text-center bg-neutral-50" style={{borderRadius:'2px'}}>
+                                <div className="text-[10px] font-black tracking-widest uppercase text-neutral-500">매출</div>
+                                <div className="text-lg font-black text-black mt-0.5 font-mono">{fmt(agg.total.revenue)}<span className="text-[10px] ml-0.5">원</span></div>
+                              </div>
+                              <div className="border-2 border-neutral-700 p-2 text-center bg-neutral-50" style={{borderRadius:'2px'}}>
+                                <div className="text-[10px] font-black tracking-widest uppercase text-neutral-500">원가(VAT포함)</div>
+                                <div className="text-lg font-black text-neutral-700 mt-0.5 font-mono">{fmt(agg.total.costIncVat)}<span className="text-[10px] ml-0.5">원</span></div>
+                              </div>
+                              <div className="border-2 border-amber-600 p-2 text-center bg-amber-50" style={{borderRadius:'2px'}}>
+                                <div className="text-[10px] font-black tracking-widest uppercase text-amber-700">수수료+배송+포장</div>
+                                <div className="text-lg font-black text-amber-800 mt-0.5 font-mono">{fmt(agg.total.fee - agg.total.shippingNet + agg.total.packaging)}<span className="text-[10px] ml-0.5">원</span></div>
+                              </div>
+                              <div className={`border-2 p-2 text-center ${agg.total.netMargin >= 0 ? 'border-green-700 bg-green-50' : 'border-red-600 bg-red-50'}`} style={{borderRadius:'2px'}}>
+                                <div className={`text-[10px] font-black tracking-widest uppercase ${agg.total.netMargin >= 0 ? 'text-green-800' : 'text-red-700'}`}>순마진 ({pct(agg.total.netMargin, agg.total.revenue)})</div>
+                                <div className={`text-lg font-black mt-0.5 font-mono ${agg.total.netMargin >= 0 ? 'text-green-800' : 'text-red-700'}`}>{fmt(agg.total.netMargin)}<span className="text-[10px] ml-0.5">원</span></div>
+                              </div>
+                            </div>
+
+                            {/* 채널별 + 합계 테이블 */}
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-xs">
+                                <thead>
+                                  <tr className="border-b-2 border-black text-[10px] font-black uppercase tracking-widest text-neutral-700">
+                                    <th className="text-left px-2 py-2">채널</th>
+                                    <th className="text-right px-2 py-2">주문</th>
+                                    <th className="text-right px-2 py-2">매출</th>
+                                    <th className="text-right px-2 py-2">원가(VAT포함)</th>
+                                    <th className="text-right px-2 py-2">수수료</th>
+                                    <th className="text-right px-2 py-2">배송손익</th>
+                                    <th className="text-right px-2 py-2">포장</th>
+                                    <th className="text-right px-2 py-2">순마진</th>
+                                    <th className="text-right px-2 py-2">마진율</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {channelRows.map(([ch, row], idx) => (
+                                    <tr key={ch} className={`border-b border-neutral-200 ${idx % 2 === 0 ? 'bg-white' : 'bg-neutral-50'}`}>
+                                      <td className="text-left px-2 py-2 font-bold">
+                                        <span className={`inline-block px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider ${ch === 'smartstore' ? 'bg-black text-white' : 'bg-amber-100 text-amber-800 border border-amber-300'}`} style={{borderRadius:'2px'}}>
+                                          {channelLabel[ch]}
+                                        </span>
+                                        {ch !== 'smartstore' && <span className="text-[9px] text-amber-700 ml-1">(임시처리)</span>}
+                                      </td>
+                                      <td className="text-right px-2 py-2 font-mono">{row.orders}</td>
+                                      <td className="text-right px-2 py-2 font-mono">{fmt(row.revenue)}</td>
+                                      <td className="text-right px-2 py-2 font-mono text-neutral-600">{fmt(row.costIncVat)}</td>
+                                      <td className="text-right px-2 py-2 font-mono text-amber-700">{fmt(row.fee)}</td>
+                                      <td className={`text-right px-2 py-2 font-mono ${row.shippingNet < 0 ? 'text-red-600' : 'text-neutral-600'}`}>{fmt(row.shippingNet)}</td>
+                                      <td className="text-right px-2 py-2 font-mono text-neutral-600">{fmt(row.packaging)}</td>
+                                      <td className={`text-right px-2 py-2 font-mono ${negative(row.netMargin)}`}>{fmt(row.netMargin)}</td>
+                                      <td className={`text-right px-2 py-2 font-mono font-bold ${negative(row.netMargin)}`}>{pct(row.netMargin, row.revenue)}</td>
+                                    </tr>
+                                  ))}
+                                  <tr className="border-t-2 border-black bg-neutral-100 font-black">
+                                    <td className="text-left px-2 py-2 uppercase tracking-widest text-[10px]">합계</td>
+                                    <td className="text-right px-2 py-2 font-mono">{agg.total.orders}</td>
+                                    <td className="text-right px-2 py-2 font-mono">{fmt(agg.total.revenue)}</td>
+                                    <td className="text-right px-2 py-2 font-mono">{fmt(agg.total.costIncVat)}</td>
+                                    <td className="text-right px-2 py-2 font-mono">{fmt(agg.total.fee)}</td>
+                                    <td className={`text-right px-2 py-2 font-mono ${agg.total.shippingNet < 0 ? 'text-red-600' : ''}`}>{fmt(agg.total.shippingNet)}</td>
+                                    <td className="text-right px-2 py-2 font-mono">{fmt(agg.total.packaging)}</td>
+                                    <td className={`text-right px-2 py-2 font-mono ${negative(agg.total.netMargin)}`}>{fmt(agg.total.netMargin)}</td>
+                                    <td className={`text-right px-2 py-2 font-mono ${negative(agg.total.netMargin)}`}>{pct(agg.total.netMargin, agg.total.revenue)}</td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                            </div>
+
+                            {/* 가정 안내 */}
+                            <div className="mt-4 bg-neutral-50 border border-neutral-300 p-3 text-[10px] text-neutral-600 leading-relaxed" style={{borderRadius:'4px'}}>
+                              <strong className="text-black">📌 계산 가정</strong> · 한 조각 = 1개로 단순 계산 (엑셀 결제액과 다를 수 있음, 5-B-2에서 정밀화 예정)<br/>
+                              · 매출 = 9-1 판매가({Object.entries(productNameAliases).filter(([,a])=>a.productId).length}개 본 상품) + 옵션 추가매출<br/>
+                              · 원가(VAT포함) = (도금/원단/연마/옵션) 합계 × (1 + {cms.vatRate}%)<br/>
+                              · 수수료 = 매출 × {cms.naverFeePct}% (모든 채널 동일 · 추후 채널별 분리 예정)<br/>
+                              · 배송손익 = 고객부담({fmt(cms.shippingCharged)}) − 우리계약({fmt(cms.shippingContract)}) = <span className={cms.shippingCharged - cms.shippingContract < 0 ? 'text-red-600 font-bold' : 'text-black font-bold'}>{fmt(cms.shippingCharged - cms.shippingContract)}원/주문</span> · 포장비 = {fmt(cms.packagingCost)}원/주문
+                            </div>
+                          </div>
+                        );
+                      })()}
 
                       {/* 세금/수수료 설정 카드 */}
                       <div className="bg-white border-2 border-black p-5" style={{borderRadius:'6px'}}>
@@ -17254,7 +17483,8 @@ ${list}` }]
                           ['Phase 2A-1', '판매가 (기본+색상별)', true],
                           ['Phase 2A-2', '매입가/부가세 라벨', true],
                           ['Phase 5-A', '엑셀 업로드+매칭', true],
-                          ['Phase 5-B', '일별 마진 계산', false],
+                          ['Phase 5-B-1', '일별 마진 계산', true],
+                          ['Phase 5-B-2', '일별 결과 누적/상세', false],
                           ['Phase 2A-3', '금형비 필드', false],
                           ['Phase 3', '제품별 마진 계산기', false],
                           ['Phase 4', '금형비 회수 / BEP', false],
