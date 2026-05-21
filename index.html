@@ -670,15 +670,6 @@
           const [bizCategories, setBizCategories] = useState(() => { try { return JSON.parse(localStorage.getItem('biz_categories')||'["임대료","통신비","보험료","리스/렌탈","구독서비스","기타"]'); } catch { return ['임대료','통신비','보험료','리스/렌탈','구독서비스','기타']; } });
           const [fixedExpenseTab, setFixedExpenseTab] = useState('life'); // 'life' | 'biz'
 
-          // 지원사업 탭 상태
-          const [subsidyFilter, setSubsidyFilter] = useState('전체');
-          const [regionFilter, setRegionFilter] = useState('전체');
-          const [subsidyItems, setSubsidyItems] = useState([]);
-          const [subsidyLoading, setSubsidyLoading] = useState(false);
-          const [subsidyError, setSubsidyError] = useState('');
-          const [lastUpdated, setLastUpdated] = useState('');
-          const [aiSummary, setAiSummary] = useState('');
-          const [aiLoading, setAiLoading] = useState(false);
           const [fixedExpensePopup, setFixedExpensePopup] = useState(false);
           const [editExpensePopup, setEditExpensePopup] = useState(null);
           const [addCategoryPopup, setAddCategoryPopup] = useState(false);
@@ -687,111 +678,27 @@
           const saveBizExpenses = (d) => { setBizExpenses(d); localStorage.setItem('biz_expenses', JSON.stringify(d)); };
           const saveBizCategories = (d) => { setBizCategories(d); localStorage.setItem('biz_categories', JSON.stringify(d)); };
 
-          // 지원사업 데이터 fetch - Claude 웹검색 방식
-          const fetchSubsidy = async () => {
-            setSubsidyLoading(true);
-            setSubsidyError('');
-            setAiSummary('');
-            try {
-              const res = await fetch('https://api.anthropic.com/v1/messages', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  model: 'claude-sonnet-4-20250514',
-                  max_tokens: 4000,
-                  tools: [{ type: 'web_search_20250305', name: 'web_search' }],
-                  messages: [{
-                    role: 'user',
-                    content: `2026년 현재 기준으로 다음을 검색해서 JSON 배열로만 응답하세요. 절대 다른 텍스트 없이 JSON만.
+          // 💠 v20260522.02: 12번 지원사업/인증 탭 — 수동 관리형 (AI 검색 기능 제거)
+          // 💠 v20260522.03: 하위탭 4개 (대출/지원사업/인증/획득인증)
+          const [supportTab, setSupportTab] = useState('loans'); // 'loans' | 'programs' | 'certs' | 'acquired'
+          const [supportLoans, setSupportLoans] = useState(() => {
+            try { return JSON.parse(localStorage.getItem('support_loans') || '[]'); } catch { return []; }
+          });
+          const [supportPrograms, setSupportPrograms] = useState(() => {
+            try { return JSON.parse(localStorage.getItem('support_programs') || '[]'); } catch { return []; }
+          });
+          const [supportCerts, setSupportCerts] = useState(() => {
+            try { return JSON.parse(localStorage.getItem('support_certs') || '[]'); } catch { return []; }
+          });
+          const [supportAcquiredCerts, setSupportAcquiredCerts] = useState(() => {
+            try { return JSON.parse(localStorage.getItem('support_acquired_certs') || '[]'); } catch { return []; }
+          });
+          const saveSupportLoans = (d) => { setSupportLoans(d); localStorage.setItem('support_loans', JSON.stringify(d)); };
+          const savePrograms = (d) => { setSupportPrograms(d); localStorage.setItem('support_programs', JSON.stringify(d)); };
+          const saveCerts = (d) => { setSupportCerts(d); localStorage.setItem('support_certs', JSON.stringify(d)); };
+          const saveAcquired = (d) => { setSupportAcquiredCerts(d); localStorage.setItem('support_acquired_certs', JSON.stringify(d)); };
+          const [supportPopup, setSupportPopup] = useState(null); // { kind: 'loans'|'programs'|'certs'|'acquired', item: {...} }
 
-검색 대상:
-1. 경기도 중소기업 지원사업 2026
-2. 양주시 기업 지원사업 2026
-3. 중소벤처기업부 제조업 지원사업 2026
-4. 경기도 제조업 보조금 융자 2026
-
-응답 형식 (JSON 배열만):
-[
-  {
-    "title": "사업명",
-    "org": "주관기관",
-    "deadline": "2026.MM.DD 또는 상시",
-    "desc": "2-3줄 요약",
-    "link": "공식URL",
-    "category": "금융 또는 기술 또는 인력 또는 창업 또는 경영 또는 제조 중 하나",
-    "region": "양주시 또는 경기도 또는 정부(중앙부처) 중 하나"
-  }
-]
-
-최소 15개 이상 찾아서 JSON으로만 응답.`
-                  }]
-                })
-              });
-              const data = await res.json();
-              const textBlock = data.content?.find(c => c.type === 'text');
-              if (!textBlock) throw new Error('응답 없음');
-              const raw = textBlock.text.trim();
-              const jsonStart = raw.indexOf('[');
-              const jsonEnd = raw.lastIndexOf(']') + 1;
-              const jsonStr = raw.slice(jsonStart, jsonEnd);
-              const items = JSON.parse(jsonStr);
-              const today = new Date(); today.setHours(0,0,0,0);
-              const withDday = items.map(i => {
-                let dday = null;
-                if (i.deadline && i.deadline !== '상시') {
-                  const d = new Date(i.deadline.replace(/\./g, '-'));
-                  if (!isNaN(d)) dday = Math.ceil((d - today) / (1000*60*60*24));
-                }
-                return { ...i, dday };
-              });
-              setSubsidyItems(withDday);
-              setLastUpdated(new Date().toLocaleTimeString('ko-KR'));
-            } catch(e) {
-              setSubsidyError('데이터를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.');
-            }
-            setSubsidyLoading(false);
-          };
-
-                    const getAiAnalysis = async () => {
-            setAiLoading(true);
-            const list = subsidyItems.slice(0,15).map((i,idx) =>
-              `${idx+1}. [${i.region}] ${i.title} (${i.org}) - ${i.desc}`
-            ).join('\n');
-            try {
-              const res = await fetch('https://api.anthropic.com/v1/messages', {
-                method:'POST',
-                headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({
-                  model:'claude-sonnet-4-20250514',
-                  max_tokens:1500,
-                  messages:[{ role:'user', content:`우리 회사 정보:
-- 위치: 경기도 양주시
-- 업종: 정밀금속 가공 (헤어핀·액세서리 제조)
-- 규모: 직원 5인 미만 소기업
-- 주요 비용: 원자재(금속), 도금 외주, 프리랜서 인건비
-
-아래 지원사업 목록 중 우리 회사에 가장 적합한 것 TOP 3를 골라 추천해주세요.
-각 사업마다: ① 사업명 ② 왜 우리 회사에 맞는지 ③ 신청 시 주의할 점을 간결하게 써주세요.
-
-지원사업 목록:
-${list}` }]
-                })
-              });
-              const data = await res.json();
-              setAiSummary(data.content?.[0]?.text || '분석 결과를 가져오지 못했습니다.');
-            } catch(e) {
-              setAiSummary('AI 분석 중 오류가 발생했습니다.');
-            }
-            setAiLoading(false);
-          };
-
-          // 지원사업 탭 진입 시 자동 로딩
-          useEffect(() => {
-            if (activeMainTab === 'subsidy' && subsidyItems.length === 0 && !subsidyLoading) {
-              fetchSubsidy();
-            }
-          }, [activeMainTab]);
-          
           const [activeFabricTab, setActiveFabricTab] = useState('suppliers');
 
           // 요척 계산기 상태
@@ -3281,7 +3188,7 @@ ${list}` }]
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260522.01</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260522.04</div>
                   </div>
                   
                   {/* v10.06: 헬퍼/봇 상태등 */}
@@ -3329,7 +3236,7 @@ ${list}` }]
                     ['productMgmt', '상품관리', '9'],
                     ['costMargin', '원가/마진', '10'],
                     ['fixedExpense', '고정지출', '11'],
-                    ['subsidy', '정부/지자체 지원사업', '12'],
+                    ['subsidy', '지원사업/인증', '12'],
                     ['userMgmt', '설정', '13'],
                     ['changeLog', '변경이력', '14'],
                   ].map(([tab, label, num]) => {
@@ -3704,6 +3611,219 @@ ${list}` }]
                               10. 고정지출 →
                             </button>
                           </div>
+                        );
+                      })()}
+
+                      {/* 💠 v20260522.03: 지원사업/인증 마감임박 강력 알림 + 현황 요약 */}
+                      {(() => {
+                        const today = new Date();
+                        today.setHours(0,0,0,0);
+                        const getDday = (dateStr) => {
+                          if (!dateStr) return null;
+                          const d = new Date(dateStr);
+                          if (isNaN(d)) return null;
+                          return Math.ceil((d - today.getTime()) / (1000*60*60*24));
+                        };
+
+                        // D-0/D-1 마감임박 (대출/지원사업 미완료)
+                        const collectUrgent = (list, kind, kindLabel) => list.filter(item => {
+                          if (!item.deadline) return false;
+                          const dday = getDday(item.deadline);
+                          if (dday === null || dday < 0 || dday > 1) return false;
+                          const isFinished = item.selectionStatus === '선정' || item.selectionStatus === '탈락';
+                          return !isFinished;
+                        }).map(item => ({ ...item, _kind: kind, _kindLabel: kindLabel, _dday: getDday(item.deadline) }));
+
+                        const urgentLoans = collectUrgent(supportLoans, 'loans', '💰 대출');
+                        const urgentPrograms = collectUrgent(supportPrograms, 'programs', '🏛 지원');
+                        const urgentAll = [...urgentLoans, ...urgentPrograms].sort((a,b)=>a._dday - b._dday);
+
+                        // 인증 만료임박 (30일 이내, 미만료)
+                        const expiringCerts = supportAcquiredCerts.filter(c => {
+                          if (!c.expiryDate) return false;
+                          const d = getDday(c.expiryDate);
+                          return d !== null && d >= 0 && d <= 30;
+                        }).map(c => ({ ...c, _dday: getDday(c.expiryDate) })).sort((a,b)=>a._dday - b._dday);
+
+                        const hasUrgent = urgentAll.length > 0;
+                        const hasExpiring = expiringCerts.length > 0;
+
+                        // 현황 요약 통계
+                        const isProgress = (item) => item.appliedDate && item.selectionStatus !== '선정' && item.selectionStatus !== '탈락';
+                        const isApproved = (item) => item.approvalStatus === '승인';
+                        const isWithin = (deadline, days) => {
+                          const d = getDday(deadline);
+                          return d !== null && d >= 0 && d <= days;
+                        };
+                        const loansSummary = {
+                          total: supportLoans.length,
+                          progress: supportLoans.filter(isProgress).length,
+                          d3: supportLoans.filter(i => isWithin(i.deadline, 3) && i.selectionStatus !== '선정' && i.selectionStatus !== '탈락').length,
+                          ok: supportLoans.filter(i => i.selectionStatus === '선정').length,
+                        };
+                        const programsSummary = {
+                          total: supportPrograms.length,
+                          progress: supportPrograms.filter(isProgress).length,
+                          d3: supportPrograms.filter(i => isWithin(i.deadline, 3) && i.selectionStatus !== '선정' && i.selectionStatus !== '탈락').length,
+                          ok: supportPrograms.filter(i => i.selectionStatus === '선정').length,
+                        };
+                        const certsSummary = {
+                          total: supportCerts.length,
+                          progress: supportCerts.filter(i => i.appliedDate && i.approvalStatus !== '승인' && i.approvalStatus !== '거절').length,
+                          ok: supportCerts.filter(isApproved).length,
+                        };
+                        const acquiredSummary = {
+                          total: supportAcquiredCerts.length,
+                          valid: supportAcquiredCerts.filter(c => {
+                            if (!c.expiryDate) return true;
+                            const d = getDday(c.expiryDate);
+                            return d !== null && d > 30;
+                          }).length,
+                          expiring: expiringCerts.length,
+                          expired: supportAcquiredCerts.filter(c => {
+                            if (!c.expiryDate) return false;
+                            const d = getDday(c.expiryDate);
+                            return d !== null && d < 0;
+                          }).length,
+                        };
+
+                        const goToSupport = (subTab) => {
+                          setSupportTab(subTab);
+                          setActiveMainTab('subsidy');
+                        };
+
+                        return (
+                          <>
+                            {/* 🚨 마감임박 강력 알림 배너 (D-0/D-1) */}
+                            {(hasUrgent || hasExpiring) && (
+                              <div className="bg-red-600 border-4 border-red-700 p-4 animate-pulse" style={{borderRadius:'4px', boxShadow:'0 0 0 4px rgba(220,38,38,0.3)'}}>
+                                <div className="flex items-center justify-between mb-3 pb-2 border-b-2 border-red-400">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-2xl animate-bounce inline-block">🚨</span>
+                                    <span className="bg-white text-red-700 text-[10px] font-black px-2 py-0.5 tracking-widest" style={{borderRadius:'2px'}}>URGENT</span>
+                                    <h2 className="text-white font-black text-base tracking-tight">마감임박 알림</h2>
+                                  </div>
+                                  <div className="text-right">
+                                    <div className="text-white font-black text-xl leading-none">{urgentAll.length + expiringCerts.length}건</div>
+                                    <div className="text-red-100 text-[10px] font-bold mt-0.5">즉시 확인 필요</div>
+                                  </div>
+                                </div>
+                                <div className="bg-white p-2 space-y-1 max-h-72 overflow-y-auto" style={{borderRadius:'2px'}}>
+                                  {urgentAll.map(item => (
+                                    <button key={`urg-${item._kind}-${item.id}`}
+                                      onClick={() => goToSupport(item._kind)}
+                                      className="w-full flex items-center justify-between bg-red-50 hover:bg-red-100 border border-red-300 px-2 py-1.5 text-left transition-all"
+                                      style={{borderRadius:'2px'}}>
+                                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                                        <span className={`text-[10px] font-black px-1.5 py-0.5 shrink-0 ${item._dday===0?'bg-red-700 text-white animate-pulse':'bg-red-600 text-white'}`} style={{borderRadius:'2px'}}>
+                                          {item._dday===0?'오늘마감!':'D-1'}
+                                        </span>
+                                        <span className="text-[9px] font-black px-1.5 py-0.5 shrink-0 bg-black text-white" style={{borderRadius:'2px'}}>{item._kindLabel}</span>
+                                        <span className="text-xs font-bold text-black truncate">{item.content || '(내용 미입력)'}</span>
+                                      </div>
+                                      <div className="flex items-center gap-2 shrink-0">
+                                        {item.amount && <span className="text-xs font-black text-red-700">{Number(item.amount).toLocaleString()}원</span>}
+                                        <span className="text-red-700 font-black text-sm">→</span>
+                                      </div>
+                                    </button>
+                                  ))}
+                                  {expiringCerts.map(c => (
+                                    <button key={`exp-${c.id}`}
+                                      onClick={() => goToSupport('acquired')}
+                                      className="w-full flex items-center justify-between bg-amber-50 hover:bg-amber-100 border border-amber-400 px-2 py-1.5 text-left transition-all"
+                                      style={{borderRadius:'2px'}}>
+                                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                                        <span className={`text-[10px] font-black px-1.5 py-0.5 shrink-0 ${c._dday<=7?'bg-red-600 text-white animate-pulse':'bg-amber-600 text-white'}`} style={{borderRadius:'2px'}}>
+                                          만료 D-{c._dday}
+                                        </span>
+                                        <span className="text-[9px] font-black px-1.5 py-0.5 shrink-0 bg-amber-700 text-white" style={{borderRadius:'2px'}}>🏆 인증</span>
+                                        <span className="text-xs font-bold text-black truncate">{c.certName || '(인증명 미입력)'}</span>
+                                      </div>
+                                      <span className="text-amber-700 font-black text-sm shrink-0">→</span>
+                                    </button>
+                                  ))}
+                                </div>
+                                <button onClick={() => setActiveMainTab('subsidy')}
+                                  className="w-full mt-2 py-2 bg-white hover:bg-red-50 text-red-700 font-black text-xs uppercase tracking-widest" style={{borderRadius:'2px'}}>
+                                  12. 지원사업/인증 →
+                                </button>
+                              </div>
+                            )}
+
+                            {/* 📊 지원사업/인증 현황 요약 */}
+                            <div className="bg-white border-2 border-black overflow-hidden" style={{borderRadius:'4px'}}>
+                              <div className="bg-black px-4 py-2 flex items-center justify-between">
+                                <span className="text-white font-black text-xs tracking-widest uppercase">📊 지원사업/인증 현황 요약</span>
+                                <button onClick={() => setActiveMainTab('subsidy')}
+                                  className="text-[10px] text-white hover:text-amber-300 font-bold tracking-wider underline">전체 보기 →</button>
+                              </div>
+                              <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-neutral-200">
+                                {/* 대출 */}
+                                <button onClick={() => goToSupport('loans')}
+                                  className="p-3 text-left hover:bg-neutral-50 transition-all">
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="text-[10px] font-black uppercase tracking-wider text-neutral-500">💰 대출</span>
+                                    <span className="text-[10px] font-bold text-neutral-400">전체 {loansSummary.total}</span>
+                                  </div>
+                                  <div className="flex items-baseline gap-1">
+                                    <span className="text-2xl font-black text-black">{loansSummary.progress}</span>
+                                    <span className="text-[10px] text-neutral-500 font-bold">진행중</span>
+                                  </div>
+                                  <div className="text-[10px] mt-1 flex gap-2">
+                                    {loansSummary.d3 > 0 && <span className="text-red-700 font-black">⚠ D-3 이내 {loansSummary.d3}</span>}
+                                    {loansSummary.ok > 0 && <span className="text-green-700 font-bold">✓ 선정 {loansSummary.ok}</span>}
+                                  </div>
+                                </button>
+                                {/* 지원사업 */}
+                                <button onClick={() => goToSupport('programs')}
+                                  className="p-3 text-left hover:bg-neutral-50 transition-all">
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="text-[10px] font-black uppercase tracking-wider text-neutral-500">🏛 지원사업</span>
+                                    <span className="text-[10px] font-bold text-neutral-400">전체 {programsSummary.total}</span>
+                                  </div>
+                                  <div className="flex items-baseline gap-1">
+                                    <span className="text-2xl font-black text-black">{programsSummary.progress}</span>
+                                    <span className="text-[10px] text-neutral-500 font-bold">진행중</span>
+                                  </div>
+                                  <div className="text-[10px] mt-1 flex gap-2">
+                                    {programsSummary.d3 > 0 && <span className="text-red-700 font-black">⚠ D-3 이내 {programsSummary.d3}</span>}
+                                    {programsSummary.ok > 0 && <span className="text-green-700 font-bold">✓ 선정 {programsSummary.ok}</span>}
+                                  </div>
+                                </button>
+                                {/* 인증 */}
+                                <button onClick={() => goToSupport('certs')}
+                                  className="p-3 text-left hover:bg-neutral-50 transition-all">
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="text-[10px] font-black uppercase tracking-wider text-neutral-500">📜 인증</span>
+                                    <span className="text-[10px] font-bold text-neutral-400">전체 {certsSummary.total}</span>
+                                  </div>
+                                  <div className="flex items-baseline gap-1">
+                                    <span className="text-2xl font-black text-black">{certsSummary.progress}</span>
+                                    <span className="text-[10px] text-neutral-500 font-bold">진행중</span>
+                                  </div>
+                                  <div className="text-[10px] mt-1 flex gap-2">
+                                    {certsSummary.ok > 0 && <span className="text-green-700 font-bold">✓ 승인 {certsSummary.ok}</span>}
+                                  </div>
+                                </button>
+                                {/* 획득인증 */}
+                                <button onClick={() => goToSupport('acquired')}
+                                  className="p-3 text-left hover:bg-neutral-50 transition-all">
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="text-[10px] font-black uppercase tracking-wider text-neutral-500">🏆 획득인증</span>
+                                    <span className="text-[10px] font-bold text-neutral-400">전체 {acquiredSummary.total}</span>
+                                  </div>
+                                  <div className="flex items-baseline gap-1">
+                                    <span className="text-2xl font-black text-green-700">{acquiredSummary.valid}</span>
+                                    <span className="text-[10px] text-neutral-500 font-bold">유효</span>
+                                  </div>
+                                  <div className="text-[10px] mt-1 flex gap-2 flex-wrap">
+                                    {acquiredSummary.expiring > 0 && <span className="text-amber-700 font-black">⏰ 만료임박 {acquiredSummary.expiring}</span>}
+                                    {acquiredSummary.expired > 0 && <span className="text-red-700 font-bold">❌ 만료 {acquiredSummary.expired}</span>}
+                                  </div>
+                                </button>
+                              </div>
+                            </div>
+                          </>
                         );
                       })()}
 
@@ -17038,11 +17158,13 @@ ${list}` }]
                   // 💠 v20260521.04 정정: 집게핀(헤어핀/셀룰로오스) 공통 부속 — 전부 동일 적용
                   const SPRING_COST = 100;  // 스프링 (집게핀 1개당)
                   const PIN_COST = 200;     // 핀대 (집게핀 1개당)
+                  // 💠 v20260522.02: 곱창밴드 공통 부속
+                  const RUBBER_COST = 200;  // 고무줄 (곱창밴드 1개당)
 
                   // 9-1 상품에서 색상별 본 상품 원가(VAT 별도) 추출
                   // 💠 v20260521.04 정정: 셀룰로오스를 집게핀 그룹으로 이동, 스프링/핀대 자동 가산
                   // · 집게핀(헤어핀/셀룰로오스): 도금[색상] + 연마(grindRequired면) + 다이케스팅 + 스프링 + 핀대
-                  // · 곱창밴드: 원단(yardsPerUnit × fabricPrice) + 도금[색상] + 봉재공임 + 라벨일반 + 라벨금속
+                  // · 곱창밴드: 원단(yardsPerUnit × fabricPrice) + 도금[색상] + 봉재공임 + 라벨일반 + 라벨금속 + 고무줄
                   // · 모두 부가세 별도 (Phase 2A-2 정책)
                   const getProductCostExVat = (product, color) => {
                     if (!product) return 0;
@@ -17060,7 +17182,7 @@ ${list}` }]
                       const sewing = Number(product.sewingCost) || 0;
                       const labelPlain = Number(product.labelPlainCost) || 0;
                       const labelMetal = Number(product.labelMetalCost) || 0;
-                      return ypu * fp + plating + sewing + labelPlain + labelMetal;
+                      return ypu * fp + plating + sewing + labelPlain + labelMetal + RUBBER_COST;
                     }
                     // 기타 타입: 일단 0
                     return 0;
@@ -17811,6 +17933,8 @@ ${list}` }]
                                               {Number(selectedProduct.sewingCost) > 0 && (<tr><td className="py-0.5 pl-3 text-[10px] text-neutral-500">· 봉재공임</td><td className="py-0.5 text-right font-mono text-[10px] text-neutral-500">{fmt(Number(selectedProduct.sewingCost)||0)}원</td></tr>)}
                                               {Number(selectedProduct.labelPlainCost) > 0 && (<tr><td className="py-0.5 pl-3 text-[10px] text-neutral-500">· 일반라벨</td><td className="py-0.5 text-right font-mono text-[10px] text-neutral-500">{fmt(Number(selectedProduct.labelPlainCost)||0)}원</td></tr>)}
                                               {Number(selectedProduct.labelMetalCost) > 0 && (<tr><td className="py-0.5 pl-3 text-[10px] text-neutral-500">· 금속라벨</td><td className="py-0.5 text-right font-mono text-[10px] text-neutral-500">{fmt(Number(selectedProduct.labelMetalCost)||0)}원</td></tr>)}
+                                              {/* 💠 v20260522.02: 곱창밴드 고무줄 자동 가산 (고정 200원) */}
+                                              <tr><td className="py-0.5 pl-3 text-[10px] text-neutral-400 italic">· 고무줄 (자동)</td><td className="py-0.5 text-right font-mono text-[10px] text-neutral-400 italic">{fmt(RUBBER_COST)}원</td></tr>
                                             </>
                                           )}
                                         </>
@@ -19009,142 +19133,511 @@ ${list}` }]
 
 
 
-                {/* 지원사업 탭 */}
-                {activeMainTab === 'subsidy' && (
-                  <div className="flex-1 px-6 py-8">
-                    <div className="space-y-5">
+                {/* 💠 v20260522.02: 12번 지원사업/인증 탭 — 수동 관리형 */}
+                {/* 💠 v20260522.03: 인증 url 필드 + 획득인증리스트 하위탭 추가 */}
+                {activeMainTab === 'subsidy' && (() => {
+                  // 공통: 현재 활성 탭에 따라 데이터/저장 함수/필드 설정
+                  const isLoans = supportTab === 'loans';
+                  const isPrograms = supportTab === 'programs';
+                  const isCerts = supportTab === 'certs';
+                  const isAcquired = supportTab === 'acquired';
+                  const currentList = isLoans ? supportLoans : isPrograms ? supportPrograms : isCerts ? supportCerts : supportAcquiredCerts;
+                  const currentSave = isLoans ? saveSupportLoans : isPrograms ? savePrograms : isCerts ? saveCerts : saveAcquired;
+                  const currentLabel = isLoans ? '대출' : isPrograms ? '지원사업' : isCerts ? '인증' : '획득인증';
 
-                      {/* 헤더 */}
-                      <div className="flex items-center justify-between flex-wrap gap-2">
-                        <div>
-                          <h1 className="text-2xl font-bold text-slate-900">🏛️ 정부/지자체 지원사업</h1>
-                          <p className="text-xs text-slate-400 mt-0.5">경기도 양주시 · 제조업 · 기업마당(bizinfo.go.kr) 실시간 연동</p>
-                        </div>
-                        <button onClick={fetchSubsidy}
-                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold">
-                          🔄 새로고침
-                        </button>
-                      </div>
+                  // 상태 계산 (대출/지원사업: 선정여부 / 인증: 승인여부 / 획득인증: 유효기간)
+                  const computeStatus = (item) => {
+                    if (isAcquired) {
+                      // 획득인증: 유효기간 기준
+                      if (!item.expiryDate) return { kind: 'valid-forever', label: '유효 (만료일 없음)', cls: 'bg-green-100 text-green-800 border-green-500' };
+                      const exp = new Date(item.expiryDate);
+                      if (isNaN(exp)) return { kind: 'unknown', label: '유효기간 미확인', cls: 'bg-neutral-100 text-neutral-500 border-neutral-300' };
+                      const today = new Date(); today.setHours(0,0,0,0);
+                      const days = Math.ceil((exp - today) / (1000*60*60*24));
+                      if (days < 0) return { kind: 'expired', label: '만료됨', cls: 'bg-red-100 text-red-700 border-red-500' };
+                      if (days <= 30) return { kind: 'expiring', label: `만료임박 D-${days}`, cls: 'bg-amber-100 text-amber-800 border-amber-500' };
+                      return { kind: 'valid', label: `유효 D-${days}`, cls: 'bg-green-100 text-green-800 border-green-500' };
+                    }
+                    const hasDate = !!(item.appliedDate && String(item.appliedDate).trim());
+                    if (!hasDate) return { kind: 'pre', label: '신청전', cls: 'bg-neutral-100 text-neutral-500 border-neutral-300' };
+                    const result = isCerts ? item.approvalStatus : item.selectionStatus;
+                    if (result === '선정' || result === '승인') {
+                      return { kind: 'done-ok', label: `완료 · ${result}`, cls: 'bg-green-100 text-green-800 border-green-500' };
+                    }
+                    if (result === '탈락' || result === '거절') {
+                      return { kind: 'done-no', label: `완료 · ${result}`, cls: 'bg-red-100 text-red-700 border-red-500' };
+                    }
+                    return { kind: 'progress', label: '진행중', cls: 'bg-amber-100 text-amber-800 border-amber-500' };
+                  };
 
-                      {/* AI 분석 섹션 */}
-                      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-200 p-5">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <span className="text-lg">🤖</span>
-                            <span className="font-bold text-slate-800 text-sm">AI 맞춤 추천 분석</span>
-                            <span className="text-xs text-slate-400">경기도 양주시 · 정밀금속 제조업 기준</span>
+                  // 새 항목 기본값
+                  const blankItem = isAcquired
+                    ? { id: Date.now(), certName: '', issuer: '', issuedDate: '', expiryDate: '', certNumber: '', notes: '' }
+                    : isCerts
+                    ? { id: Date.now(), certContent: '', appliedDate: '', approvalStatus: '미정', url: '', notes: '' }
+                    : { id: Date.now(), department: '', applicationPeriod: '', deadline: '', appliedDate: '', amount: '', content: '', selectionStatus: '미정', url: '', documents: '', notes: '' };
+
+                  return (
+                    <div className="flex-1 px-6 py-8">
+                      <div className="max-w-6xl mx-auto space-y-5">
+                        {/* 헤더 */}
+                        <div className="flex items-center justify-between border-b-2 border-black pb-4">
+                          <div>
+                            <h1 className="text-3xl font-black tracking-tight text-black uppercase">🏛 지원사업/인증</h1>
+                            <p className="text-xs text-neutral-500 mt-1 tracking-widest">SUPPORT & CERTIFICATION TRACKER</p>
                           </div>
-                          <button onClick={getAiAnalysis} disabled={aiLoading || subsidyItems.length===0}
-                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-xl text-xs font-bold">
-                            {aiLoading ? '분석중...' : '✨ AI 분석 실행'}
+                          <button
+                            onClick={() => setSupportPopup({ kind: supportTab, item: { ...blankItem, id: Date.now() }, isEdit: false })}
+                            className="px-3 py-1.5 text-[11px] font-black uppercase tracking-widest bg-black text-white border-2 border-black hover:bg-white hover:text-black transition-all"
+                            style={{borderRadius:'2px'}}>
+                            + {currentLabel} 등록
                           </button>
                         </div>
-                        {aiSummary ? (
-                          <div className="bg-white rounded-xl p-4 text-sm text-slate-700 whitespace-pre-wrap leading-relaxed border border-blue-100">{aiSummary}</div>
-                        ) : (
-                          <p className="text-xs text-slate-400">목록 로딩 후 AI 분석 버튼을 클릭하면 우리 회사에 맞는 지원사업을 추천해드립니다.</p>
-                        )}
-                      </div>
 
-                      {/* 필터 */}
-                      <div className="flex flex-wrap gap-3">
-                        <div className="flex gap-1 flex-wrap items-center">
-                          <span className="text-xs text-slate-500 font-semibold mr-1">분야:</span>
-                          {['전체','금융','기술','인력','수출','내수','창업','경영','제조','기타'].map(c=>(
-                            <button key={c} onClick={()=>setSubsidyFilter(c)}
-                              className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${subsidyFilter===c?'bg-blue-600 text-white':'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
-                              {c}
+                        {/* 하위탭 */}
+                        <div className="flex gap-1 border-b-2 border-neutral-200">
+                          {[
+                            ['loans', '💰 대출', supportLoans.length],
+                            ['programs', '🏛 지원사업', supportPrograms.length],
+                            ['certs', '📜 인증', supportCerts.length],
+                            ['acquired', '🏆 획득인증', supportAcquiredCerts.length],
+                          ].map(([key, label, count]) => (
+                            <button key={key}
+                              onClick={() => setSupportTab(key)}
+                              className={`px-4 py-2.5 text-xs font-black uppercase tracking-wider transition-all border-b-4 -mb-0.5 ${
+                                supportTab === key
+                                  ? 'border-black text-black'
+                                  : 'border-transparent text-neutral-400 hover:text-black'
+                              }`}
+                            >
+                              {label} <span className={`ml-1 ${supportTab===key?'text-black':'text-neutral-400'}`}>({count})</span>
                             </button>
                           ))}
                         </div>
-                        <div className="flex gap-1 flex-wrap items-center">
-                          <span className="text-xs text-slate-500 font-semibold mr-1">지역:</span>
-                          {['전체','정부(중앙부처)','경기도','양주시'].map(r=>(
-                            <button key={r} onClick={()=>setRegionFilter(r)}
-                              className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${regionFilter===r?'bg-green-600 text-white':'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
-                              {r}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
 
-                      {/* 상태바 */}
-                      {(() => {
-                        const filtered = subsidyItems.filter(item => {
-                          const catOk = subsidyFilter==='전체' || item.category?.includes(subsidyFilter);
-                          const regOk = regionFilter==='전체' || item.region===regionFilter;
-                          return catOk && regOk;
-                        });
-                        const getDdayColor = (d) => {
-                          if (d===null) return 'bg-slate-100 text-slate-400';
-                          if (d<0) return 'bg-slate-100 text-slate-300';
-                          if (d<=7) return 'bg-red-100 text-red-600';
-                          if (d<=14) return 'bg-amber-100 text-amber-600';
-                          return 'bg-green-100 text-green-600';
-                        };
-                        return (
-                          <>
-                            <div className="flex items-center justify-between text-xs text-slate-400">
-                              <span>총 {filtered.length}건 {subsidyItems.length>0&&`(전체 ${subsidyItems.length}건)`}</span>
-                              {lastUpdated && <span>마지막 업데이트: {lastUpdated}</span>}
+                        {/* 상태 요약 */}
+                        {currentList.length > 0 && (() => {
+                          if (isAcquired) {
+                            const summary = { valid: 0, expiring: 0, expired: 0 };
+                            currentList.forEach(it => {
+                              const s = computeStatus(it);
+                              if (s.kind === 'valid' || s.kind === 'valid-forever') summary.valid++;
+                              else if (s.kind === 'expiring') summary.expiring++;
+                              else if (s.kind === 'expired') summary.expired++;
+                            });
+                            return (
+                              <div className="grid grid-cols-3 gap-2">
+                                <div className="border-2 border-green-600 bg-green-50 p-2 text-center" style={{borderRadius:'2px'}}>
+                                  <div className="text-[10px] font-black tracking-widest uppercase text-green-700">유효</div>
+                                  <div className="text-xl font-black text-green-800 mt-0.5">{summary.valid}</div>
+                                </div>
+                                <div className="border-2 border-amber-500 bg-amber-50 p-2 text-center" style={{borderRadius:'2px'}}>
+                                  <div className="text-[10px] font-black tracking-widest uppercase text-amber-700">만료임박 (30일)</div>
+                                  <div className="text-xl font-black text-amber-800 mt-0.5">{summary.expiring}</div>
+                                </div>
+                                <div className="border-2 border-red-500 bg-red-50 p-2 text-center" style={{borderRadius:'2px'}}>
+                                  <div className="text-[10px] font-black tracking-widest uppercase text-red-700">만료됨</div>
+                                  <div className="text-xl font-black text-red-700 mt-0.5">{summary.expired}</div>
+                                </div>
+                              </div>
+                            );
+                          }
+                          const summary = { pre: 0, progress: 0, ok: 0, no: 0 };
+                          currentList.forEach(it => {
+                            const s = computeStatus(it);
+                            if (s.kind === 'pre') summary.pre++;
+                            else if (s.kind === 'progress') summary.progress++;
+                            else if (s.kind === 'done-ok') summary.ok++;
+                            else if (s.kind === 'done-no') summary.no++;
+                          });
+                          return (
+                            <div className="grid grid-cols-4 gap-2">
+                              <div className="border-2 border-neutral-300 p-2 text-center" style={{borderRadius:'2px'}}>
+                                <div className="text-[10px] font-black tracking-widest uppercase text-neutral-500">신청전</div>
+                                <div className="text-xl font-black text-neutral-700 mt-0.5">{summary.pre}</div>
+                              </div>
+                              <div className="border-2 border-amber-500 bg-amber-50 p-2 text-center" style={{borderRadius:'2px'}}>
+                                <div className="text-[10px] font-black tracking-widest uppercase text-amber-700">진행중</div>
+                                <div className="text-xl font-black text-amber-800 mt-0.5">{summary.progress}</div>
+                              </div>
+                              <div className="border-2 border-green-600 bg-green-50 p-2 text-center" style={{borderRadius:'2px'}}>
+                                <div className="text-[10px] font-black tracking-widest uppercase text-green-700">{isCerts?'승인':'선정'}</div>
+                                <div className="text-xl font-black text-green-800 mt-0.5">{summary.ok}</div>
+                              </div>
+                              <div className="border-2 border-red-500 bg-red-50 p-2 text-center" style={{borderRadius:'2px'}}>
+                                <div className="text-[10px] font-black tracking-widest uppercase text-red-700">{isCerts?'거절':'탈락'}</div>
+                                <div className="text-xl font-black text-red-700 mt-0.5">{summary.no}</div>
+                              </div>
                             </div>
+                          );
+                        })()}
 
-                            {subsidyLoading && (
-                              <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
-                                <div className="text-3xl mb-3">⏳</div>
-                                <p className="text-slate-500 font-medium">🔍 지원사업 검색 중... (20~30초 소요)</p><p className="text-xs text-slate-400 mt-2">Claude AI가 경기도·양주시·중소기업부 지원사업을 웹검색하고 있습니다</p>
-                              </div>
-                            )}
-                            {subsidyError && !subsidyLoading && (
-                              <div className="bg-red-50 rounded-2xl border border-red-200 p-6 text-center">
-                                <p className="text-red-600 text-sm font-medium">{subsidyError}</p>
-                                <button onClick={fetchSubsidy} className="mt-3 px-4 py-2 bg-red-500 text-white rounded-xl text-xs font-bold">다시 시도</button>
-                              </div>
-                            )}
-                            {!subsidyLoading && !subsidyError && (
-                              <div className="space-y-3">
-                                {filtered.length===0 && (
-                                  <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400">
-                                    <div className="text-3xl mb-2">📭</div>
-                                    <p>해당하는 지원사업이 없습니다</p>
-                                  </div>
-                                )}
-                                {filtered.map((item, idx) => (
-                                  <div key={idx} className={`bg-white rounded-2xl border-2 p-5 hover:shadow-md transition-all ${item.dday!==null&&item.dday<=7&&item.dday>=0?'border-red-200':'border-slate-200'}`}>
-                                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                        {/* 목록 */}
+                        {currentList.length === 0 ? (
+                          <div className="bg-white border-2 border-dashed border-neutral-300 p-12 text-center text-sm text-neutral-400" style={{borderRadius:'4px'}}>
+                            <div className="text-3xl mb-2">📭</div>
+                            <p>등록된 {currentLabel} 항목이 없습니다.</p>
+                            <p className="text-[11px] mt-1">우측 상단 [+ {currentLabel} 등록] 버튼으로 시작하세요.</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {currentList
+                              .slice()
+                              .sort((a, b) => {
+                                if (isAcquired) {
+                                  // 획득인증: 만료임박 > 유효 > 만료 순
+                                  const sa = computeStatus(a), sb = computeStatus(b);
+                                  const order = { 'expiring': 0, 'valid': 1, 'valid-forever': 2, 'unknown': 3, 'expired': 4 };
+                                  if ((order[sa.kind]||9) !== (order[sb.kind]||9)) return (order[sa.kind]||9) - (order[sb.kind]||9);
+                                  return (a.expiryDate || '9999').localeCompare(b.expiryDate || '9999');
+                                }
+                                // 진행중(임박) > 신청전 > 완료 순
+                                const sa = computeStatus(a), sb = computeStatus(b);
+                                const order = { 'progress': 0, 'pre': 1, 'done-ok': 2, 'done-no': 2 };
+                                if (order[sa.kind] !== order[sb.kind]) return order[sa.kind] - order[sb.kind];
+                                // 같은 상태 내 정렬: 마감일자 임박 우선
+                                if (sa.kind === 'progress' || sa.kind === 'pre') {
+                                  return (a.deadline || '9999').localeCompare(b.deadline || '9999');
+                                }
+                                return (b.appliedDate || '').localeCompare(a.appliedDate || '');
+                              })
+                              .map((item) => {
+                                const status = computeStatus(item);
+                                // 마감 D-day (대출/지원사업만)
+                                let dday = null;
+                                if (!isCerts && !isAcquired && item.deadline) {
+                                  const d = new Date(item.deadline);
+                                  if (!isNaN(d)) {
+                                    const today = new Date(); today.setHours(0,0,0,0);
+                                    dday = Math.ceil((d - today) / (1000*60*60*24));
+                                  }
+                                }
+                                return (
+                                  <div key={item.id} className="bg-white border-2 border-neutral-300 hover:border-black p-4 transition-all" style={{borderRadius:'4px'}}>
+                                    <div className="flex items-start justify-between gap-3">
                                       <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                          {item.category && <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-semibold">{item.category}</span>}
-                                          <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${item.region==='양주시'?'bg-green-100 text-green-600':item.region==='경기도'?'bg-teal-100 text-teal-600':'bg-slate-100 text-slate-500'}`}>{item.region}</span>
-                                          {item.org && <span className="text-xs text-slate-400">{item.org}</span>}
-                                        </div>
-                                        <a href={item.link} target="_blank" rel="noopener noreferrer"
-                                          className="font-bold text-slate-900 text-sm hover:text-blue-600 transition-colors leading-snug block mb-1">{item.title}</a>
-                                        <p className="text-xs text-slate-500 leading-relaxed">{item.desc}</p>
-                                      </div>
-                                      <div className="flex flex-col items-end gap-2 shrink-0">
-                                        {item.dday!==null ? (
-                                          <span className={`text-xs font-bold px-3 py-1 rounded-full ${getDdayColor(item.dday)}`}>
-                                            {item.dday<0?'마감':item.dday===0?'오늘마감!':`D-${item.dday}`}
+                                        {/* 상단: 상태 + 부처/태그 */}
+                                        <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                          <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 border-2 ${status.cls}`} style={{borderRadius:'2px'}}>
+                                            {status.label}
                                           </span>
-                                        ) : <span className="text-xs text-slate-300 px-3 py-1 rounded-full bg-slate-50">상시</span>}
-                                        {item.deadline && <span className="text-xs text-slate-400">{item.deadline}까지</span>}
-                                        <a href={item.link} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:text-blue-700 font-semibold">자세히 →</a>
+                                          {isAcquired && item.issuer && (
+                                            <span className="text-[10px] font-bold text-neutral-600 bg-neutral-100 border border-neutral-300 px-2 py-0.5" style={{borderRadius:'2px'}}>
+                                              {item.issuer}
+                                            </span>
+                                          )}
+                                          {!isCerts && !isAcquired && item.department && (
+                                            <span className="text-[10px] font-bold text-neutral-600 bg-neutral-100 border border-neutral-300 px-2 py-0.5" style={{borderRadius:'2px'}}>
+                                              {item.department}
+                                            </span>
+                                          )}
+                                          {dday !== null && status.kind !== 'done-ok' && status.kind !== 'done-no' && (
+                                            <span className={`text-[10px] font-black px-2 py-0.5 ${dday < 0 ? 'bg-neutral-200 text-neutral-500' : dday <= 7 ? 'bg-red-100 text-red-700 border border-red-500' : dday <= 14 ? 'bg-amber-100 text-amber-700 border border-amber-500' : 'bg-green-100 text-green-700 border border-green-500'}`} style={{borderRadius:'2px'}}>
+                                              {dday < 0 ? '마감' : dday === 0 ? '오늘마감!' : `D-${dday}`}
+                                            </span>
+                                          )}
+                                        </div>
+                                        {/* 제목 / 내용 */}
+                                        <div className="text-sm font-black text-black mb-1 leading-snug">
+                                          {isAcquired ? (item.certName || '(인증명 미입력)')
+                                            : isCerts ? (item.certContent || '(인증서 내용 미입력)')
+                                            : (item.content || '(내용 미입력)')}
+                                        </div>
+                                        {/* 메타정보 */}
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-x-3 gap-y-1 text-[11px] text-neutral-600 mt-2">
+                                          {isAcquired ? (
+                                            <>
+                                              <div><span className="text-neutral-400">발급일:</span> <span className="font-bold">{item.issuedDate || '-'}</span></div>
+                                              <div><span className="text-neutral-400">만료일:</span> <span className="font-bold">{item.expiryDate || '없음'}</span></div>
+                                              {item.certNumber && (
+                                                <div className="col-span-2"><span className="text-neutral-400">인증번호:</span> <span className="font-bold font-mono">{item.certNumber}</span></div>
+                                              )}
+                                            </>
+                                          ) : (
+                                            <>
+                                              {!isCerts && (
+                                                <>
+                                                  <div><span className="text-neutral-400">신청기간:</span> <span className="font-bold">{item.applicationPeriod || '-'}</span></div>
+                                                  <div><span className="text-neutral-400">마감일:</span> <span className="font-bold">{item.deadline || '-'}</span></div>
+                                                </>
+                                              )}
+                                              <div><span className="text-neutral-400">신청일:</span> <span className="font-bold">{item.appliedDate || '미기재'}</span></div>
+                                              {!isCerts && (
+                                                <div><span className="text-neutral-400">신청금액:</span> <span className="font-bold">{item.amount ? `${Number(item.amount).toLocaleString()}원` : '-'}</span></div>
+                                              )}
+                                            </>
+                                          )}
+                                        </div>
+                                        {!isCerts && !isAcquired && item.documents && (
+                                          <div className="text-[11px] text-neutral-600 mt-1.5"><span className="text-neutral-400">제출서류:</span> {item.documents}</div>
+                                        )}
+                                        {item.notes && (
+                                          <div className="text-[11px] text-neutral-500 italic mt-1.5">📝 {item.notes}</div>
+                                        )}
+                                      </div>
+                                      {/* 우측 액션 */}
+                                      <div className="flex flex-col items-end gap-1.5 shrink-0">
+                                        {!isAcquired && item.url && (
+                                          <button type="button"
+                                            onClick={() => {
+                                              const raw = String(item.url).trim();
+                                              const finalUrl = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+                                              window.open(finalUrl, '_blank', 'noopener,noreferrer');
+                                            }}
+                                            className="px-2 py-1 text-[10px] font-black uppercase tracking-wider bg-blue-600 text-white border-2 border-blue-600 hover:bg-blue-700"
+                                            style={{borderRadius:'2px'}}>
+                                            🔗 신청 URL 열기
+                                          </button>
+                                        )}
+                                        <div className="flex gap-1">
+                                          <button onClick={() => setSupportPopup({ kind: supportTab, item: { ...item }, isEdit: true })}
+                                            className="px-2 py-1 text-[10px] font-black uppercase tracking-wider bg-black text-white border-2 border-black hover:bg-neutral-800" style={{borderRadius:'2px'}}>
+                                            수정
+                                          </button>
+                                          <button onClick={() => {
+                                            const titleField = isAcquired ? item.certName : isCerts ? item.certContent : item.content;
+                                            if (!confirm(`삭제하시겠습니까?\n\n${titleField || '(내용 없음)'}`)) return;
+                                            currentSave(currentList.filter(x => x.id !== item.id));
+                                          }}
+                                            className="px-2 py-1 text-[10px] font-black uppercase tracking-wider bg-white text-red-600 border-2 border-red-500 hover:bg-red-600 hover:text-white" style={{borderRadius:'2px'}}>
+                                            삭제
+                                          </button>
+                                        </div>
                                       </div>
                                     </div>
                                   </div>
-                                ))}
+                                );
+                              })}
+                          </div>
+                        )}
+
+                        {/* 등록/수정 팝업 */}
+                        {supportPopup && (() => {
+                          const popupKind = supportPopup.kind;
+                          const isPopupCerts = popupKind === 'certs';
+                          const isPopupAcquired = popupKind === 'acquired';
+                          const popupLabel = popupKind === 'loans' ? '대출' : popupKind === 'programs' ? '지원사업' : popupKind === 'certs' ? '인증' : '획득인증';
+                          const popupSave = popupKind === 'loans' ? saveSupportLoans : popupKind === 'programs' ? savePrograms : popupKind === 'certs' ? saveCerts : saveAcquired;
+                          const popupList = popupKind === 'loans' ? supportLoans : popupKind === 'programs' ? supportPrograms : popupKind === 'certs' ? supportCerts : supportAcquiredCerts;
+                          const form = supportPopup.item;
+                          const setForm = (patch) => setSupportPopup(prev => ({ ...prev, item: { ...prev.item, ...patch } }));
+                          const onSave = () => {
+                            const next = supportPopup.isEdit
+                              ? popupList.map(x => x.id === form.id ? form : x)
+                              : [...popupList, form];
+                            popupSave(next);
+                            setSupportPopup(null);
+                          };
+                          return (
+                            <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.6)'}}>
+                              <div className="bg-white w-full max-w-2xl max-h-[90vh] flex flex-col border-2 border-black" style={{borderRadius:'6px'}}>
+                                {/* 헤더 */}
+                                <div className="px-5 py-3 border-b-2 border-black flex items-center justify-between">
+                                  <div className="text-sm font-black tracking-widest uppercase text-black">
+                                    {supportPopup.isEdit ? `✏️ ${popupLabel} 수정` : `+ ${popupLabel} 등록`}
+                                  </div>
+                                  <button onClick={() => setSupportPopup(null)} className="text-xl font-bold text-neutral-400 hover:text-black">✕</button>
+                                </div>
+                                {/* 본문 */}
+                                <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+                                  {isPopupAcquired ? (
+                                    <>
+                                      <div>
+                                        <label className="block text-[11px] font-black uppercase tracking-wider text-neutral-700 mb-1">인증명 *</label>
+                                        <input type="text" value={form.certName || ''} onChange={e => setForm({ certName: e.target.value })}
+                                          placeholder="예: 벤처기업확인서, ISO 9001, 이노비즈, 메인비즈 등"
+                                          className="w-full px-2 py-1.5 border border-neutral-300 focus:border-black outline-none text-sm" style={{borderRadius:'2px'}}/>
+                                      </div>
+                                      <div>
+                                        <label className="block text-[11px] font-black uppercase tracking-wider text-neutral-700 mb-1">발급기관</label>
+                                        <input type="text" value={form.issuer || ''} onChange={e => setForm({ issuer: e.target.value })}
+                                          placeholder="예: 중소벤처기업부, 한국표준협회"
+                                          className="w-full px-2 py-1.5 border border-neutral-300 focus:border-black outline-none text-sm" style={{borderRadius:'2px'}}/>
+                                      </div>
+                                      <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                          <label className="block text-[11px] font-black uppercase tracking-wider text-neutral-700 mb-1">발급일자</label>
+                                          <input type="date" value={form.issuedDate || ''} onChange={e => setForm({ issuedDate: e.target.value })}
+                                            className="w-full px-2 py-1.5 border border-neutral-300 focus:border-black outline-none text-sm" style={{borderRadius:'2px'}}/>
+                                        </div>
+                                        <div>
+                                          <label className="block text-[11px] font-black uppercase tracking-wider text-neutral-700 mb-1">유효기간 (만료일)</label>
+                                          <input type="date" value={form.expiryDate || ''} onChange={e => setForm({ expiryDate: e.target.value })}
+                                            className="w-full px-2 py-1.5 border border-neutral-300 focus:border-black outline-none text-sm" style={{borderRadius:'2px'}}/>
+                                          <div className="text-[10px] text-neutral-400 mt-0.5">비우면 "만료일 없음"</div>
+                                        </div>
+                                      </div>
+                                      <div>
+                                        <label className="block text-[11px] font-black uppercase tracking-wider text-neutral-700 mb-1">인증번호</label>
+                                        <input type="text" value={form.certNumber || ''} onChange={e => setForm({ certNumber: e.target.value })}
+                                          placeholder="예: 제2026-0001호"
+                                          className="w-full px-2 py-1.5 border border-neutral-300 focus:border-black outline-none text-sm font-mono" style={{borderRadius:'2px'}}/>
+                                      </div>
+                                      <div>
+                                        <label className="block text-[11px] font-black uppercase tracking-wider text-neutral-700 mb-1">비고</label>
+                                        <textarea rows={2} value={form.notes || ''} onChange={e => setForm({ notes: e.target.value })}
+                                          className="w-full px-2 py-1.5 border border-neutral-300 focus:border-black outline-none text-sm" style={{borderRadius:'2px'}}/>
+                                      </div>
+                                    </>
+                                  ) : isPopupCerts ? (
+                                    <>
+                                      <div>
+                                        <label className="block text-[11px] font-black uppercase tracking-wider text-neutral-700 mb-1">인증서 내용 *</label>
+                                        <textarea rows={2} value={form.certContent || ''} onChange={e => setForm({ certContent: e.target.value })}
+                                          placeholder="예: 벤처기업확인서, ISO 9001, 이노비즈 등"
+                                          className="w-full px-2 py-1.5 border border-neutral-300 focus:border-black outline-none text-sm" style={{borderRadius:'2px'}}/>
+                                      </div>
+                                      <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                          <label className="block text-[11px] font-black uppercase tracking-wider text-neutral-700 mb-1">신청일자</label>
+                                          <input type="date" value={form.appliedDate || ''} onChange={e => setForm({ appliedDate: e.target.value })}
+                                            className="w-full px-2 py-1.5 border border-neutral-300 focus:border-black outline-none text-sm" style={{borderRadius:'2px'}}/>
+                                          <div className="text-[10px] text-neutral-400 mt-0.5">비우면 "신청전"</div>
+                                        </div>
+                                        <div>
+                                          <label className="block text-[11px] font-black uppercase tracking-wider text-neutral-700 mb-1">승인여부</label>
+                                          <div className="flex gap-1">
+                                            {['미정', '승인', '거절'].map(v => (
+                                              <button key={v} type="button" onClick={() => setForm({ approvalStatus: v })}
+                                                className={`flex-1 px-2 py-1.5 text-xs font-black border-2 ${form.approvalStatus === v ? (v==='승인'?'bg-green-600 text-white border-green-600':v==='거절'?'bg-red-600 text-white border-red-600':'bg-black text-white border-black') : 'bg-white text-neutral-600 border-neutral-300 hover:border-black'}`} style={{borderRadius:'2px'}}>
+                                                {v}
+                                              </button>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      </div>
+                                      {/* 💠 v20260522.03: 인증 신청 URL */}
+                                      <div>
+                                        <label className="block text-[11px] font-black uppercase tracking-wider text-neutral-700 mb-1">신청 URL</label>
+                                        <div className="flex gap-2">
+                                          <input type="url" value={form.url || ''} onChange={e => setForm({ url: e.target.value })}
+                                            placeholder="https://... 또는 도메인만 (예: bizinfo.go.kr)"
+                                            className="flex-1 px-2 py-1.5 border border-neutral-300 focus:border-black outline-none text-sm font-mono" style={{borderRadius:'2px'}}/>
+                                          {form.url && form.url.trim() && (
+                                            <button type="button"
+                                              onClick={() => {
+                                                const raw = String(form.url).trim();
+                                                const finalUrl = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+                                                window.open(finalUrl, '_blank', 'noopener,noreferrer');
+                                              }}
+                                              className="shrink-0 px-3 py-1.5 text-[11px] font-black uppercase tracking-wider bg-blue-600 text-white border-2 border-blue-600 hover:bg-blue-700"
+                                              style={{borderRadius:'2px'}}>
+                                              🔗 열기
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
+                                      <div>
+                                        <label className="block text-[11px] font-black uppercase tracking-wider text-neutral-700 mb-1">비고</label>
+                                        <textarea rows={2} value={form.notes || ''} onChange={e => setForm({ notes: e.target.value })}
+                                          className="w-full px-2 py-1.5 border border-neutral-300 focus:border-black outline-none text-sm" style={{borderRadius:'2px'}}/>
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                          <label className="block text-[11px] font-black uppercase tracking-wider text-neutral-700 mb-1">관련부처</label>
+                                          <input type="text" value={form.department || ''} onChange={e => setForm({ department: e.target.value })}
+                                            placeholder="예: 중소벤처기업부, 양주시"
+                                            className="w-full px-2 py-1.5 border border-neutral-300 focus:border-black outline-none text-sm" style={{borderRadius:'2px'}}/>
+                                        </div>
+                                        <div>
+                                          <label className="block text-[11px] font-black uppercase tracking-wider text-neutral-700 mb-1">신청기간</label>
+                                          <input type="text" value={form.applicationPeriod || ''} onChange={e => setForm({ applicationPeriod: e.target.value })}
+                                            placeholder="예: 2026.05.01 ~ 2026.06.30"
+                                            className="w-full px-2 py-1.5 border border-neutral-300 focus:border-black outline-none text-sm" style={{borderRadius:'2px'}}/>
+                                        </div>
+                                      </div>
+                                      <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                          <label className="block text-[11px] font-black uppercase tracking-wider text-neutral-700 mb-1">마감일자</label>
+                                          <input type="date" value={form.deadline || ''} onChange={e => setForm({ deadline: e.target.value })}
+                                            className="w-full px-2 py-1.5 border border-neutral-300 focus:border-black outline-none text-sm" style={{borderRadius:'2px'}}/>
+                                        </div>
+                                        <div>
+                                          <label className="block text-[11px] font-black uppercase tracking-wider text-neutral-700 mb-1">신청일자</label>
+                                          <input type="date" value={form.appliedDate || ''} onChange={e => setForm({ appliedDate: e.target.value })}
+                                            className="w-full px-2 py-1.5 border border-neutral-300 focus:border-black outline-none text-sm" style={{borderRadius:'2px'}}/>
+                                          <div className="text-[10px] text-neutral-400 mt-0.5">비우면 "신청전"</div>
+                                        </div>
+                                      </div>
+                                      <div>
+                                        <label className="block text-[11px] font-black uppercase tracking-wider text-neutral-700 mb-1">신청금액 (원)</label>
+                                        <input type="number" value={form.amount || ''} onChange={e => setForm({ amount: e.target.value })}
+                                          placeholder="예: 50000000"
+                                          className="w-full px-2 py-1.5 border border-neutral-300 focus:border-black outline-none text-sm text-right font-mono" style={{borderRadius:'2px'}}/>
+                                      </div>
+                                      <div>
+                                        <label className="block text-[11px] font-black uppercase tracking-wider text-neutral-700 mb-1">내용 *</label>
+                                        <textarea rows={2} value={form.content || ''} onChange={e => setForm({ content: e.target.value })}
+                                          placeholder="사업명 / 대출명 및 간략 설명"
+                                          className="w-full px-2 py-1.5 border border-neutral-300 focus:border-black outline-none text-sm" style={{borderRadius:'2px'}}/>
+                                      </div>
+                                      <div>
+                                        <label className="block text-[11px] font-black uppercase tracking-wider text-neutral-700 mb-1">선정여부</label>
+                                        <div className="flex gap-1">
+                                          {['미정', '선정', '탈락'].map(v => (
+                                            <button key={v} type="button" onClick={() => setForm({ selectionStatus: v })}
+                                              className={`flex-1 px-2 py-1.5 text-xs font-black border-2 ${form.selectionStatus === v ? (v==='선정'?'bg-green-600 text-white border-green-600':v==='탈락'?'bg-red-600 text-white border-red-600':'bg-black text-white border-black') : 'bg-white text-neutral-600 border-neutral-300 hover:border-black'}`} style={{borderRadius:'2px'}}>
+                                              {v}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      </div>
+                                      <div>
+                                        <label className="block text-[11px] font-black uppercase tracking-wider text-neutral-700 mb-1">신청 URL</label>
+                                        <div className="flex gap-2">
+                                          <input type="url" value={form.url || ''} onChange={e => setForm({ url: e.target.value })}
+                                            placeholder="https://... 또는 도메인만 (예: bizinfo.go.kr)"
+                                            className="flex-1 px-2 py-1.5 border border-neutral-300 focus:border-black outline-none text-sm font-mono" style={{borderRadius:'2px'}}/>
+                                          {form.url && form.url.trim() && (
+                                            <button type="button"
+                                              onClick={() => {
+                                                const raw = String(form.url).trim();
+                                                const finalUrl = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+                                                window.open(finalUrl, '_blank', 'noopener,noreferrer');
+                                              }}
+                                              className="shrink-0 px-3 py-1.5 text-[11px] font-black uppercase tracking-wider bg-blue-600 text-white border-2 border-blue-600 hover:bg-blue-700"
+                                              style={{borderRadius:'2px'}}>
+                                              🔗 열기
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
+                                      <div>
+                                        <label className="block text-[11px] font-black uppercase tracking-wider text-neutral-700 mb-1">제출서류</label>
+                                        <textarea rows={2} value={form.documents || ''} onChange={e => setForm({ documents: e.target.value })}
+                                          placeholder="예: 사업자등록증, 재무제표, 사업계획서 등"
+                                          className="w-full px-2 py-1.5 border border-neutral-300 focus:border-black outline-none text-sm" style={{borderRadius:'2px'}}/>
+                                      </div>
+                                      <div>
+                                        <label className="block text-[11px] font-black uppercase tracking-wider text-neutral-700 mb-1">비고</label>
+                                        <textarea rows={2} value={form.notes || ''} onChange={e => setForm({ notes: e.target.value })}
+                                          className="w-full px-2 py-1.5 border border-neutral-300 focus:border-black outline-none text-sm" style={{borderRadius:'2px'}}/>
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                                {/* 푸터 */}
+                                <div className="px-5 py-3 border-t-2 border-black flex justify-end gap-2">
+                                  <button onClick={() => setSupportPopup(null)}
+                                    className="px-4 py-2 text-[11px] font-black uppercase tracking-widest bg-white text-black border-2 border-black hover:bg-neutral-100"
+                                    style={{borderRadius:'2px'}}>취소</button>
+                                  <button onClick={onSave}
+                                    className="px-4 py-2 text-[11px] font-black uppercase tracking-widest bg-black text-white border-2 border-black hover:bg-neutral-800"
+                                    style={{borderRadius:'2px'}}>
+                                    {supportPopup.isEdit ? '수정' : '등록'}
+                                  </button>
+                                </div>
                               </div>
-                            )}
-                            <div className="text-center text-xs text-slate-300 pb-2">
-                              출처: 기업마당(bizinfo.go.kr) · 중소벤처기업부 공식 API · 경기도 양주시 제조업 필터
                             </div>
-                          </>
-                        );
-                      })()}
+                          );
+                        })()}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {activeMainTab === 'userMgmt' && (
                   <div className="space-y-4">
