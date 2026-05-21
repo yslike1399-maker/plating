@@ -3281,7 +3281,7 @@ ${list}` }]
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260521.07</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260522.01</div>
                   </div>
                   
                   {/* v10.06: 헬퍼/봇 상태등 */}
@@ -15683,6 +15683,51 @@ ${list}` }]
                                               <div className="font-black text-black text-xs truncate flex items-center gap-1 tracking-tight" title={p.name}>
                                                 <span className="text-black">★</span>{p.name}
                                               </div>
+                                              {/* 💠 v20260522.01: 원가/판매가 입력 상태 뱃지 (상품명과 겹치지 않게 별도 줄) */}
+                                              {(() => {
+                                                const fmt = (n) => Number(n).toLocaleString();
+                                                const basePriceVal = typeof p.defaultSalePrice === 'number' && p.defaultSalePrice > 0 ? p.defaultSalePrice : null;
+                                                const overrideCount = Object.values(p.salePriceOverrides || {}).filter(v => Number(v) > 0).length;
+                                                const hasBasePrice = basePriceVal != null || overrideCount > 0;
+                                                const priceTitle = hasBasePrice
+                                                  ? `기본판매가: ${basePriceVal != null ? fmt(basePriceVal)+'원' : '미입력'}${overrideCount>0 ? ` · 색상별 예외 ${overrideCount}개` : ''}`
+                                                  : '판매가 미입력';
+                                                const isHairpinLike = p.type === 'hairpin' || p.type === 'cellulose';
+                                                const isGocchang = p.type === 'gocchang';
+                                                const hasGrind = Number(p.grindCost) > 0;
+                                                const grindTitle = Number(p.grindCost) > 0 ? `연마원가: ${fmt(p.grindCost)}원` : '연마원가 미입력';
+                                                const hasDie = Number(p.dieCastingCost) > 0;
+                                                const dieTitle = Number(p.dieCastingCost) > 0 ? `다이케스팅: ${fmt(p.dieCastingCost)}원` : '다이케스팅 미입력';
+                                                const hasSew = Number(p.sewingCost) > 0;
+                                                const sewTitle = Number(p.sewingCost) > 0 ? `봉재공임: ${fmt(p.sewingCost)}원` : '봉재공임 미입력';
+                                                const labelPlain = Number(p.labelPlainCost) || 0;
+                                                const labelMetal = Number(p.labelMetalCost) || 0;
+                                                const hasLabel = labelPlain > 0 || labelMetal > 0;
+                                                const labelParts = [];
+                                                if (labelPlain > 0) labelParts.push(`일반 ${fmt(labelPlain)}원`);
+                                                if (labelMetal > 0) labelParts.push(`금속 ${fmt(labelMetal)}원`);
+                                                const labelTitle = labelParts.length > 0 ? `라벨: ${labelParts.join(' · ')}` : '라벨 미입력 (일반/금속 모두 0)';
+                                                const onCls = 'bg-black text-white border-2 border-black';
+                                                const offCls = 'bg-white text-neutral-400 border-2 border-dashed border-neutral-400';
+                                                const cls = (on) => `text-[9px] font-black uppercase tracking-wider px-1 py-0.5 cursor-help leading-none ${on ? onCls : offCls}`;
+                                                return (
+                                                  <div className="flex flex-wrap gap-0.5 justify-end">
+                                                    <span className={cls(hasBasePrice)} style={{borderRadius:'2px'}} title={priceTitle}>판매</span>
+                                                    {isHairpinLike && p.grindRequired && (
+                                                      <span className={cls(hasGrind)} style={{borderRadius:'2px'}} title={grindTitle}>연마</span>
+                                                    )}
+                                                    {isHairpinLike && (
+                                                      <span className={cls(hasDie)} style={{borderRadius:'2px'}} title={dieTitle}>다이</span>
+                                                    )}
+                                                    {isGocchang && (
+                                                      <span className={cls(hasSew)} style={{borderRadius:'2px'}} title={sewTitle}>공임</span>
+                                                    )}
+                                                    {isGocchang && (
+                                                      <span className={cls(hasLabel)} style={{borderRadius:'2px'}} title={labelTitle}>라벨</span>
+                                                    )}
+                                                  </div>
+                                                );
+                                              })()}
                                               {/* 색상 리스트 (유광/반광 좌우 + 단일 별도 / 무신사 스타일) */}
                                               {p.colors && p.colors.length > 0 && (() => {
                                                 const colorOrderBase = ['골드','실버','블랙','로즈골드','다크골드'];
@@ -15938,6 +15983,51 @@ ${list}` }]
                                                 <ProductIdBadge id={p.id} size="xs" />
                                               </div>
                                               <div className="font-black text-black text-xs truncate tracking-tight" title={p.name}>{p.name}</div>
+                                              {/* 💠 v20260522.01: 원가/판매가 입력 상태 뱃지 (상품명과 겹치지 않게 별도 줄) */}
+                                              {(() => {
+                                                const fmt = (n) => Number(n).toLocaleString();
+                                                const basePriceVal = typeof p.defaultSalePrice === 'number' && p.defaultSalePrice > 0 ? p.defaultSalePrice : null;
+                                                const overrideCount = Object.values(p.salePriceOverrides || {}).filter(v => Number(v) > 0).length;
+                                                const hasBasePrice = basePriceVal != null || overrideCount > 0;
+                                                const priceTitle = hasBasePrice
+                                                  ? `기본판매가: ${basePriceVal != null ? fmt(basePriceVal)+'원' : '미입력'}${overrideCount>0 ? ` · 색상별 예외 ${overrideCount}개` : ''}`
+                                                  : '판매가 미입력';
+                                                const isHairpinLike = p.type === 'hairpin' || p.type === 'cellulose';
+                                                const isGocchang = p.type === 'gocchang';
+                                                const hasGrind = Number(p.grindCost) > 0;
+                                                const grindTitle = Number(p.grindCost) > 0 ? `연마원가: ${fmt(p.grindCost)}원` : '연마원가 미입력';
+                                                const hasDie = Number(p.dieCastingCost) > 0;
+                                                const dieTitle = Number(p.dieCastingCost) > 0 ? `다이케스팅: ${fmt(p.dieCastingCost)}원` : '다이케스팅 미입력';
+                                                const hasSew = Number(p.sewingCost) > 0;
+                                                const sewTitle = Number(p.sewingCost) > 0 ? `봉재공임: ${fmt(p.sewingCost)}원` : '봉재공임 미입력';
+                                                const labelPlain = Number(p.labelPlainCost) || 0;
+                                                const labelMetal = Number(p.labelMetalCost) || 0;
+                                                const hasLabel = labelPlain > 0 || labelMetal > 0;
+                                                const labelParts = [];
+                                                if (labelPlain > 0) labelParts.push(`일반 ${fmt(labelPlain)}원`);
+                                                if (labelMetal > 0) labelParts.push(`금속 ${fmt(labelMetal)}원`);
+                                                const labelTitle = labelParts.length > 0 ? `라벨: ${labelParts.join(' · ')}` : '라벨 미입력 (일반/금속 모두 0)';
+                                                const onCls = 'bg-black text-white border-2 border-black';
+                                                const offCls = 'bg-white text-neutral-400 border-2 border-dashed border-neutral-400';
+                                                const cls = (on) => `text-[9px] font-black uppercase tracking-wider px-1 py-0.5 cursor-help leading-none ${on ? onCls : offCls}`;
+                                                return (
+                                                  <div className="flex flex-wrap gap-0.5 justify-end">
+                                                    <span className={cls(hasBasePrice)} style={{borderRadius:'2px'}} title={priceTitle}>판매</span>
+                                                    {isHairpinLike && p.grindRequired && (
+                                                      <span className={cls(hasGrind)} style={{borderRadius:'2px'}} title={grindTitle}>연마</span>
+                                                    )}
+                                                    {isHairpinLike && (
+                                                      <span className={cls(hasDie)} style={{borderRadius:'2px'}} title={dieTitle}>다이</span>
+                                                    )}
+                                                    {isGocchang && (
+                                                      <span className={cls(hasSew)} style={{borderRadius:'2px'}} title={sewTitle}>공임</span>
+                                                    )}
+                                                    {isGocchang && (
+                                                      <span className={cls(hasLabel)} style={{borderRadius:'2px'}} title={labelTitle}>라벨</span>
+                                                    )}
+                                                  </div>
+                                                );
+                                              })()}
 
                                               {/* 색상 리스트 (유광/반광 좌우 + 단일 별도 / 무신사 스타일) */}
                                               {p.colors && p.colors.length > 0 && (() => {
