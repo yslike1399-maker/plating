@@ -1416,6 +1416,8 @@
 
           // 일괄 출력 팝업 상태
           const [barcodePrintPopup, setBarcodePrintPopup] = useState(null); // {product}
+          // 바코드 출력 전 상품 확인 팝업 (2세대/3세대 등 혼동 방지)
+          const [printConfirmPopup, setPrintConfirmPopup] = useState(null); // {product}
           
           // 인쇄 알림 토스트 (헬퍼가 자동 인쇄한다는 안내)
           const [printToast, setPrintToast] = useState(null);
@@ -3188,7 +3190,7 @@
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260522.04</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260529.01</div>
                   </div>
                   
                   {/* v10.06: 헬퍼/봇 상태등 */}
@@ -12339,6 +12341,48 @@
                   );
                 })()}
                 
+                {/* 🖨️ 바코드 출력 전 상품 확인 모달 (2세대/3세대 등 혼동 방지 · 숫자 볼드 레드 강조) */}
+                {printConfirmPopup && (() => {
+                  const cp = printConfirmPopup.product;
+                  const cpName = cp.name || cp.labelName || '';
+                  const proceed = () => {
+                    setBarcodePrintPopup({product: cp, selections: {}, previewBarcodeHidden: true});
+                    setPrintConfirmPopup(null);
+                  };
+                  return (
+                    <div className="fixed inset-0 z-[75] flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.6)'}}
+                      onClick={()=>setPrintConfirmPopup(null)}>
+                      <style>{`@keyframes lrPrintBlink{0%{background-position:0% 50%;}50%{background-position:100% 50%;}100%{background-position:0% 50%;}}`}</style>
+                      <div className="w-full max-w-md" style={{borderRadius:'16px', boxShadow:'0 0 0 2px #000, 0 25px 50px -12px rgba(0,0,0,0.5)', background:'linear-gradient(120deg, #FEE500 0%, #FFFFFF 50%, #FEE500 100%)', backgroundSize:'200% 200%', animation:'lrPrintBlink 3.5s ease-in-out infinite'}}
+                        onClick={e=>e.stopPropagation()}>
+                        <div className="px-6 pt-6 pb-3 text-center">
+                          <div className="text-3xl mb-2">🖨️</div>
+                          <div className="text-[13px] font-black text-neutral-500 tracking-widest uppercase">바코드 출력</div>
+                        </div>
+                        <div className="px-6 pb-5 text-center">
+                          <div className="bg-neutral-50 border-2 border-black px-4 py-4 mb-4" style={{borderRadius:'12px'}}>
+                            <div className="font-black text-black leading-tight" style={{fontSize:'26px', wordBreak:'keep-all'}}>
+                              {cpName.split(/(\d+)/).map((part, i) =>
+                                /^\d+$/.test(part)
+                                  ? <span key={i} style={{color:'#dc2626', fontWeight:900}}>{part}</span>
+                                  : <React.Fragment key={i}>{part}</React.Fragment>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-base font-black text-black">이 상품 바코드 출력이 맞습니까?</div>
+                          <div className="text-[11px] text-neutral-500 font-bold mt-1">상품명의 <span style={{color:'#dc2626', fontWeight:900}}>숫자(세대)</span>를 꼭 확인하세요</div>
+                        </div>
+                        <div className="flex gap-2 px-6 pb-6">
+                          <button onClick={()=>setPrintConfirmPopup(null)}
+                            className="flex-1 py-3 bg-white border-2 border-black hover:bg-neutral-100 text-black font-black text-sm tracking-widest" style={{borderRadius:'10px'}}>아니오</button>
+                          <button onClick={proceed}
+                            className="flex-[1.6] py-3 bg-black hover:bg-neutral-800 text-white font-black text-sm tracking-widest" style={{borderRadius:'10px'}}>네, 맞아요</button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* 🖨️ 라벨 인쇄 편집기 v20260427.07.05 - 헬퍼 연동, 한글 100% */}
                 {barcodePrintPopup && (() => {
                   const p = barcodePrintPopup.product;
@@ -13022,10 +13066,13 @@
                                           <>
                                             <span className="text-[10px] font-mono text-neutral-800 bg-white border border-neutral-500 px-1.5 py-0.5 ml-auto font-bold" style={{borderRadius:'4px'}}>{bc}</span>
                                             <div className="flex gap-0.5">
-                                              {[5, 10, 15, 20].map(n => (
-                                                <button key={n} onClick={()=>setSelections(s=>({...s, [color]: n}))}
+                                              {[1, 5, 10, 15, 20].map(n => (
+                                                <button key={n} onClick={()=>setSelections(s=>({...s, [color]: Math.min(99, (parseInt(s[color])||0) + n)}))}
                                                   className="px-1.5 py-0.5 bg-white border border-neutral-500 hover:bg-black hover:text-white text-[9px] font-bold" style={{borderRadius:'2px'}}>{n}</button>
                                               ))}
+                                              <button onClick={()=>setSelections(s=>({...s, [color]: ''}))}
+                                                title="이 색상 수량 지우기"
+                                                className="px-1.5 py-0.5 bg-white border border-neutral-500 hover:bg-red-500 hover:text-white hover:border-red-500 text-[10px] font-bold leading-none" style={{borderRadius:'2px'}}>✕</button>
                                             </div>
                                             <input type="number" min="0" max="99" value={qty}
                                               onChange={e=>setSelections(s=>({...s, [color]: e.target.value.replace(/\D/g,'').slice(0,2)}))}
@@ -13044,6 +13091,7 @@
                                                   positionText: pos || ''
                                                 }];
                                                 printBarcodeBatch(singleItem, opts);
+                                                setSelections(s => ({...s, [color]: ''}));
                                               }}
                                               title={`${displayColorName} ${qty||1}장 즉시 출력`}
                                               className="bg-black hover:bg-neutral-800 text-white px-2 py-1 text-[10px] font-black tracking-wider whitespace-nowrap" style={{borderRadius:'4px'}}>🖨️ 출력</button>
@@ -15965,7 +16013,7 @@
                                                 {(() => {
                                                   const hasAnyBarcode = p.barcodes && Object.values(p.barcodes).some(v => v && v.length === 11);
                                                   return hasAnyBarcode ? (
-                                                    <button onClick={()=>setBarcodePrintPopup({product: p, selections: {}, previewBarcodeHidden: true})}
+                                                    <button onClick={()=>setPrintConfirmPopup({product: p})}
                                                       title="바코드 출력"
                                                       className="bg-white hover:bg-black hover:text-white text-black border border-neutral-700 px-2 py-1.5 text-[11px] font-black" style={{borderRadius:'2px'}}>🖨️</button>
                                                   ) : (
@@ -15983,7 +16031,7 @@
                                                   className="bg-white hover:bg-black hover:text-white text-neutral-400 border border-neutral-300 px-2 py-1.5 text-[11px] font-black" style={{borderRadius:'2px'}}>🗑️</button>
                                               </div>
                                               {p.barcodes && Object.values(p.barcodes).some(v => v && v.length === 11) && (
-                                                <button onClick={()=>setBarcodePrintPopup({product: p, selections: {}, previewBarcodeHidden: true})}
+                                                <button onClick={()=>setPrintConfirmPopup({product: p})}
                                                   title="바코드 출력 (라벨 인쇄)"
                                                   className="w-full text-black py-2.5 text-[12px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 mt-1 animate-pulse border-2 border-black"
                                                   style={{borderRadius:'2px', backgroundColor:'#FEE500'}}>
@@ -16285,7 +16333,7 @@
                                                 {(() => {
                                                   const hasAnyBarcode = p.barcodes && Object.values(p.barcodes).some(v => v && v.length === 11);
                                                   return hasAnyBarcode ? (
-                                                    <button onClick={()=>setBarcodePrintPopup({product: p, selections: {}, previewBarcodeHidden: true})}
+                                                    <button onClick={()=>setPrintConfirmPopup({product: p})}
                                                       title="바코드 출력"
                                                       className="bg-white hover:bg-black hover:text-white text-black border border-neutral-700 px-2 py-1.5 text-[11px] font-black" style={{borderRadius:'2px'}}>🖨️</button>
                                                   ) : (
@@ -16304,7 +16352,7 @@
                                                 </button>
                                               </div>
                                               {p.barcodes && Object.values(p.barcodes).some(v => v && v.length === 11) && (
-                                                <button onClick={()=>setBarcodePrintPopup({product: p, selections: {}, previewBarcodeHidden: true})}
+                                                <button onClick={()=>setPrintConfirmPopup({product: p})}
                                                   title="바코드 출력 (라벨 인쇄)"
                                                   className="w-full text-black py-2.5 text-[12px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 mt-1 animate-pulse border-2 border-black"
                                                   style={{borderRadius:'2px', backgroundColor:'#FEE500'}}>
