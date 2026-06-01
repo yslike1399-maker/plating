@@ -2479,6 +2479,12 @@
             }
 
             saveHistory(history.filter(h => h.id !== orderId));
+
+            // 💠 v20260602.02: 수정 모드로 열려있던 주문이 삭제되면 수정 화면도 함께 닫는다
+            if (editingPlatingOrderId === orderId) {
+              setEditingPlatingOrderId(null);
+              setOrderForm({ date: formatDate(new Date()), products: [] });
+            }
           };
 
           const handleDownloadExcel = async (order) => {
@@ -3190,7 +3196,7 @@
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260529.01</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260602.03</div>
                   </div>
                   
                   {/* v10.06: 헬퍼/봇 상태등 */}
@@ -5282,17 +5288,13 @@
                                   <h3 className="font-bold text-lg text-slate-900">{product.productName}</h3>
                                   <div className="flex items-center space-x-2 mt-1">
                                     <span className="text-sm text-slate-500">연마:</span>
-                                    {product.grindRequired ? (
-                                      <select
-                                        value={product.grind}
-                                        onChange={(e) => updateGrind(product.productId, product.grind, e.target.value)}
-                                        className="text-sm px-2 py-1 rounded-md border border-slate-300 focus:border-blue-500 outline-none"
-                                      >
-                                        {GRIND_OPTIONS.map(g => <option key={g} value={g}>{g}</option>)}
-                                      </select>
-                                    ) : (
-                                      <span className="text-sm px-2 py-1 bg-slate-100 text-slate-600 rounded-md font-medium">연마 제외</span>
-                                    )}
+                                    <select
+                                      value={product.grind}
+                                      onChange={(e) => updateGrind(product.productId, product.grind, e.target.value)}
+                                      className="text-sm px-2 py-1 rounded-md border border-slate-300 focus:border-blue-500 outline-none"
+                                    >
+                                      {GRIND_OPTIONS.map(g => <option key={g} value={g}>{g}</option>)}
+                                    </select>
                                   </div>
                                 </div>
                               </div>
@@ -6098,7 +6100,9 @@
                                         productId: p.productId,
                                         productName: p.productName,
                                         grind: p.grind,
-                                        image: p.image,
+                                        // 💠 v20260602.03: history는 quota 회피로 base64를 제거하므로
+                                        // workorder_images(IndexedDB) 또는 9-1 마스터에서 이미지 복원
+                                        image: getProductImage(p),
                                         items: p.items.map(item => ({
                                           color: item.color,
                                           finish: item.finish || '',
