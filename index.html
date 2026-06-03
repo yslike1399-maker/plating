@@ -3196,7 +3196,7 @@
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260602.03</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260604.01</div>
                   </div>
                   
                   {/* v10.06: 헬퍼/봇 상태등 */}
@@ -9205,58 +9205,58 @@
                     {/* 프리랜서 수정 팝업 */}
                     {editFreelancerPopup && (
                       <div className="fixed inset-0 z-50 flex items-center justify-center" style={{background:'rgba(0,0,0,0.5)'}}>
-                        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md mx-4 p-8">
+                        <div className="bg-white rounded-md shadow-2xl border-2 border-black w-full max-w-md mx-4 p-8">
                           <div className="flex items-center justify-between mb-6">
-                            <h3 className="text-lg font-bold text-slate-900">✏️ 프리랜서 수정</h3>
-                            <button onClick={() => setEditFreelancerPopup(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
+                            <h3 className="text-lg font-black text-black tracking-tight">✏️ 프리랜서 수정</h3>
+                            <button onClick={() => setEditFreelancerPopup(null)} className="text-neutral-400 hover:text-black text-xl font-bold">✕</button>
                           </div>
                           <div className="space-y-3">
                             <div className="grid grid-cols-2 gap-3">
                               <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1">프리랜서명 *</label>
+                                <label className="block text-xs font-bold text-neutral-500 mb-1">프리랜서명 *</label>
                                 <input type="text" value={editFreelancerPopup.name || ''} onChange={e => setEditFreelancerPopup({...editFreelancerPopup, name: e.target.value})}
-                                  className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm"/>
+                                  className="w-full px-3 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm"/>
                               </div>
                               <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1">작업내용</label>
+                                <label className="block text-xs font-bold text-neutral-500 mb-1">작업내용</label>
                                 <input type="text" value={editFreelancerPopup.work || ''} onChange={e => setEditFreelancerPopup({...editFreelancerPopup, work: e.target.value})}
-                                  className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm"/>
+                                  className="w-full px-3 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm"/>
                               </div>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                               <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1">주민등록번호</label>
+                                <label className="block text-xs font-bold text-neutral-500 mb-1">주민등록번호</label>
                                 <input type="text" value={editFreelancerPopup.ssn || ''} onChange={e => setEditFreelancerPopup({...editFreelancerPopup, ssn: e.target.value})}
-                                  className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm"/>
+                                  className="w-full px-3 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm"/>
                               </div>
                               <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1">전화번호</label>
+                                <label className="block text-xs font-bold text-neutral-500 mb-1">전화번호</label>
                                 <input type="text" value={editFreelancerPopup.phone || ''} onChange={e => setEditFreelancerPopup({...editFreelancerPopup, phone: e.target.value})}
-                                  className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm"/>
+                                  className="w-full px-3 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm"/>
                               </div>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                               <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1">은행명</label>
+                                <label className="block text-xs font-bold text-neutral-500 mb-1">은행명</label>
                                 <input type="text" value={editFreelancerPopup.bank || ''} onChange={e => setEditFreelancerPopup({...editFreelancerPopup, bank: e.target.value})}
-                                  className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm"/>
+                                  className="w-full px-3 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm"/>
                               </div>
                               <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1">계좌번호</label>
+                                <label className="block text-xs font-bold text-neutral-500 mb-1">계좌번호</label>
                                 <input type="text" value={editFreelancerPopup.account || ''} onChange={e => setEditFreelancerPopup({...editFreelancerPopup, account: e.target.value})}
-                                  className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm"/>
+                                  className="w-full px-3 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm"/>
                               </div>
                             </div>
                           </div>
                           <div className="flex gap-3 mt-6">
                             <button onClick={() => setEditFreelancerPopup(null)}
-                              className="flex-1 py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50">취소</button>
+                              className="flex-1 py-3 rounded-md border border-neutral-300 text-neutral-600 font-bold text-sm hover:bg-neutral-100">취소</button>
                             <button onClick={() => {
                               if (!editFreelancerPopup.name?.trim()) return alert('프리랜서명을 입력하세요');
                               saveFreelancers(freelancers.map(f => f.id === editFreelancerPopup.id ? {...f, ...editFreelancerPopup} : f));
                               setEditFreelancerPopup(null);
                               alert('수정 완료!');
-                            }} className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm">저장</button>
+                            }} className="flex-1 py-3 rounded-md bg-black hover:bg-neutral-800 text-white font-black text-sm">저장</button>
                           </div>
                         </div>
                       </div>
@@ -9265,46 +9265,46 @@
                     {/* 프리랜서 등록 팝업 */}
                     {freelancerRegPopup && (
                       <div className="fixed inset-0 z-50 flex items-center justify-center" style={{background:'rgba(0,0,0,0.5)'}}>
-                        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md mx-4 p-8">
+                        <div className="bg-white rounded-md shadow-2xl border-2 border-black w-full max-w-md mx-4 p-8">
                           <div className="flex items-center justify-between mb-6">
-                            <h3 className="text-lg font-bold text-slate-900">👤 프리랜서 등록</h3>
-                            <button onClick={() => setFreelancerRegPopup(false)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
+                            <h3 className="text-lg font-black text-black tracking-tight">👤 프리랜서 등록</h3>
+                            <button onClick={() => setFreelancerRegPopup(false)} className="text-neutral-400 hover:text-black text-xl font-bold">✕</button>
                           </div>
                           <div className="space-y-3">
                             <div className="grid grid-cols-2 gap-3">
                               <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1">프리랜서명 *</label>
-                                <input type="text" id="flName" placeholder="홍길동" className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm"/>
+                                <label className="block text-xs font-bold text-neutral-500 mb-1">프리랜서명 *</label>
+                                <input type="text" id="flName" placeholder="홍길동" className="w-full px-3 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm"/>
                               </div>
                               <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1">작업내용</label>
-                                <input type="text" id="flWork" placeholder="예: 바느질" className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm"/>
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
-                              <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1">주민등록번호</label>
-                                <input type="text" id="flSSN" placeholder="000000-0000000" className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm"/>
-                              </div>
-                              <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1">전화번호</label>
-                                <input type="text" id="flPhone" placeholder="010-0000-0000" className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm"/>
+                                <label className="block text-xs font-bold text-neutral-500 mb-1">작업내용</label>
+                                <input type="text" id="flWork" placeholder="예: 바느질" className="w-full px-3 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm"/>
                               </div>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                               <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1">은행명</label>
-                                <input type="text" id="flBank" placeholder="국민은행" className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm"/>
+                                <label className="block text-xs font-bold text-neutral-500 mb-1">주민등록번호</label>
+                                <input type="text" id="flSSN" placeholder="000000-0000000" className="w-full px-3 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm"/>
                               </div>
                               <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1">계좌번호</label>
-                                <input type="text" id="flAccount" placeholder="000-000-000000" className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm"/>
+                                <label className="block text-xs font-bold text-neutral-500 mb-1">전화번호</label>
+                                <input type="text" id="flPhone" placeholder="010-0000-0000" className="w-full px-3 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm"/>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-xs font-bold text-neutral-500 mb-1">은행명</label>
+                                <input type="text" id="flBank" placeholder="국민은행" className="w-full px-3 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm"/>
+                              </div>
+                              <div>
+                                <label className="block text-xs font-bold text-neutral-500 mb-1">계좌번호</label>
+                                <input type="text" id="flAccount" placeholder="000-000-000000" className="w-full px-3 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm"/>
                               </div>
                             </div>
                           </div>
                           <div className="flex gap-3 mt-6">
                             <button onClick={() => setFreelancerRegPopup(false)}
-                              className="flex-1 py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50">취소</button>
+                              className="flex-1 py-3 rounded-md border border-neutral-300 text-neutral-600 font-bold text-sm hover:bg-neutral-100">취소</button>
                             <button onClick={() => {
                               const name = document.getElementById('flName').value.trim();
                               if (!name) return alert('프리랜서명을 입력하세요');
@@ -9319,24 +9319,24 @@
                               }]);
                               setFreelancerRegPopup(false);
                               alert(`${name}님 등록 완료!`);
-                            }} className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm">등록</button>
+                            }} className="flex-1 py-3 rounded-md bg-black hover:bg-neutral-800 text-white font-black text-sm">등록</button>
                           </div>
                         </div>
                       </div>
                     )}
 
                     {/* 등록된 프리랜서 목록 - 카드형 */}
-                    <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8">
+                    <div className="bg-white rounded-md border border-neutral-300 p-8">
                       <div className="flex items-center justify-between mb-6">
-                        <h2 className="text-xl font-bold text-slate-900">등록된 프리랜서 ({freelancers.length})</h2>
+                        <h2 className="text-xl font-black text-black tracking-tight">등록된 프리랜서 ({freelancers.length})</h2>
                         <button onClick={() => setFreelancerRegPopup(true)}
-                          className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold transition-all">
+                          className="flex items-center gap-1.5 px-4 py-2 bg-black hover:bg-neutral-800 text-white rounded-md text-sm font-black transition-all">
                           <Plus /> 프리랜서 등록
                         </button>
                       </div>
 
                       {freelancers.length === 0 ? (
-                        <div className="text-center py-12 text-slate-400 cursor-pointer hover:text-blue-500 transition-all" onClick={() => setFreelancerRegPopup(true)}>
+                        <div className="text-center py-12 text-neutral-400 cursor-pointer hover:text-black transition-all" onClick={() => setFreelancerRegPopup(true)}>
                           <div className="text-4xl mb-2">+</div>
                           <p className="font-medium">프리랜서를 등록해주세요</p>
                         </div>
@@ -9355,49 +9355,49 @@
                             const unpaidTotal = freelancerWorks.filter(w => w.freelancerId === freelancer.id && !w.paid).reduce((s,w) => s + (w.payment || 0), 0);
 
                             return (
-                              <div key={freelancer.id} className={`border-2 rounded-2xl overflow-hidden ${colorClass}`}>
+                              <div key={freelancer.id} className={`border-2 rounded-md overflow-hidden ${colorClass}`}>
                                 {/* 카드 헤더 */}
                                 <div className="px-5 py-4 flex items-center gap-3">
                                   <div className={`${avatarColor} text-white w-11 h-11 rounded-full flex items-center justify-center font-bold text-sm shrink-0`}>
                                     {freelancer.name.slice(0,2)}
                                   </div>
                                   <div className="flex-1 min-w-0">
-                                    <div className="font-bold text-slate-900 text-base leading-tight">{freelancer.name}</div>
-                                    <div className="text-xs text-slate-500 mt-0.5">{freelancer.work || '작업내용 미등록'}</div>
+                                    <div className="font-black text-black text-base leading-tight">{freelancer.name}</div>
+                                    <div className="text-xs text-neutral-500 mt-0.5">{freelancer.work || '작업내용 미등록'}</div>
                                   </div>
                                   <div className="flex gap-1 shrink-0">
                                     <button onClick={() => setEditFreelancerPopup({...freelancer})}
-                                      className="p-1.5 text-blue-500 hover:bg-blue-100 rounded-lg" title="수정"><Edit /></button>
+                                      className="p-1.5 text-neutral-600 hover:bg-neutral-100 rounded-md" title="수정"><Edit /></button>
                                     <button onClick={() => { if(confirm(`${freelancer.name}님을 삭제하시겠습니까?`)) saveFreelancers(freelancers.filter(f => f.id !== freelancer.id)); }}
-                                      className="p-1.5 text-red-400 hover:bg-red-100 rounded-lg"><Trash /></button>
+                                      className="p-1.5 text-red-400 hover:bg-red-100 rounded-md"><Trash /></button>
                                   </div>
                                 </div>
 
                                 {/* 카드 바디 */}
                                 <div className="bg-white px-5 py-4 space-y-2">
                                   <div className="flex justify-between items-center">
-                                    <span className="text-xs text-slate-500">전화번호</span>
-                                    <span className="text-xs text-slate-700">{freelancer.phone || '-'}</span>
+                                    <span className="text-xs text-neutral-500">전화번호</span>
+                                    <span className="text-xs text-neutral-700">{freelancer.phone || '-'}</span>
                                   </div>
                                   <div className="flex justify-between items-center">
-                                    <span className="text-xs text-slate-500">은행 / 계좌</span>
-                                    <span className="text-xs text-slate-700">{freelancer.bank ? `${freelancer.bank} ${freelancer.account}` : '-'}</span>
+                                    <span className="text-xs text-neutral-500">은행 / 계좌</span>
+                                    <span className="text-xs text-neutral-700">{freelancer.bank ? `${freelancer.bank} ${freelancer.account}` : '-'}</span>
                                   </div>
                                   <div className="flex justify-between items-center">
-                                    <span className="text-xs text-slate-500">이번달 공임</span>
-                                    <span className={`text-xs font-bold ${thisMonthTotal > 0 ? 'text-blue-600' : 'text-slate-400'}`}>
+                                    <span className="text-xs text-neutral-500">이번달 공임</span>
+                                    <span className={`text-xs font-bold ${thisMonthTotal > 0 ? 'text-black' : 'text-neutral-400'}`}>
                                       {thisMonthTotal > 0 ? `${thisMonthTotal.toLocaleString()}원` : '-'}
                                     </span>
                                   </div>
-                                  <div className="border-t border-slate-100 pt-2 flex justify-between items-center">
-                                    <span className="text-xs text-slate-500">미지급</span>
-                                    <span className={`text-xs font-bold ${unpaidTotal > 0 ? 'text-red-500' : 'text-slate-400'}`}>
+                                  <div className="border-t border-neutral-200 pt-2 flex justify-between items-center">
+                                    <span className="text-xs text-neutral-500">미지급</span>
+                                    <span className={`text-xs font-bold ${unpaidTotal > 0 ? 'text-red-500' : 'text-neutral-400'}`}>
                                       {unpaidTotal > 0 ? `${unpaidTotal.toLocaleString()}원` : '없음'}
                                     </span>
                                   </div>
                                   <button
                                     onClick={() => setWorkPopup({ freelancer })}
-                                    className="w-full mt-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold transition-all"
+                                    className="w-full mt-3 py-2 bg-black hover:bg-neutral-800 text-white rounded-md text-xs font-black transition-all"
                                   >
                                     ✏️ 작업 등록
                                   </button>
@@ -9408,9 +9408,9 @@
 
                           {/* + 카드 */}
                           <div onClick={() => setFreelancerRegPopup(true)}
-                            className="border-2 border-dashed border-slate-300 rounded-2xl flex flex-col items-center justify-center min-h-48 cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-all group">
-                            <div className="text-3xl text-slate-300 group-hover:text-blue-400 transition-all mb-2">+</div>
-                            <div className="text-xs text-slate-400 group-hover:text-blue-500 font-medium">프리랜서 등록</div>
+                            className="border-2 border-dashed border-neutral-300 rounded-md flex flex-col items-center justify-center min-h-48 cursor-pointer hover:border-black hover:bg-neutral-50 transition-all group">
+                            <div className="text-3xl text-neutral-300 group-hover:text-black transition-all mb-2">+</div>
+                            <div className="text-xs text-neutral-400 group-hover:text-black font-medium">프리랜서 등록</div>
                           </div>
                         </div>
                       )}
@@ -9419,43 +9419,43 @@
                     {/* 작업 등록 팝업 */}
                     {workPopup && (
                       <div className="fixed inset-0 z-50 flex items-center justify-center" style={{background:'rgba(0,0,0,0.5)'}}>
-                        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg mx-4 p-8 max-h-screen overflow-y-auto">
+                        <div className="bg-white rounded-md shadow-2xl border-2 border-black w-full max-w-lg mx-4 p-8 max-h-screen overflow-y-auto">
                           <div className="flex items-center justify-between mb-5">
                             <div>
-                              <h3 className="text-lg font-bold text-slate-900">✏️ 작업 등록</h3>
-                              <p className="text-xs text-slate-500 mt-0.5">{workPopup.freelancer.name} · {workPopup.freelancer.work}</p>
+                              <h3 className="text-lg font-black text-black tracking-tight">✏️ 작업 등록</h3>
+                              <p className="text-xs text-neutral-500 mt-0.5">{workPopup.freelancer.name} · {workPopup.freelancer.work}</p>
                             </div>
-                            <button onClick={() => setWorkPopup(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
+                            <button onClick={() => setWorkPopup(null)} className="text-neutral-400 hover:text-black text-xl font-bold">✕</button>
                           </div>
                           <div className="space-y-3">
                             <div className="grid grid-cols-2 gap-3">
                               <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1">작업일 *</label>
-                                <input type="date" id="wpDate" defaultValue={new Date().toISOString().split('T')[0]} className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm"/>
+                                <label className="block text-xs font-bold text-neutral-500 mb-1">작업일 *</label>
+                                <input type="date" id="wpDate" defaultValue={new Date().toISOString().split('T')[0]} className="w-full px-3 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm"/>
                               </div>
                               <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1">품명 *</label>
-                                <input type="text" id="wpItem" placeholder="예: 꼬임슬림" className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm"/>
+                                <label className="block text-xs font-bold text-neutral-500 mb-1">품명 *</label>
+                                <input type="text" id="wpItem" placeholder="예: 꼬임슬림" className="w-full px-3 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm"/>
                               </div>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                               <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1">수량 *</label>
-                                <input type="number" id="wpQty" placeholder="0" className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm"/>
+                                <label className="block text-xs font-bold text-neutral-500 mb-1">수량 *</label>
+                                <input type="number" id="wpQty" placeholder="0" className="w-full px-3 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm"/>
                               </div>
                               <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1">공임 *</label>
-                                <input type="number" id="wpWage" placeholder="0" className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm"/>
+                                <label className="block text-xs font-bold text-neutral-500 mb-1">공임 *</label>
+                                <input type="number" id="wpWage" placeholder="0" className="w-full px-3 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm"/>
                               </div>
                             </div>
                             <div>
-                              <label className="block text-xs font-semibold text-slate-600 mb-1">작업 이미지</label>
+                              <label className="block text-xs font-bold text-neutral-500 mb-1">작업 이미지</label>
                               <label className="cursor-pointer block">
-                                <div className="border-2 border-dashed border-slate-300 rounded-xl p-4 hover:border-blue-400 hover:bg-blue-50/30 transition-all text-center">
+                                <div className="border-2 border-dashed border-neutral-300 rounded-md p-4 hover:border-black hover:bg-neutral-50 transition-all text-center">
                                   <div id="wpImgPreview" className="hidden mb-2">
                                     <img id="wpImgPreviewImg" alt="미리보기" className="max-h-24 mx-auto rounded-lg"/>
                                   </div>
-                                  <div id="wpImgPlaceholder" className="text-slate-400 text-xs">
+                                  <div id="wpImgPlaceholder" className="text-neutral-400 text-xs">
                                     <div className="flex justify-center mb-1"><Image /></div>
                                     이미지 업로드
                                   </div>
@@ -9476,7 +9476,7 @@
                             </div>
                           </div>
                           <div className="flex gap-3 mt-6">
-                            <button onClick={() => setWorkPopup(null)} className="flex-1 py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50">취소</button>
+                            <button onClick={() => setWorkPopup(null)} className="flex-1 py-3 rounded-md border border-neutral-300 text-neutral-600 font-bold text-sm hover:bg-neutral-100">취소</button>
                             <button onClick={() => {
                               const workDate = document.getElementById('wpDate').value;
                               const itemName = document.getElementById('wpItem').value.trim();
@@ -9500,7 +9500,7 @@
                               }, ...freelancerWorks]);
                               setWorkPopup(null);
                               alert(`${workPopup.freelancer.name}님 작업 등록 완료!`);
-                            }} className="flex-1 py-3 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold text-sm">등록</button>
+                            }} className="flex-1 py-3 rounded-md bg-black hover:bg-neutral-800 text-white font-black text-sm">등록</button>
                           </div>
                         </div>
                       </div>
@@ -9509,9 +9509,9 @@
                     {/* 작업 내역 및 통계 */}
                                         {/* 작업 내역 및 통계 */}
                     <div className={`grid gap-6 ${receiptCheckedWorks.length > 0 ? 'grid-cols-1 lg:grid-cols-[1fr_400px]' : 'grid-cols-1'}`}>
-                      <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8">
+                      <div className="bg-white rounded-md border border-neutral-300 p-8">
                       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-                        <h2 className="text-xl font-bold text-slate-900">작업 내역 및 통계</h2>
+                        <h2 className="text-xl font-black text-black tracking-tight">작업 내역 및 통계</h2>
                         {receiptCheckedWorks.length > 0 && (
                           <div className="flex items-center gap-2">
                             <span className="px-3 py-1.5 bg-yellow-100 border border-yellow-400 text-yellow-800 text-xs font-bold" style={{borderRadius:'2px'}}>
@@ -9526,7 +9526,7 @@
                       </div>
                       
                       {freelancerWorks.length === 0 ? (
-                        <div className="text-center py-12 text-slate-400">
+                        <div className="text-center py-12 text-neutral-400">
                           <p className="font-medium">등록된 작업이 없습니다</p>
                         </div>
                       ) : (
@@ -9534,11 +9534,11 @@
                           {/* 조회 필터 */}
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                             <div>
-                              <label className="block text-sm font-semibold text-slate-700 mb-2">프리랜서별 조회</label>
-                              <select 
+                              <label className="block text-sm font-bold text-neutral-600 mb-2">프리랜서별 조회</label>
+                              <select
                                 value={filterFreelancerId}
                                 onChange={(e) => setFilterFreelancerId(e.target.value)}
-                                className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none"
+                                className="w-full px-4 py-3 rounded-md border border-neutral-400 focus:border-black outline-none"
                               >
                                 <option value="">전체</option>
                                 {freelancers.map(f => (
@@ -9547,29 +9547,29 @@
                               </select>
                             </div>
                             <div>
-                              <label className="block text-sm font-semibold text-slate-700 mb-2">작업일 시작</label>
-                              <input 
-                                type="date" 
+                              <label className="block text-sm font-bold text-neutral-600 mb-2">작업일 시작</label>
+                              <input
+                                type="date"
                                 value={filterMonth}
                                 onChange={(e) => setFilterMonth(e.target.value)}
-                                className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none"
+                                className="w-full px-4 py-3 rounded-md border border-neutral-400 focus:border-black outline-none"
                               />
                             </div>
                             <div>
-                              <label className="block text-sm font-semibold text-slate-700 mb-2">작업일 종료</label>
-                              <input 
-                                type="date" 
+                              <label className="block text-sm font-bold text-neutral-600 mb-2">작업일 종료</label>
+                              <input
+                                type="date"
                                 id="filterEndDate"
-                                className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none"
+                                className="w-full px-4 py-3 rounded-md border border-neutral-400 focus:border-black outline-none"
                               />
                             </div>
                             <div>
-                              <label className="block text-sm font-semibold text-slate-700 mb-2">지급일 기준</label>
+                              <label className="block text-sm font-bold text-neutral-600 mb-2">지급일 기준</label>
                               <div className="flex gap-2">
-                                <input 
-                                  type="date" 
+                                <input
+                                  type="date"
                                   id="filterPaidDate"
-                                  className="flex-1 px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none"
+                                  className="flex-1 px-4 py-3 rounded-md border border-neutral-400 focus:border-black outline-none"
                                 />
                                 <button
                                   onClick={() => {
@@ -9578,7 +9578,7 @@
                                     document.getElementById('filterPaidDate').value = '';
                                     setFilterFreelancerId('');
                                   }}
-                                  className="px-4 py-3 bg-slate-200 hover:bg-slate-300 rounded-xl font-semibold text-slate-700"
+                                  className="px-4 py-3 bg-neutral-200 hover:bg-neutral-300 rounded-md font-bold text-neutral-700"
                                 >
                                   초기화
                                 </button>
@@ -9586,11 +9586,28 @@
                             </div>
                           </div>
 
+                          {/* 프리랜서 색상 범례 (전체 조회 시) */}
+                          {!filterFreelancerId && freelancers.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-2 mb-5 p-3 rounded-md bg-neutral-50 border border-neutral-300">
+                              <span className="text-xs font-bold text-neutral-500 mr-1">🎨 색상 구분</span>
+                              {freelancers.map((f, idx) => {
+                                const legendColors = ['#3b82f6','#10b981','#8b5cf6','#f59e0b','#ef4444','#06b6d4','#f97316','#ec4899'];
+                                const c = legendColors[idx % legendColors.length];
+                                return (
+                                  <span key={f.id} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white border" style={{borderColor: c}}>
+                                    <span style={{width:'8px',height:'8px',borderRadius:'50%',background:c,display:'inline-block'}}></span>
+                                    <span className="text-xs font-bold" style={{color:c}}>{f.name}</span>
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
+
                           <div className="overflow-x-auto mb-8">
                             <table className="w-full text-sm">
                               <thead>
-                                <tr className="border-b-2 border-slate-300">
-                                  <th className="text-center py-3 px-2 font-bold w-10 bg-yellow-50 border-r border-slate-200" title="영수증 발급용 체크박스">
+                                <tr className="border-b-2 border-black">
+                                  <th className="text-center py-3 px-2 font-bold w-10 bg-yellow-50 border-r border-neutral-200" title="영수증 발급용 체크박스">
                                     <span className="text-[10px]">📄</span>
                                   </th>
                                   <th className="text-left py-3 px-4 font-bold">날짜</th>
@@ -9604,7 +9621,7 @@
                                   <th className="text-right py-3 px-4 font-bold">실지급액</th>
                                   <th className="text-center py-3 px-4 font-bold">지급여부</th>
                                   <th className="text-center py-3 px-4 font-bold whitespace-nowrap">지급완료일</th>
-                                  <th className="text-center py-3 px-4 font-bold">세금신고</th>
+                                  <th className="text-center py-3 px-4 font-bold whitespace-nowrap">세금신고/월</th>
                                   <th className="text-left py-3 px-4 font-bold">비고</th>
                                   <th className="text-center py-3 px-4 font-bold">관리</th>
                                 </tr>
@@ -9645,9 +9662,10 @@
                                     const freelancerIdx = freelancers.findIndex(f => f.id === work.freelancerId);
                                     const barColors = ['#3b82f6','#10b981','#8b5cf6','#f59e0b','#ef4444','#06b6d4','#f97316','#ec4899'];
                                     const barColor = barColors[freelancerIdx % barColors.length] || '#94a3b8';
+                                    const isDone = work.paid && work.taxReported; // 지급+세금신고 모두 완료
                                     return (
-                                      <tr key={work.id} className={`border-b border-slate-200 hover:bg-slate-50 ${receiptCheckedWorks.includes(work.id) ? 'bg-yellow-50' : ''}`} style={{borderLeft: `4px solid ${barColor}`}}>
-                                        <td className="py-3 px-2 text-center bg-yellow-50/40 border-r border-slate-200">
+                                      <tr key={work.id} className={`border-b border-neutral-200 hover:bg-neutral-50 ${receiptCheckedWorks.includes(work.id) ? 'bg-yellow-50' : ''}`} style={{borderLeft: `4px solid ${barColor}`, ...(isDone ? {textDecoration:'line-through', textDecorationColor:'#dc2626', textDecorationThickness:'2px'} : {})}}>
+                                        <td className="py-3 px-2 text-center bg-yellow-50/40 border-r border-neutral-200">
                                           <input type="checkbox"
                                             checked={receiptCheckedWorks.includes(work.id)}
                                             onChange={(e)=>{
@@ -9661,32 +9679,37 @@
                                             title="영수증에 포함"/>
                                         </td>
                                         <td className="py-3 px-4 whitespace-nowrap">{work.workDate}</td>
-                                        <td className="py-3 px-4 font-semibold whitespace-nowrap">{freelancer?.name || '삭제된 프리랜서'}</td>
+                                        <td className="py-3 px-4 font-bold whitespace-nowrap" style={{color: freelancer ? barColor : '#94a3b8'}}>
+                                          <span className="inline-flex items-center gap-1.5">
+                                            <span style={{width:'9px',height:'9px',borderRadius:'50%',background: freelancer ? barColor : '#94a3b8',display:'inline-block',flexShrink:0,boxShadow:'0 0 0 2px rgba(0,0,0,0.04)'}}></span>
+                                            {freelancer?.name || '삭제된 프리랜서'}
+                                          </span>
+                                        </td>
                                         <td className="py-3 px-4">{work.itemName}</td>
                                         <td className="py-3 px-4 text-center">
                                           {work.workImage ? (
-                                            <img src={work.workImage} alt="작업" className="w-16 h-16 rounded-lg object-cover mx-auto border-2 border-slate-200" />
+                                            <img src={work.workImage} alt="작업" className="w-16 h-16 rounded-md object-cover mx-auto border border-neutral-300" />
                                           ) : (
-                                            <span className="text-slate-400 text-xs">없음</span>
+                                            <span className="text-neutral-400 text-xs">없음</span>
                                           )}
                                         </td>
                                         <td className="text-center py-3 px-4">{work.qty}</td>
                                         <td className="text-right py-3 px-4 whitespace-nowrap">{work.wage.toLocaleString()}원</td>
                                         <td className="text-right py-3 px-4 font-semibold whitespace-nowrap">{work.total.toLocaleString()}원</td>
                                         <td className="text-right py-3 px-4 text-red-600 whitespace-nowrap">{work.tax.toLocaleString()}원</td>
-                                        <td className="text-right py-3 px-4 font-bold text-blue-600 whitespace-nowrap">{work.payment.toLocaleString()}원</td>
+                                        <td className="text-right py-3 px-4 font-black text-black whitespace-nowrap">{work.payment.toLocaleString()}원</td>
                                         <td className="text-center py-3 px-4">
                                           <button
                                             onClick={() => {
-                                              const updated = freelancerWorks.map(w => 
+                                              const updated = freelancerWorks.map(w =>
                                                 w.id === work.id ? {...w, paid: !w.paid, paidDate: !w.paid ? (work.paidDate || formatDate(new Date())) : work.paidDate} : w
                                               );
                                               saveFreelancerWorks(updated);
                                             }}
                                             className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
-                                              work.paid 
-                                                ? 'bg-red-500 text-yellow-300 hover:bg-red-600' 
-                                                : 'bg-blue-500 text-white hover:bg-blue-600'
+                                              work.paid
+                                                ? 'bg-neutral-200 text-neutral-500 hover:bg-neutral-300'
+                                                : 'bg-black text-white hover:bg-neutral-800'
                                             }`}
                                           >
                                             {work.paid ? '지급함' : '지급전'}
@@ -9702,21 +9725,45 @@
                                               );
                                               saveFreelancerWorks(updated);
                                             }}
-                                            className="px-2 py-1 rounded border border-slate-300 text-xs"
+                                            className="px-2 py-1 rounded-md border border-neutral-400 text-xs"
                                           />
                                         </td>
                                         <td className="text-center py-3 px-4">
-                                          <input
-                                            type="checkbox"
-                                            checked={work.taxReported}
-                                            onChange={(e) => {
-                                              const updated = freelancerWorks.map(w => 
-                                                w.id === work.id ? {...w, taxReported: e.target.checked} : w
-                                              );
-                                              saveFreelancerWorks(updated);
-                                            }}
-                                            className="w-5 h-5"
-                                          />
+                                          <div className="flex flex-col items-center gap-1">
+                                            <input
+                                              type="checkbox"
+                                              checked={work.taxReported}
+                                              onChange={(e) => {
+                                                const checked = e.target.checked;
+                                                const updated = freelancerWorks.map(w =>
+                                                  w.id === work.id
+                                                    ? {...w, taxReported: checked,
+                                                        // 신고 체크 시 신고월 기본값 = 지급월(없으면 작업월)
+                                                        taxReportMonth: checked
+                                                          ? (w.taxReportMonth || (w.paidDate ? w.paidDate.substring(0,7) : (w.workDate ? w.workDate.substring(0,7) : '')))
+                                                          : w.taxReportMonth}
+                                                    : w
+                                                );
+                                                saveFreelancerWorks(updated);
+                                              }}
+                                              className="w-5 h-5 accent-black"
+                                            />
+                                            {work.taxReported && (
+                                              <input
+                                                type="month"
+                                                value={work.taxReportMonth || ''}
+                                                onChange={(e) => {
+                                                  const updated = freelancerWorks.map(w =>
+                                                    w.id === work.id ? {...w, taxReportMonth: e.target.value} : w
+                                                  );
+                                                  saveFreelancerWorks(updated);
+                                                }}
+                                                className="px-1.5 py-1 rounded-md border border-neutral-400 text-[11px]"
+                                                title="세금신고 월 (예: 4월 작업 → 5월 신고)"
+                                                style={{textDecoration:'none'}}
+                                              />
+                                            )}
+                                          </div>
                                         </td>
                                         <td className="py-3 px-4">
                                           <input
@@ -9728,7 +9775,7 @@
                                               );
                                               saveFreelancerWorks(updated);
                                             }}
-                                            className="px-2 py-1 rounded border border-slate-300 text-xs w-full"
+                                            className="px-2 py-1 rounded-md border border-neutral-400 text-xs w-full"
                                             placeholder="비고"
                                           />
                                         </td>
@@ -9739,7 +9786,7 @@
                                                 saveFreelancerWorks(freelancerWorks.filter(w => w.id !== work.id));
                                               }
                                             }}
-                                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
+                                            className="p-2 text-red-500 hover:bg-red-50 rounded-md"
                                           >
                                             <Trash />
                                           </button>
@@ -9940,10 +9987,10 @@
                       );
                     })()}
                     </div>{/* end grid */}
-                    <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8">
-                      <h2 className="text-xl font-bold text-slate-900 mb-6">📊 프리랜서별 통계</h2>
+                    <div className="bg-white rounded-md border border-neutral-300 p-8">
+                      <h2 className="text-xl font-black text-black tracking-tight mb-6">📊 프리랜서별 통계</h2>
                       {freelancers.length === 0 ? (
-                        <p className="text-slate-400 text-center py-8">등록된 프리랜서가 없습니다</p>
+                        <p className="text-neutral-400 text-center py-8">등록된 프리랜서가 없습니다</p>
                       ) : (
                         <div className="space-y-8">
                           {freelancers.map((freelancer, flIdx) => {
@@ -9973,67 +10020,67 @@
                             const setGraphMode = (mode) => setGraphModes(prev => ({...prev, [freelancer.id]: mode}));
 
                             return (
-                              <div key={freelancer.id} className="border border-slate-200 rounded-2xl overflow-hidden">
+                              <div key={freelancer.id} className="border border-neutral-300 rounded-md overflow-hidden">
                                 {/* 헤더 */}
-                                <div className="bg-slate-50 px-5 py-4 flex items-center justify-between flex-wrap gap-3">
+                                <div className="bg-neutral-50 px-5 py-4 flex items-center justify-between flex-wrap gap-3">
                                   <div className="flex items-center gap-3">
                                     <div className={`${avatarColor} text-white w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0`}>{freelancer.name.slice(0,2)}</div>
                                     <div>
-                                      <span className="font-bold text-slate-900">{freelancer.name}</span>
-                                      <span className="text-slate-500 text-xs ml-2">({freelancer.work})</span>
+                                      <span className="font-black text-black">{freelancer.name}</span>
+                                      <span className="text-neutral-500 text-xs ml-2">({freelancer.work})</span>
                                     </div>
                                   </div>
                                   <div className="flex gap-4 text-sm flex-wrap">
-                                    <span className="text-slate-600">총 {works.length}건</span>
-                                    <span className="text-blue-600 font-semibold">{totalPayment.toLocaleString()}원</span>
-                                    <span className="text-green-600">지급 {paidAmount.toLocaleString()}원</span>
+                                    <span className="text-neutral-600">총 {works.length}건</span>
+                                    <span className="text-black font-bold">{totalPayment.toLocaleString()}원</span>
+                                    <span className="text-neutral-500">지급 {paidAmount.toLocaleString()}원</span>
                                     {unpaidAmount > 0 && <span className="text-red-500 font-bold">미지급 {unpaidAmount.toLocaleString()}원</span>}
-                                    {unreportedTax > 0 && <span className="text-purple-600 font-bold">미신고세금 {unreportedTax.toLocaleString()}원</span>}
+                                    {unreportedTax > 0 && <span className="text-red-600 font-bold">미신고세금 {unreportedTax.toLocaleString()}원</span>}
                                   </div>
                                 </div>
 
                                 {/* 그래프 + 통계 나란히 */}
-                                <div className="px-5 py-4 border-t border-slate-100 flex gap-6 flex-wrap">
+                                <div className="px-5 py-4 border-t border-neutral-200 flex gap-6 flex-wrap">
                                   {/* 왼쪽: 통계 정보 */}
                                   <div className="min-w-48 space-y-1.5">
-                                    <div className="text-xs font-bold text-slate-600 mb-2">📋 전체 통계</div>
+                                    <div className="text-xs font-bold text-neutral-600 mb-2">📋 전체 통계</div>
                                     <div className="flex justify-between gap-4 text-xs">
-                                      <span className="text-slate-500">작업 건수</span>
-                                      <span className="font-semibold text-slate-800">{works.length}건</span>
+                                      <span className="text-neutral-500">작업 건수</span>
+                                      <span className="font-bold text-neutral-800">{works.length}건</span>
                                     </div>
                                     <div className="flex justify-between gap-4 text-xs">
-                                      <span className="text-slate-500">총 금액(세전)</span>
-                                      <span className="font-semibold text-slate-800">{works.reduce((s,w)=>s+w.total,0).toLocaleString()}원</span>
+                                      <span className="text-neutral-500">총 금액(세전)</span>
+                                      <span className="font-bold text-neutral-800">{works.reduce((s,w)=>s+w.total,0).toLocaleString()}원</span>
                                     </div>
                                     <div className="flex justify-between gap-4 text-xs">
-                                      <span className="text-slate-500">세금(3.3%)</span>
-                                      <span className="font-semibold text-red-500">{works.reduce((s,w)=>s+w.tax,0).toLocaleString()}원</span>
+                                      <span className="text-neutral-500">세금(3.3%)</span>
+                                      <span className="font-bold text-red-500">{works.reduce((s,w)=>s+w.tax,0).toLocaleString()}원</span>
                                     </div>
                                     <div className="flex justify-between gap-4 text-xs">
-                                      <span className="text-slate-500">실지급액</span>
-                                      <span className="font-semibold text-blue-600">{totalPayment.toLocaleString()}원</span>
+                                      <span className="text-neutral-500">실지급액</span>
+                                      <span className="font-black text-black">{totalPayment.toLocaleString()}원</span>
                                     </div>
                                     <div className="flex justify-between gap-4 text-xs">
-                                      <span className="text-slate-500">지급 완료</span>
-                                      <span className="font-semibold text-green-600">{paidAmount.toLocaleString()}원</span>
+                                      <span className="text-neutral-500">지급 완료</span>
+                                      <span className="font-bold text-neutral-500">{paidAmount.toLocaleString()}원</span>
                                     </div>
-                                    <div className="flex justify-between gap-4 text-xs border-t border-slate-100 pt-1.5 mt-1.5">
-                                      <span className="text-slate-500">미지급</span>
-                                      <span className={`font-bold ${unpaidAmount > 0 ? 'text-orange-500' : 'text-slate-400'}`}>{unpaidAmount.toLocaleString()}원</span>
+                                    <div className="flex justify-between gap-4 text-xs border-t border-neutral-200 pt-1.5 mt-1.5">
+                                      <span className="text-neutral-500">미지급</span>
+                                      <span className={`font-bold ${unpaidAmount > 0 ? 'text-red-500' : 'text-neutral-400'}`}>{unpaidAmount.toLocaleString()}원</span>
                                     </div>
                                     {unreportedTax > 0 && (
                                       <div className="flex justify-between gap-4 text-xs">
-                                        <span className="text-slate-500">미신고 세금</span>
-                                        <span className="font-bold text-purple-600">{unreportedTax.toLocaleString()}원</span>
+                                        <span className="text-neutral-500">미신고 세금</span>
+                                        <span className="font-bold text-red-600">{unreportedTax.toLocaleString()}원</span>
                                       </div>
                                     )}
 
                                     {/* 미신고 세금 상세 */}
                                     {unreportedTax > 0 && (
-                                      <div className="mt-3 bg-purple-50 rounded-xl p-3 border border-purple-200">
-                                        <p className="text-xs font-bold text-purple-700 mb-2">📋 미신고 세금 내역 ({unreportedWorks.length}건)</p>
+                                      <div className="mt-3 bg-red-50 rounded-md p-3 border border-red-200">
+                                        <p className="text-xs font-bold text-red-700 mb-2">📋 미신고 세금 내역 ({unreportedWorks.length}건)</p>
                                         <div className="space-y-1.5">
-                                          <div className="flex justify-between text-xs text-slate-600">
+                                          <div className="flex justify-between text-xs text-neutral-600">
                                             <span>세전 금액</span>
                                             <span className="font-semibold">{unreportedWorks.reduce((s,w)=>s+w.total,0).toLocaleString()}원</span>
                                           </div>
@@ -10041,19 +10088,19 @@
                                             <span>세금(3.3%)</span>
                                             <span className="font-semibold">{unreportedTax.toLocaleString()}원</span>
                                           </div>
-                                          <div className="flex justify-between text-xs text-blue-600">
+                                          <div className="flex justify-between text-xs text-neutral-700">
                                             <span>세후 금액</span>
                                             <span className="font-semibold">{unreportedWorks.reduce((s,w)=>s+w.payment,0).toLocaleString()}원</span>
                                           </div>
-                                          <div className="border-t border-purple-200 pt-1.5 mt-1">
-                                            <p className="text-xs text-slate-500 font-semibold mb-1">세부 내역:</p>
+                                          <div className="border-t border-red-200 pt-1.5 mt-1">
+                                            <p className="text-xs text-neutral-500 font-semibold mb-1">세부 내역:</p>
                                             {unreportedWorks.slice(0,3).map(w=>(
-                                              <p key={w.id} className="text-xs text-slate-500 mb-0.5">
+                                              <p key={w.id} className="text-xs text-neutral-500 mb-0.5">
                                                 • {w.paidDate} ({w.itemName})<br/>
-                                                <span className="ml-2 text-slate-400">세전 {w.total.toLocaleString()} → 세금 {w.tax.toLocaleString()} → 세후 {w.payment.toLocaleString()}원</span>
+                                                <span className="ml-2 text-neutral-400">세전 {w.total.toLocaleString()} → 세금 {w.tax.toLocaleString()} → 세후 {w.payment.toLocaleString()}원</span>
                                               </p>
                                             ))}
-                                            {unreportedWorks.length > 3 && <p className="text-xs text-slate-400">외 {unreportedWorks.length-3}건...</p>}
+                                            {unreportedWorks.length > 3 && <p className="text-xs text-neutral-400">외 {unreportedWorks.length-3}건...</p>}
                                           </div>
                                         </div>
                                       </div>
@@ -10065,11 +10112,11 @@
                                     <div className="flex-1 min-w-48">
                                       <div className="flex gap-2 mb-3">
                                         <button onClick={() => setGraphMode('qty')}
-                                          className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${graphMode==='qty' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
+                                          className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${graphMode==='qty' ? 'bg-black text-white' : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200'}`}>
                                           수량
                                         </button>
                                         <button onClick={() => setGraphMode('amount')}
-                                          className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${graphMode==='amount' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
+                                          className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${graphMode==='amount' ? 'bg-black text-white' : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200'}`}>
                                           금액
                                         </button>
                                       </div>
@@ -10082,14 +10129,14 @@
                                           const label = graphMode==='qty' ? `${val}` : `${Math.round(val/10000)}만`;
                                           return (
                                             <g key={m}>
-                                              <rect x={x} y={chartH-h} width={barW} height={h} fill="#3b82f6" rx="4"/>
+                                              <rect x={x} y={chartH-h} width={barW} height={h} fill="#000000" rx="2"/>
                                               {h > 16 && <text x={x+barW/2} y={chartH-5} textAnchor="middle" fontSize="9" fill="white" fontWeight="bold">{label}</text>}
-                                              <text x={x+barW/2} y={chartH+14} textAnchor="middle" fontSize="9" fill="#64748b">{m.substring(5)}</text>
+                                              <text x={x+barW/2} y={chartH+14} textAnchor="middle" fontSize="9" fill="#737373">{m.substring(5)}</text>
                                             </g>
                                           );
                                         })}
                                       </svg>
-                                      <div className="text-xs text-slate-400 mt-1">
+                                      <div className="text-xs text-neutral-400 mt-1">
                                         {graphMode==='qty' ? '월별 작업 수량' : '월별 실지급 금액'} (최근 6개월)
                                       </div>
                                     </div>
@@ -10111,24 +10158,24 @@
                     {/* 추가 지급 팝업 */}
                     {extraPayPopup && (
                       <div className="fixed inset-0 z-50 flex items-center justify-center" style={{background:'rgba(0,0,0,0.5)'}}>
-                        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm mx-4 p-8">
+                        <div className="bg-white rounded-md shadow-2xl border-2 border-black w-full max-w-sm mx-4 p-8">
                           <div className="flex items-center justify-between mb-5">
-                            <h3 className="text-lg font-bold text-slate-900">💸 추가 지급</h3>
-                            <button onClick={() => setExtraPayPopup(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
+                            <h3 className="text-lg font-black text-black tracking-tight">💸 추가 지급</h3>
+                            <button onClick={() => setExtraPayPopup(null)} className="text-neutral-400 hover:text-black text-xl font-bold">✕</button>
                           </div>
 
                           {/* 직원 + 현재 지급 현황 */}
-                          <div className="bg-green-50 rounded-xl px-4 py-3 mb-5 text-sm">
-                            <span className="font-bold text-green-800">{extraPayPopup.employee.name}</span>
-                            <span className="text-green-600 ml-2">({extraPayPopup.employee.position})</span>
-                            <div className="text-xs text-green-500 mt-0.5">{extraPayPopup.record.month}</div>
+                          <div className="bg-neutral-50 rounded-md border border-neutral-300 px-4 py-3 mb-5 text-sm">
+                            <span className="font-black text-black">{extraPayPopup.employee.name}</span>
+                            <span className="text-neutral-500 ml-2">({extraPayPopup.employee.position})</span>
+                            <div className="text-xs text-neutral-500 mt-0.5">{extraPayPopup.record.month}</div>
                             {(() => {
                               const paid = salaryPayments.filter(p => p.salaryRecordId === extraPayPopup.record.id).reduce((s,p)=>s+p.amount,0);
                               const remaining = Math.max(0, extraPayPopup.record.totalAmount - paid);
                               return (
-                                <div className="mt-2 space-y-0.5 text-xs text-green-700">
+                                <div className="mt-2 space-y-0.5 text-xs text-neutral-700">
                                   <div className="flex justify-between"><span>기본급</span><span className="font-semibold">{extraPayPopup.employee.monthlySalary.toLocaleString()}원</span></div>
-                                  <div className="flex justify-between"><span>기지급액</span><span className="font-semibold text-blue-600">{paid.toLocaleString()}원</span></div>
+                                  <div className="flex justify-between"><span>기지급액</span><span className="font-semibold text-black">{paid.toLocaleString()}원</span></div>
                                   {remaining > 0 && <div className="flex justify-between"><span>잔여 미지급</span><span className="font-semibold text-red-500">{remaining.toLocaleString()}원</span></div>}
                                 </div>
                               );
@@ -10137,25 +10184,25 @@
 
                           <div className="space-y-3">
                             <div>
-                              <label className="block text-xs font-semibold text-slate-600 mb-1">지급일 *</label>
+                              <label className="block text-xs font-bold text-neutral-500 mb-1">지급일 *</label>
                               <input type="date" id="extraPayDate" defaultValue={new Date().toISOString().split('T')[0]}
-                                className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-green-500 outline-none text-sm"/>
+                                className="w-full px-3 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm"/>
                             </div>
                             <div>
-                              <label className="block text-xs font-semibold text-slate-600 mb-1">지급금액 *</label>
+                              <label className="block text-xs font-bold text-neutral-500 mb-1">지급금액 *</label>
                               <input type="number" id="extraPayAmt" placeholder="0"
-                                className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-green-500 outline-none text-sm"/>
+                                className="w-full px-3 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm"/>
                             </div>
                             <div>
-                              <label className="block text-xs font-semibold text-slate-600 mb-1">메모</label>
+                              <label className="block text-xs font-bold text-neutral-500 mb-1">메모</label>
                               <input type="text" id="extraPayMemo" placeholder="예: 4월 추가 지급"
-                                className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-green-500 outline-none text-sm"/>
+                                className="w-full px-3 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm"/>
                             </div>
                           </div>
 
                           <div className="flex gap-3 mt-6">
                             <button onClick={() => setExtraPayPopup(null)}
-                              className="flex-1 py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold text-sm">취소</button>
+                              className="flex-1 py-3 rounded-md border border-neutral-300 text-neutral-600 font-bold text-sm">취소</button>
                             <button onClick={() => {
                               const payDate = document.getElementById('extraPayDate').value;
                               const amount = parseInt(document.getElementById('extraPayAmt').value) || 0;
@@ -10173,7 +10220,7 @@
                               }]);
                               setExtraPayPopup(null);
                               alert(`${amount.toLocaleString()}원 추가 지급 완료!`);
-                            }} className="flex-1 py-3 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold text-sm">지급</button>
+                            }} className="flex-1 py-3 rounded-md bg-black hover:bg-neutral-800 text-white font-black text-sm">지급</button>
                           </div>
                         </div>
                       </div>
@@ -10182,50 +10229,50 @@
                     {/* 직원 수정 팝업 */}
                     {editEmployeePopup && (
                       <div className="fixed inset-0 z-50 flex items-center justify-center" style={{background:'rgba(0,0,0,0.5)'}}>
-                        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md mx-4 p-8">
+                        <div className="bg-white rounded-md shadow-2xl border-2 border-black w-full max-w-md mx-4 p-8">
                           <div className="flex items-center justify-between mb-6">
-                            <h3 className="text-lg font-bold text-slate-900">✏️ 직원 수정</h3>
-                            <button onClick={() => setEditEmployeePopup(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
+                            <h3 className="text-lg font-black text-black tracking-tight">✏️ 직원 수정</h3>
+                            <button onClick={() => setEditEmployeePopup(null)} className="text-neutral-400 hover:text-black text-xl font-bold">✕</button>
                           </div>
                           <div className="space-y-3">
                             <div className="grid grid-cols-2 gap-3">
                               <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1">직원명 *</label>
+                                <label className="block text-xs font-bold text-neutral-500 mb-1">직원명 *</label>
                                 <input type="text" value={editEmployeePopup.name || ''} onChange={e => setEditEmployeePopup({...editEmployeePopup, name: e.target.value})}
-                                  className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm"/>
+                                  className="w-full px-3 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm"/>
                               </div>
                               <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1">직책 *</label>
+                                <label className="block text-xs font-bold text-neutral-500 mb-1">직책 *</label>
                                 <input type="text" value={editEmployeePopup.position || ''} onChange={e => setEditEmployeePopup({...editEmployeePopup, position: e.target.value})}
-                                  className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm"/>
+                                  className="w-full px-3 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm"/>
                               </div>
                             </div>
                             <div>
-                              <label className="block text-xs font-semibold text-slate-600 mb-1">월 실지급액 *</label>
+                              <label className="block text-xs font-bold text-neutral-500 mb-1">월 실지급액 *</label>
                               <input type="number" value={editEmployeePopup.monthlySalary || ''} onChange={e => setEditEmployeePopup({...editEmployeePopup, monthlySalary: parseInt(e.target.value)||0})}
-                                className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm"/>
+                                className="w-full px-3 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm"/>
                             </div>
                             <div>
-                              <label className="block text-xs font-semibold text-slate-600 mb-1">전화번호</label>
+                              <label className="block text-xs font-bold text-neutral-500 mb-1">전화번호</label>
                               <input type="text" value={editEmployeePopup.phone || ''} onChange={e => setEditEmployeePopup({...editEmployeePopup, phone: e.target.value})}
-                                className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm"/>
+                                className="w-full px-3 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm"/>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                               <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1">은행명</label>
+                                <label className="block text-xs font-bold text-neutral-500 mb-1">은행명</label>
                                 <input type="text" value={editEmployeePopup.bank || ''} onChange={e => setEditEmployeePopup({...editEmployeePopup, bank: e.target.value})}
-                                  className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm"/>
+                                  className="w-full px-3 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm"/>
                               </div>
                               <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1">계좌번호</label>
+                                <label className="block text-xs font-bold text-neutral-500 mb-1">계좌번호</label>
                                 <input type="text" value={editEmployeePopup.account || ''} onChange={e => setEditEmployeePopup({...editEmployeePopup, account: e.target.value})}
-                                  className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm"/>
+                                  className="w-full px-3 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm"/>
                               </div>
                             </div>
                           </div>
                           <div className="flex gap-3 mt-6">
                             <button onClick={() => setEditEmployeePopup(null)}
-                              className="flex-1 py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50">취소</button>
+                              className="flex-1 py-3 rounded-md border border-neutral-300 text-neutral-600 font-bold text-sm hover:bg-neutral-100">취소</button>
                             <button onClick={() => {
                               if (!editEmployeePopup.name?.trim()) return alert('직원명을 입력하세요');
                               if (!editEmployeePopup.position?.trim()) return alert('직책을 입력하세요');
@@ -10233,7 +10280,7 @@
                               saveEmployees(employees.map(e => e.id === editEmployeePopup.id ? {...e, ...editEmployeePopup} : e));
                               setEditEmployeePopup(null);
                               alert('수정 완료!');
-                            }} className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm">저장</button>
+                            }} className="flex-1 py-3 rounded-md bg-black hover:bg-neutral-800 text-white font-black text-sm">저장</button>
                           </div>
                         </div>
                       </div>
@@ -10242,44 +10289,44 @@
                     {/* 직원 등록 팝업 */}
                     {empRegPopup && (
                       <div className="fixed inset-0 z-50 flex items-center justify-center" style={{background:'rgba(0,0,0,0.5)'}}>
-                        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md mx-4 p-8">
+                        <div className="bg-white rounded-md shadow-2xl border-2 border-black w-full max-w-md mx-4 p-8">
                           <div className="flex items-center justify-between mb-6">
-                            <h3 className="text-lg font-bold text-slate-900">👤 직원 등록</h3>
-                            <button onClick={() => setEmpRegPopup(false)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
+                            <h3 className="text-lg font-black text-black tracking-tight">👤 직원 등록</h3>
+                            <button onClick={() => setEmpRegPopup(false)} className="text-neutral-400 hover:text-black text-xl font-bold">✕</button>
                           </div>
                           <div className="space-y-3">
                             <div className="grid grid-cols-2 gap-3">
                               <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1">직원명 *</label>
-                                <input type="text" id="empName" placeholder="홍길동" className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm"/>
+                                <label className="block text-xs font-bold text-neutral-500 mb-1">직원명 *</label>
+                                <input type="text" id="empName" placeholder="홍길동" className="w-full px-3 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm"/>
                               </div>
                               <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1">직책 *</label>
-                                <input type="text" id="empPosition" placeholder="대표이사" className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm"/>
+                                <label className="block text-xs font-bold text-neutral-500 mb-1">직책 *</label>
+                                <input type="text" id="empPosition" placeholder="대표이사" className="w-full px-3 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm"/>
                               </div>
                             </div>
                             <div>
-                              <label className="block text-xs font-semibold text-slate-600 mb-1">월 실지급액 *</label>
-                              <input type="number" id="empSalary" placeholder="0" className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm"/>
+                              <label className="block text-xs font-bold text-neutral-500 mb-1">월 실지급액 *</label>
+                              <input type="number" id="empSalary" placeholder="0" className="w-full px-3 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm"/>
                             </div>
                             <div>
-                              <label className="block text-xs font-semibold text-slate-600 mb-1">전화번호</label>
-                              <input type="text" id="empPhone" placeholder="010-0000-0000" className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm"/>
+                              <label className="block text-xs font-bold text-neutral-500 mb-1">전화번호</label>
+                              <input type="text" id="empPhone" placeholder="010-0000-0000" className="w-full px-3 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm"/>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                               <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1">은행명</label>
-                                <input type="text" id="empBank" placeholder="국민은행" className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm"/>
+                                <label className="block text-xs font-bold text-neutral-500 mb-1">은행명</label>
+                                <input type="text" id="empBank" placeholder="국민은행" className="w-full px-3 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm"/>
                               </div>
                               <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1">계좌번호</label>
-                                <input type="text" id="empAccount" placeholder="000-000-000000" className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm"/>
+                                <label className="block text-xs font-bold text-neutral-500 mb-1">계좌번호</label>
+                                <input type="text" id="empAccount" placeholder="000-000-000000" className="w-full px-3 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm"/>
                               </div>
                             </div>
                           </div>
                           <div className="flex gap-3 mt-6">
                             <button onClick={() => setEmpRegPopup(false)}
-                              className="flex-1 py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50">취소</button>
+                              className="flex-1 py-3 rounded-md border border-neutral-300 text-neutral-600 font-bold text-sm hover:bg-neutral-100">취소</button>
                             <button onClick={() => {
                               const name = document.getElementById('empName').value.trim();
                               const position = document.getElementById('empPosition').value.trim();
@@ -10294,24 +10341,24 @@
                               setEmpRegPopup(false);
                               alert(`${name}님 등록 완료!`);
                             }}
-                              className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm">등록</button>
+                              className="flex-1 py-3 rounded-md bg-black hover:bg-neutral-800 text-white font-black text-sm">등록</button>
                           </div>
                         </div>
                       </div>
                     )}
 
                     {/* 등록된 직원 목록 */}
-                    <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8">
+                    <div className="bg-white rounded-md border border-neutral-300 p-8">
                       <div className="flex items-center justify-between mb-6">
-                        <h2 className="text-xl font-bold text-slate-900">등록된 직원 ({employees.filter(e => e.active).length})</h2>
+                        <h2 className="text-xl font-black text-black tracking-tight">등록된 직원 ({employees.filter(e => e.active).length})</h2>
                         <button onClick={() => setEmpRegPopup(true)}
-                          className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold transition-all">
+                          className="flex items-center gap-1.5 px-4 py-2 bg-black hover:bg-neutral-800 text-white rounded-md text-sm font-black transition-all">
                           <Plus /> 직원 등록
                         </button>
                       </div>
-                      
+
                       {employees.filter(e => e.active).length === 0 ? (
-                        <div className="text-center py-12 text-slate-400 cursor-pointer hover:text-blue-500 transition-all" onClick={() => setEmpRegPopup(true)}>
+                        <div className="text-center py-12 text-neutral-400 cursor-pointer hover:text-black transition-all" onClick={() => setEmpRegPopup(true)}>
                           <div className="text-4xl mb-2">+</div>
                           <p className="font-medium">직원을 등록해주세요</p>
                         </div>
@@ -10330,19 +10377,19 @@
                             const thisPaid = thisRecord ? salaryPayments.filter(p => p.salaryRecordId === thisRecord.id).reduce((s,p) => s+p.amount, 0) : 0;
 
                             return (
-                              <div key={employee.id} className={`border-2 rounded-2xl overflow-hidden ${colorClass}`}>
+                              <div key={employee.id} className={`border-2 rounded-md overflow-hidden ${colorClass}`}>
                                 {/* 카드 헤더 */}
                                 <div className="px-5 py-4 flex items-center gap-3">
                                   <div className={`${avatarColor} text-white w-11 h-11 rounded-full flex items-center justify-center font-bold text-sm shrink-0`}>
                                     {initials}
                                   </div>
                                   <div className="flex-1 min-w-0">
-                                    <div className="font-bold text-slate-900 text-base leading-tight">{employee.name}</div>
-                                    <div className="text-xs text-slate-500 mt-0.5">{employee.position}</div>
+                                    <div className="font-black text-black text-base leading-tight">{employee.name}</div>
+                                    <div className="text-xs text-neutral-500 mt-0.5">{employee.position}</div>
                                   </div>
                                   <div className="flex gap-1 shrink-0">
                                     <button onClick={() => setEditEmployeePopup({...employee})}
-                                      className="p-1.5 text-blue-500 hover:bg-blue-100 rounded-lg transition-all" title="수정"
+                                      className="p-1.5 text-neutral-600 hover:bg-neutral-100 rounded-md transition-all" title="수정"
                                     ><Edit /></button>
                                     <button
                                       onClick={() => {
@@ -10350,7 +10397,7 @@
                                           saveEmployees(employees.map(e => e.id === employee.id ? {...e, active: false} : e));
                                         }
                                       }}
-                                      className="p-1.5 text-red-400 hover:bg-red-100 rounded-lg transition-all"
+                                      className="p-1.5 text-red-400 hover:bg-red-100 rounded-md transition-all"
                                     ><Trash /></button>
                                   </div>
                                 </div>
@@ -10358,27 +10405,27 @@
                                 {/* 카드 바디 */}
                                 <div className="bg-white px-5 py-4 space-y-2">
                                   <div className="flex justify-between items-center">
-                                    <span className="text-xs text-slate-500">월 실지급액</span>
-                                    <span className="font-bold text-blue-600 text-sm">{employee.monthlySalary.toLocaleString()}원</span>
+                                    <span className="text-xs text-neutral-500">월 실지급액</span>
+                                    <span className="font-black text-black text-sm">{employee.monthlySalary.toLocaleString()}원</span>
                                   </div>
                                   <div className="flex justify-between items-center">
-                                    <span className="text-xs text-slate-500">전화번호</span>
-                                    <span className="text-xs text-slate-700">{employee.phone || '-'}</span>
+                                    <span className="text-xs text-neutral-500">전화번호</span>
+                                    <span className="text-xs text-neutral-700">{employee.phone || '-'}</span>
                                   </div>
                                   <div className="flex justify-between items-center">
-                                    <span className="text-xs text-slate-500">은행 / 계좌</span>
-                                    <span className="text-xs text-slate-700">{employee.bank ? `${employee.bank} ${employee.account}` : '-'}</span>
+                                    <span className="text-xs text-neutral-500">은행 / 계좌</span>
+                                    <span className="text-xs text-neutral-700">{employee.bank ? `${employee.bank} ${employee.account}` : '-'}</span>
                                   </div>
-                                  <div className="border-t border-slate-100 pt-2 flex justify-between items-center">
-                                    <span className="text-xs text-slate-500">이번달 지급</span>
-                                    <span className={`text-xs font-bold ${thisPaid > 0 ? 'text-green-600' : 'text-slate-400'}`}>
+                                  <div className="border-t border-neutral-200 pt-2 flex justify-between items-center">
+                                    <span className="text-xs text-neutral-500">이번달 지급</span>
+                                    <span className={`text-xs font-bold ${thisPaid > 0 ? 'text-black' : 'text-neutral-400'}`}>
                                       {thisPaid > 0 ? `${thisPaid.toLocaleString()}원` : '미지급'}
                                     </span>
                                   </div>
                                   <div className="flex gap-2 mt-3">
                                     <button
                                       onClick={() => setSalaryPopup({ employeeId: employee.id, employee })}
-                                      className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all"
+                                      className="flex-1 py-2 bg-black hover:bg-neutral-800 text-white rounded-md text-xs font-black transition-all"
                                     >
                                       💰 급여 등록
                                     </button>
@@ -10390,11 +10437,11 @@
                                         if (!thisRecord) return alert(`${thisMonth} 급여 기록이 없습니다.\n먼저 급여 등록을 해주세요.`);
                                         setExtraPayPopup({ employee, record: thisRecord });
                                       }}
-                                      className="flex-1 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold transition-all"
+                                      className="flex-1 py-2 bg-white border border-black text-black hover:bg-neutral-100 rounded-md text-xs font-bold transition-all"
                                     >
                                       💸 추가 지급
                                     </button>
-                                    <label className="flex-1 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all text-center cursor-pointer">
+                                    <label className="flex-1 py-2 bg-white border border-neutral-400 text-neutral-600 hover:bg-neutral-100 rounded-md text-xs font-bold transition-all text-center cursor-pointer">
                                       📊 엑셀 업로드
                                       <input type="month" id={`excelMonth_${employee.id}`} className="hidden" />
                                       <input type="file" accept=".xls,.xlsx" className="hidden"
@@ -10450,10 +10497,10 @@
                           {/* + 카드 */}
                           <div
                             onClick={() => setEmpRegPopup(true)}
-                            className="border-2 border-dashed border-slate-300 rounded-2xl flex flex-col items-center justify-center min-h-48 cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-all group"
+                            className="border-2 border-dashed border-neutral-300 rounded-md flex flex-col items-center justify-center min-h-48 cursor-pointer hover:border-black hover:bg-neutral-50 transition-all group"
                           >
-                            <div className="text-3xl text-slate-300 group-hover:text-blue-400 transition-all mb-2">+</div>
-                            <div className="text-xs text-slate-400 group-hover:text-blue-500 font-medium">직원 등록</div>
+                            <div className="text-3xl text-neutral-300 group-hover:text-black transition-all mb-2">+</div>
+                            <div className="text-xs text-neutral-400 group-hover:text-black font-medium">직원 등록</div>
                           </div>
                         </div>
                       )}
@@ -10462,53 +10509,53 @@
                     {/* 급여 지급 팝업 모달 */}
                     {salaryPopup && (
                       <div className="fixed inset-0 z-50 flex items-center justify-center" style={{background:'rgba(0,0,0,0.5)'}}>
-                        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md mx-4 p-8">
+                        <div className="bg-white rounded-md shadow-2xl border-2 border-black w-full max-w-md mx-4 p-8">
                           <div className="flex items-center justify-between mb-6">
-                            <h3 className="text-lg font-bold text-slate-900">💰 급여 지급 등록</h3>
-                            <button onClick={() => setSalaryPopup(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
+                            <h3 className="text-lg font-black text-black tracking-tight">💰 급여 지급 등록</h3>
+                            <button onClick={() => setSalaryPopup(null)} className="text-neutral-400 hover:text-black text-xl font-bold">✕</button>
                           </div>
 
                           {/* 직원 정보 */}
-                          <div className="bg-blue-50 rounded-xl px-4 py-3 mb-5 text-sm">
-                            <span className="font-bold text-blue-800">{salaryPopup.employee.name}</span>
-                            <span className="text-blue-600 ml-2">({salaryPopup.employee.position})</span>
-                            <div className="text-xs text-blue-500 mt-0.5">기본급: {salaryPopup.employee.monthlySalary.toLocaleString()}원</div>
+                          <div className="bg-neutral-50 rounded-md border border-neutral-300 px-4 py-3 mb-5 text-sm">
+                            <span className="font-black text-black">{salaryPopup.employee.name}</span>
+                            <span className="text-neutral-500 ml-2">({salaryPopup.employee.position})</span>
+                            <div className="text-xs text-neutral-500 mt-0.5">기본급: {salaryPopup.employee.monthlySalary.toLocaleString()}원</div>
                           </div>
 
                           <div className="space-y-4">
                             <div>
-                              <label className="block text-sm font-semibold text-slate-700 mb-1">대상 연월</label>
+                              <label className="block text-sm font-bold text-neutral-600 mb-1">대상 연월</label>
                               <input type="month" id="popSalaryMonth"
                                 defaultValue={new Date().toISOString().substring(0,7)}
-                                className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm" />
+                                className="w-full px-4 py-2.5 rounded-md border border-neutral-400 focus:border-black outline-none text-sm" />
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                               <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1">보험료 증액 (+)</label>
+                                <label className="block text-xs font-bold text-neutral-500 mb-1">보험료 증액 (+)</label>
                                 <input type="number" id="popSalaryInsurance" defaultValue={0}
-                                  className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm" placeholder="0" />
+                                  className="w-full px-3 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm" placeholder="0" />
                               </div>
                               <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1">상여금 (+)</label>
+                                <label className="block text-xs font-bold text-neutral-500 mb-1">상여금 (+)</label>
                                 <input type="number" id="popSalaryBonus" defaultValue={0}
-                                  className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm" placeholder="0" />
+                                  className="w-full px-3 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm" placeholder="0" />
                               </div>
                               <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1">공제액 (-)</label>
+                                <label className="block text-xs font-bold text-neutral-500 mb-1">공제액 (-)</label>
                                 <input type="number" id="popSalaryDeduction" defaultValue={0}
-                                  className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm" placeholder="0" />
+                                  className="w-full px-3 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm" placeholder="0" />
                               </div>
                               <div>
-                                <label className="block text-xs font-semibold text-blue-600 mb-1">실지급액</label>
+                                <label className="block text-xs font-bold text-black mb-1">실지급액</label>
                                 <input type="number" id="popSalaryTotal" readOnly
                                   defaultValue={salaryPopup.employee.monthlySalary}
-                                  className="w-full px-3 py-2 rounded-xl border-2 border-blue-300 bg-blue-50 font-bold text-blue-600 outline-none text-sm" />
+                                  className="w-full px-3 py-2 rounded-md border border-neutral-400 bg-neutral-100 font-black text-black outline-none text-sm" />
                               </div>
                             </div>
                             <div>
-                              <label className="block text-xs font-semibold text-slate-600 mb-1">비고</label>
+                              <label className="block text-xs font-bold text-neutral-500 mb-1">비고</label>
                               <input type="text" id="popSalaryNote" placeholder="예: 설 상여금 등"
-                                className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm" />
+                                className="w-full px-3 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm" />
                             </div>
                           </div>
 
@@ -10529,7 +10576,7 @@
 
                           <div className="flex gap-3 mt-6">
                             <button onClick={() => setSalaryPopup(null)}
-                              className="flex-1 py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50">취소</button>
+                              className="flex-1 py-3 rounded-md border border-neutral-300 text-neutral-600 font-bold text-sm hover:bg-neutral-100">취소</button>
                             <button onClick={() => {
                               const month = document.getElementById('popSalaryMonth').value;
                               const insurance = parseInt(document.getElementById('popSalaryInsurance').value) || 0;
@@ -10553,26 +10600,26 @@
                               setSalaryPopup(null);
                               alert(`${salaryPopup.employee.name}님 ${month} 급여 등록 완료!`);
                             }}
-                              className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm">등록</button>
+                              className="flex-1 py-3 rounded-md bg-black hover:bg-neutral-800 text-white font-black text-sm">등록</button>
                           </div>
                         </div>
                       </div>
                     )}
 
                     {/* 급여 지급 처리 */}
-                    <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8">
+                    <div className="bg-white rounded-md border border-neutral-300 p-8">
                       <div className="flex items-center justify-between mb-6">
-                        <h2 className="text-xl font-bold text-slate-900">급여 지급 내역</h2>
+                        <h2 className="text-xl font-black text-black tracking-tight">급여 지급 내역</h2>
                         <div className="flex gap-3 items-center">
                           <select id="salaryFilterEmployee"
-                            className="px-4 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm">
+                            className="px-4 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm">
                             <option value="">전체 직원</option>
                             {employees.filter(e => e.active).map(emp => (
                               <option key={emp.id} value={emp.id}>{emp.name} ({emp.position})</option>
                             ))}
                           </select>
                           <select id="salaryFilterMonth"
-                            className="px-4 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm">
+                            className="px-4 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm">
                             <option value="">전체 기간</option>
                             {Array.from(new Set(salaryRecords.map(r => r.month))).sort((a,b)=>b.localeCompare(a)).map(month => (
                               <option key={month} value={month}>{month}</option>
@@ -10582,7 +10629,7 @@
                       </div>
 
                       {salaryRecords.length === 0 ? (
-                        <div className="text-center py-12 text-slate-400"><p className="font-medium">발생된 급여가 없습니다</p></div>
+                        <div className="text-center py-12 text-neutral-400"><p className="font-medium">발생된 급여가 없습니다</p></div>
                       ) : (() => {
                         const filterEmployeeId = document.getElementById('salaryFilterEmployee')?.value;
                         const filterMonth = document.getElementById('salaryFilterMonth')?.value;
@@ -10594,7 +10641,7 @@
                           return empRecords.length > 0 ? { emp, empRecords } : null;
                         }).filter(Boolean);
 
-                        if (grouped.length === 0) return <div className="text-center py-8 text-slate-400">해당 조건의 내역이 없습니다</div>;
+                        if (grouped.length === 0) return <div className="text-center py-8 text-neutral-400">해당 조건의 내역이 없습니다</div>;
 
                         return (
                           <div className="space-y-6">
@@ -10602,10 +10649,10 @@
                               <div key={emp.id}>
                                 {/* 직원 그룹 헤더 */}
                                 <div className="flex items-center gap-3 mb-2">
-                                  <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold shrink-0">{emp.name.slice(0,2)}</div>
-                                  <span className="font-bold text-slate-900">{emp.name}</span>
-                                  <span className="text-slate-500 text-sm">({emp.position})</span>
-                                  <span className="text-xs bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">{empRecords.length}개월</span>
+                                  <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center text-xs font-bold shrink-0">{emp.name.slice(0,2)}</div>
+                                  <span className="font-black text-black">{emp.name}</span>
+                                  <span className="text-neutral-500 text-sm">({emp.position})</span>
+                                  <span className="text-xs bg-neutral-200 text-neutral-600 px-2 py-0.5 rounded-full">{empRecords.length}개월</span>
                                 </div>
                                 {/* 월별 카드 */}
                                 <div className="pl-11 space-y-2">
@@ -10623,13 +10670,13 @@
                                     const hasUnreported = thisOverpaid > 0 && !record.bonusReported;
 
                                     return (
-                                      <div key={record.id} className={`border-2 rounded-2xl overflow-hidden ${needsBonusWarning ? 'border-red-400' : isOverpaid ? 'border-orange-400' : 'border-slate-200'}`}>
+                                      <div key={record.id} className={`border-2 rounded-md overflow-hidden ${needsBonusWarning ? 'border-red-400' : isOverpaid ? 'border-orange-400' : 'border-neutral-300'}`}>
                                         {/* 헤더 - 항상 표시 */}
                                         <div onClick={() => setExpandedRecords(prev => ({...prev, [record.id]: !prev[record.id]}))}
-                                          className={`flex items-center justify-between px-5 py-3 cursor-pointer select-none transition-all ${isExpanded ? 'bg-slate-100' : needsBonusWarning ? 'bg-red-50 hover:bg-red-100' : isOverpaid ? 'bg-orange-50 hover:bg-orange-100' : 'bg-white hover:bg-slate-50'}`}>
+                                          className={`flex items-center justify-between px-5 py-3 cursor-pointer select-none transition-all ${isExpanded ? 'bg-neutral-100' : needsBonusWarning ? 'bg-red-50 hover:bg-red-100' : isOverpaid ? 'bg-orange-50 hover:bg-orange-100' : 'bg-white hover:bg-neutral-50'}`}>
                                           <div className="flex items-center gap-3">
-                                            <span className="text-slate-400 transition-transform text-xs" style={{display:'inline-block', transform: isExpanded ? 'rotate(90deg)' : 'none'}}>▶</span>
-                                            <span className="ml-2 bg-slate-200 text-slate-600 text-xs px-2 py-0.5 rounded-full font-medium">{record.month}</span>
+                                            <span className="text-neutral-400 transition-transform text-xs" style={{display:'inline-block', transform: isExpanded ? 'rotate(90deg)' : 'none'}}>▶</span>
+                                            <span className="ml-2 bg-neutral-200 text-neutral-600 text-xs px-2 py-0.5 rounded-full font-medium">{record.month}</span>
                                           </div>
                                           <div className="flex items-center gap-3">
                                             {/* 기본/상여 구분 표시 */}
@@ -10637,11 +10684,11 @@
                                               const baseAmt = emp.monthlySalary;
                                               const bonusAmt = Math.max(0, totalPaid - baseAmt);
                                               return bonusAmt > 0 ? (
-                                                <span className="text-sm font-bold text-slate-700">
-                                                  기본 <span className="text-blue-600">{baseAmt.toLocaleString()}</span> / 상여 <span className="text-red-500">{bonusAmt.toLocaleString()}원</span>
+                                                <span className="text-sm font-bold text-neutral-700">
+                                                  기본 <span className="text-black">{baseAmt.toLocaleString()}</span> / 상여 <span className="text-red-500">{bonusAmt.toLocaleString()}원</span>
                                                 </span>
                                               ) : (
-                                                <span className="text-sm font-bold text-blue-600">{totalPaid.toLocaleString()}원</span>
+                                                <span className="text-sm font-bold text-black">{totalPaid.toLocaleString()}원</span>
                                               );
                                             })()}
                                             {hasUnreported && <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full font-semibold" style={{animation:'pulse 1s ease-in-out infinite'}}>상여 미신고</span>}
@@ -10652,25 +10699,25 @@
 
                                         {/* 상세 내용 */}
                                         {isExpanded && (
-                                          <div className={`px-6 py-5 border-t border-slate-200 ${needsBonusWarning ? 'bg-red-50' : isOverpaid ? 'bg-orange-50' : 'bg-white'}`}>
+                                          <div className={`px-6 py-5 border-t border-neutral-200 ${needsBonusWarning ? 'bg-red-50' : isOverpaid ? 'bg-orange-50' : 'bg-white'}`}>
                                             {/* 기본 정보 */}
                                             <div className="flex items-start justify-between mb-4 flex-wrap gap-4">
                                               <div className="flex-1 min-w-0">
-                                                <h3 className="text-base font-bold text-slate-900">{emp.name} ({emp.position}) - {record.month}</h3>
+                                                <h3 className="text-base font-black text-black">{emp.name} ({emp.position}) - {record.month}</h3>
                                                 {record.breakdown && (
-                                                  <div className="bg-slate-50 rounded-lg p-3 mt-2 text-xs">
+                                                  <div className="bg-neutral-50 rounded-md p-3 mt-2 text-xs">
                                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                                                       <div>기본급: <strong>{record.breakdown.basicAmount?.toLocaleString()}원</strong></div>
                                                       {record.breakdown.insurance > 0 && <div className="text-orange-600">보험료: <strong>+{record.breakdown.insurance.toLocaleString()}원</strong></div>}
-                                                      {record.breakdown.bonus > 0 && <div className="text-green-600">상여금: <strong>+{record.breakdown.bonus.toLocaleString()}원</strong></div>}
+                                                      {record.breakdown.bonus > 0 && <div className="text-red-500">상여금: <strong>+{record.breakdown.bonus.toLocaleString()}원</strong></div>}
                                                       {record.breakdown.deduction > 0 && <div className="text-red-600">공제: <strong>-{record.breakdown.deduction.toLocaleString()}원</strong></div>}
-                                                      {record.breakdown.note && <div className="col-span-2 md:col-span-4 text-blue-600">📝 {record.breakdown.note}</div>}
+                                                      {record.breakdown.note && <div className="col-span-2 md:col-span-4 text-neutral-600">📝 {record.breakdown.note}</div>}
                                                     </div>
                                                   </div>
                                                 )}
                                                 <div className="flex gap-4 mt-2 text-sm flex-wrap">
-                                                  <span className="text-slate-600">실제 지급된 금액: <strong className="text-green-600">{totalPaid.toLocaleString()}원</strong></span>
-                                                  {remaining > 0 && <span className="text-slate-600">미지급: <strong className="text-red-600">{remaining.toLocaleString()}원</strong></span>}
+                                                  <span className="text-neutral-600">실제 지급된 금액: <strong className="text-black">{totalPaid.toLocaleString()}원</strong></span>
+                                                  {remaining > 0 && <span className="text-neutral-600">미지급: <strong className="text-red-600">{remaining.toLocaleString()}원</strong></span>}
                                                 </div>
                                               </div>
 
@@ -10680,8 +10727,8 @@
                                                 const maxVal = Math.max(...empRecs.map(r => { const p = salaryPayments.filter(x=>x.salaryRecordId===r.id).reduce((s,x)=>s+x.amount,0); return Math.max(p,r.totalAmount); }), emp.monthlySalary, 1);
                                                 const barW=42, gap=8, chartH=100, totalW=empRecs.length*(barW+gap);
                                                 return (
-                                                  <div className="shrink-0 bg-white rounded-xl border border-slate-200 p-3">
-                                                    <div className="text-xs text-slate-500 mb-2 text-center font-medium">월별 지급 현황</div>
+                                                  <div className="shrink-0 bg-white rounded-md border border-neutral-300 p-3">
+                                                    <div className="text-xs text-neutral-500 mb-2 text-center font-medium">월별 지급 현황</div>
                                                     <svg width={Math.max(totalW,120)} height={chartH+20} style={{display:'block'}}>
                                                       <line x1={0} y1={chartH-(emp.monthlySalary/maxVal*chartH)} x2={Math.max(totalW,120)} y2={chartH-(emp.monthlySalary/maxVal*chartH)} stroke="#94a3b8" strokeWidth="1" strokeDasharray="4,3"/>
                                                       {empRecs.map((r,i) => {
@@ -10691,18 +10738,18 @@
                                                         const x=i*(barW+gap);
                                                         return (
                                                           <g key={r.id}>
-                                                            <rect x={x} y={chartH-baseH} width={barW} height={baseH} fill="#3b82f6" rx="3"/>
+                                                            <rect x={x} y={chartH-baseH} width={barW} height={baseH} fill="#000000" rx="2"/>
                                                             {baseH>16 && <text x={x+barW/2} y={chartH-5} textAnchor="middle" fontSize="9" fill="white" fontWeight="bold">{Math.round(Math.min(total,base)/10000)}만</text>}
-                                                            {bonusH>0 && <rect x={x} y={chartH-baseH-bonusH} width={barW} height={bonusH} fill="#ef4444" rx="3"/>}
+                                                            {bonusH>0 && <rect x={x} y={chartH-baseH-bonusH} width={barW} height={bonusH} fill="#ef4444" rx="2"/>}
                                                             {bonusH>14 && <text x={x+barW/2} y={chartH-baseH-5} textAnchor="middle" fontSize="9" fill="white" fontWeight="bold">{Math.round(bonus/10000)}만</text>}
-                                                            <text x={x+barW/2} y={chartH+14} textAnchor="middle" fontSize="9" fill="#64748b">{r.month.substring(5)}</text>
+                                                            <text x={x+barW/2} y={chartH+14} textAnchor="middle" fontSize="9" fill="#737373">{r.month.substring(5)}</text>
                                                           </g>
                                                         );
                                                       })}
                                                     </svg>
                                                     <div className="flex items-center gap-3 mt-1 justify-center">
-                                                      <span className="flex items-center gap-1 text-xs text-slate-500"><span style={{width:10,height:10,background:'#3b82f6',display:'inline-block',borderRadius:2}}></span>기본급</span>
-                                                      <span className="flex items-center gap-1 text-xs text-slate-500"><span style={{width:10,height:10,background:'#ef4444',display:'inline-block',borderRadius:2}}></span>상여금</span>
+                                                      <span className="flex items-center gap-1 text-xs text-neutral-500"><span style={{width:10,height:10,background:'#000000',display:'inline-block',borderRadius:2}}></span>기본급</span>
+                                                      <span className="flex items-center gap-1 text-xs text-neutral-500"><span style={{width:10,height:10,background:'#ef4444',display:'inline-block',borderRadius:2}}></span>상여금</span>
                                                     </div>
                                                   </div>
                                                 );
@@ -10712,8 +10759,8 @@
                                             {/* 지급 버튼 */}
                                             {remaining > 0 && (
                                               <div className="flex gap-2 flex-wrap mb-4">
-                                                <input type="number" id={`pay_${record.id}`} placeholder="지급액" className="w-32 px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm"/>
-                                                <input type="date" id={`date_${record.id}`} defaultValue={new Date().toISOString().split('T')[0]} className="px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-blue-500 outline-none text-sm"/>
+                                                <input type="number" id={`pay_${record.id}`} placeholder="지급액" className="w-32 px-3 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm"/>
+                                                <input type="date" id={`date_${record.id}`} defaultValue={new Date().toISOString().split('T')[0]} className="px-3 py-2 rounded-md border border-neutral-400 focus:border-black outline-none text-sm"/>
                                                 <button onClick={() => {
                                                   const amount = parseInt(document.getElementById(`pay_${record.id}`).value)||0;
                                                   const payDate = document.getElementById(`date_${record.id}`).value;
@@ -10761,7 +10808,7 @@
                                                   saveSalaryPayments([...salaryPayments, {id:Date.now()+1, salaryRecordId:targetRecordId, amount, payDate, paymentOrder:targetPaymentOrder, note:'', createdAt:new Date().toISOString()}]);
                                                   document.getElementById(`pay_${record.id}`).value='';
                                                   alert(`${amount.toLocaleString()}원 지급 (${targetPaymentOrder}차)${movedMessage}`);
-                                                }} className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-bold text-sm">지급</button>
+                                                }} className="px-4 py-2 bg-black hover:bg-neutral-800 text-white rounded-md font-black text-sm">지급</button>
                                               </div>
                                             )}
 
@@ -10782,7 +10829,7 @@
                                               return (
                                                 <div className="mt-3 space-y-2">
                                                   {carryDetails.length>0 && (
-                                                    <div className="bg-amber-50 border border-amber-300 rounded-xl px-4 py-3 text-xs text-amber-800">
+                                                    <div className="bg-amber-50 border border-amber-300 rounded-md px-4 py-3 text-xs text-amber-800">
                                                       <div className="flex items-center gap-2 mb-2 font-bold"><span>📦</span><span>전월 이월 미신고 상여금: <strong>{carryOverBonus.toLocaleString()}원</strong></span></div>
                                                       <div className="space-y-1 pl-5 border-l-2 border-amber-300">
                                                         {carryDetails.map((d,i)=>(
@@ -10796,19 +10843,19 @@
                                                     </div>
                                                   )}
                                                   {thisBonusOverpaid>0 && (
-                                                    <div className="bg-orange-50 border border-orange-300 rounded-xl px-4 py-2 text-xs text-orange-800 flex items-center justify-between">
+                                                    <div className="bg-orange-50 border border-orange-300 rounded-md px-4 py-2 text-xs text-orange-800 flex items-center justify-between">
                                                       <span className="flex items-center gap-2"><span>📅</span><span>이번달({record.month}) 초과분</span></span>
                                                       <span className="font-bold">{thisBonusOverpaid.toLocaleString()}원</span>
                                                     </div>
                                                   )}
                                                   {totalUnreported>0 && (
-                                                    <div className="bg-red-50 border-2 border-red-400 rounded-xl px-4 py-2 text-xs flex items-center justify-between" style={{animation:'pulse 1.2s ease-in-out infinite'}}>
+                                                    <div className="bg-red-50 border-2 border-red-400 rounded-md px-4 py-2 text-xs flex items-center justify-between" style={{animation:'pulse 1.2s ease-in-out infinite'}}>
                                                       <span className="flex items-center gap-2 text-red-700 font-bold"><span>🚨</span><span>누적 미신고 상여금 합계</span></span>
                                                       <span className="text-red-600 font-bold text-sm">{totalUnreported.toLocaleString()}원</span>
                                                     </div>
                                                   )}
-                                                  <div className={`rounded-xl border-2 px-3 py-2 ${record.bonusReported?'border-green-400 bg-green-50':thisBonusOverpaid>0||carryOverBonus>0?'border-red-300 bg-red-50':'border-slate-100 bg-slate-50'}`}>
-                                                    <div className="text-xs font-bold text-slate-600 mb-1">🎁 상여금 신고
+                                                  <div className={`rounded-md border-2 px-3 py-2 ${record.bonusReported?'border-green-400 bg-green-50':thisBonusOverpaid>0||carryOverBonus>0?'border-red-300 bg-red-50':'border-neutral-200 bg-neutral-50'}`}>
+                                                    <div className="text-xs font-bold text-neutral-600 mb-1">🎁 상여금 신고
                                                       {(thisBonusOverpaid>0||carryOverBonus>0)&&!record.bonusReported&&<span className="ml-1 text-red-500">({totalUnreported.toLocaleString()}원 미신고)</span>}
                                                     </div>
                                                     {record.bonusReported?(
@@ -10818,14 +10865,14 @@
                                                       </div>
                                                     ):thisBonusOverpaid>0||carryOverBonus>0?(
                                                       <div className="flex items-center gap-1">
-                                                        <input type="date" id={`bonusRptDate_${record.id}`} defaultValue={new Date().toISOString().split('T')[0]} className="flex-1 px-1 py-0.5 rounded border border-slate-200 text-xs min-w-0"/>
+                                                        <input type="date" id={`bonusRptDate_${record.id}`} defaultValue={new Date().toISOString().split('T')[0]} className="flex-1 px-1 py-0.5 rounded-md border border-neutral-400 text-xs min-w-0"/>
                                                         <button onClick={()=>{
                                                           const d=document.getElementById(`bonusRptDate_${record.id}`).value;
                                                           if(!d) return alert('신고일자 선택하세요');
                                                           saveSalaryRecords(salaryRecords.map(r=>r.id===record.id?{...r,bonusReported:true,bonusReportDate:d}:r));
-                                                        }} className="bg-red-500 text-white px-3 py-0.5 rounded text-xs font-bold hover:bg-red-600 shrink-0">신고완료</button>
+                                                        }} className="bg-red-500 text-white px-3 py-0.5 rounded-md text-xs font-bold hover:bg-red-600 shrink-0">신고완료</button>
                                                       </div>
-                                                    ):<div className="text-xs text-slate-400">이달 상여금 없음</div>}
+                                                    ):<div className="text-xs text-neutral-400">이달 상여금 없음</div>}
                                                   </div>
                                                 </div>
                                               );
@@ -10833,15 +10880,15 @@
 
                                             {/* 지급 상세 */}
                                             {payments.length>0 && (
-                                              <div className="bg-slate-50 rounded-xl p-4 mt-4">
-                                                <h4 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+                                              <div className="bg-neutral-50 rounded-md p-4 mt-4">
+                                                <h4 className="text-sm font-black text-black mb-3 flex items-center gap-2">
                                                   <span>지급 상세 ({payments.length}차)</span>
-                                                  <span className="text-[10px] font-normal text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">💡 지급일 변경 시 해당 월 카드로 자동 이동</span>
+                                                  <span className="text-[10px] font-normal text-neutral-600 bg-neutral-100 border border-neutral-300 px-2 py-0.5 rounded-md">💡 지급일 변경 시 해당 월 카드로 자동 이동</span>
                                                 </h4>
                                                 <div className="overflow-x-auto">
                                                   <table className="w-full text-sm">
                                                     <thead>
-                                                      <tr className="border-b border-slate-300">
+                                                      <tr className="border-b border-black">
                                                         <th className="text-left py-2 px-3 font-bold">차수</th>
                                                         <th className="text-left py-2 px-3 font-bold">지급일</th>
                                                         <th className="text-right py-2 px-3 font-bold">지급액</th>
@@ -10851,24 +10898,24 @@
                                                     </thead>
                                                     <tbody>
                                                       {payments.sort((a,b)=>a.paymentOrder-b.paymentOrder).map(payment=>(
-                                                        <tr key={payment.id} className="border-b border-slate-200">
-                                                          <td className="py-2 px-3 font-bold text-blue-600">{payment.paymentOrder}차</td>
+                                                        <tr key={payment.id} className="border-b border-neutral-200">
+                                                          <td className="py-2 px-3 font-bold text-black">{payment.paymentOrder}차</td>
                                                           <td className="py-2 px-3">
                                                             {/* 🟦 v20260502.11: 지급일 변경 시 자동으로 해당 월 record로 이동/생성 */}
-                                                            <input type="date" value={payment.payDate||''} 
+                                                            <input type="date" value={payment.payDate||''}
                                                               onChange={e=>{
                                                                 const newDate = e.target.value;
                                                                 if (!newDate) return;
                                                                 updatePaymentDateWithAutoMove(payment.id, newDate);
                                                               }}
-                                                              className="px-2 py-1 text-xs rounded border border-slate-200 hover:border-blue-400 focus:border-blue-500 outline-none cursor-pointer"/>
+                                                              className="px-2 py-1 text-xs rounded-md border border-neutral-400 hover:border-black focus:border-black outline-none cursor-pointer"/>
                                                           </td>
-                                                          <td className="text-right py-2 px-3 font-bold text-green-600">{payment.amount.toLocaleString()}원</td>
+                                                          <td className="text-right py-2 px-3 font-bold text-black">{payment.amount.toLocaleString()}원</td>
                                                           <td className="py-2 px-3">
-                                                            <input type="text" value={payment.note||''} onChange={e=>saveSalaryPayments(salaryPayments.map(p=>p.id===payment.id?{...p,note:e.target.value}:p))} placeholder="비고" className="w-full px-2 py-1 text-xs rounded border border-slate-200 outline-none"/>
+                                                            <input type="text" value={payment.note||''} onChange={e=>saveSalaryPayments(salaryPayments.map(p=>p.id===payment.id?{...p,note:e.target.value}:p))} placeholder="비고" className="w-full px-2 py-1 text-xs rounded-md border border-neutral-400 outline-none"/>
                                                           </td>
                                                           <td className="text-center py-2 px-3">
-                                                            <button onClick={()=>{if(confirm('삭제하시겠습니까?'))saveSalaryPayments(salaryPayments.filter(p=>p.id!==payment.id));}} className="p-1 text-red-500 hover:bg-red-50 rounded"><Trash /></button>
+                                                            <button onClick={()=>{if(confirm('삭제하시겠습니까?'))saveSalaryPayments(salaryPayments.filter(p=>p.id!==payment.id));}} className="p-1 text-red-500 hover:bg-red-50 rounded-md"><Trash /></button>
                                                           </td>
                                                         </tr>
                                                       ))}
@@ -10891,12 +10938,12 @@
                     </div>
 
                     {/* 연간 상여금 요약 */}
-                    <div className="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8">
-                      <h2 className="text-xl font-bold text-slate-900 mb-6">📊 연간 상여금 요약</h2>
+                    <div className="bg-white rounded-md border border-neutral-300 p-8">
+                      <h2 className="text-xl font-black text-black tracking-tight mb-6">📊 연간 상여금 요약</h2>
                       {(() => {
                         const currentYear = new Date().getFullYear();
                         const activeEmps = employees.filter(e => e.active);
-                        if (activeEmps.length === 0) return <p className="text-slate-400 text-center py-8">등록된 직원이 없습니다</p>;
+                        if (activeEmps.length === 0) return <p className="text-neutral-400 text-center py-8">등록된 직원이 없습니다</p>;
 
                         return (
                           <div className="space-y-6">
@@ -10920,16 +10967,16 @@
                               if (empRecords.length === 0) return null;
 
                               return (
-                                <div key={emp.id} className="border border-slate-200 rounded-2xl overflow-hidden">
+                                <div key={emp.id} className="border border-neutral-300 rounded-md overflow-hidden">
                                   {/* 직원 헤더 */}
-                                  <div className="bg-slate-50 px-5 py-3 flex items-center justify-between">
+                                  <div className="bg-neutral-50 px-5 py-3 flex items-center justify-between">
                                     <div>
-                                      <span className="font-bold text-slate-900">{emp.name}</span>
-                                      <span className="text-slate-500 text-sm ml-2">({emp.position})</span>
-                                      <span className="text-slate-400 text-xs ml-2">{currentYear}년</span>
+                                      <span className="font-black text-black">{emp.name}</span>
+                                      <span className="text-neutral-500 text-sm ml-2">({emp.position})</span>
+                                      <span className="text-neutral-400 text-xs ml-2">{currentYear}년</span>
                                     </div>
                                     <div className="flex gap-4 text-sm">
-                                      <span className="text-slate-600">총 상여: <strong className="text-slate-900">{totalBonus.toLocaleString()}원</strong></span>
+                                      <span className="text-neutral-600">총 상여: <strong className="text-black">{totalBonus.toLocaleString()}원</strong></span>
                                       <span className="text-green-600">신고완료: <strong>{reportedBonus.toLocaleString()}원</strong></span>
                                       {unreportedBonus > 0 && (
                                         <span className="text-red-600" style={{animation:'pulse 1.2s ease-in-out infinite'}}>미신고: <strong>{unreportedBonus.toLocaleString()}원</strong></span>
@@ -10940,39 +10987,39 @@
                                   {/* 월별 상세 */}
                                   <div className="overflow-x-auto">
                                     <table className="w-full text-sm">
-                                      <thead className="bg-slate-100 border-b border-slate-200">
+                                      <thead className="bg-neutral-100 border-b border-neutral-200">
                                         <tr>
-                                          <th className="text-left py-2 px-4 text-xs font-semibold text-slate-600">월</th>
-                                          <th className="text-right py-2 px-4 text-xs font-semibold text-slate-600">상여금</th>
-                                          <th className="text-center py-2 px-4 text-xs font-semibold text-slate-600">신고상태</th>
-                                          <th className="text-left py-2 px-4 text-xs font-semibold text-slate-600">신고일</th>
+                                          <th className="text-left py-2 px-4 text-xs font-semibold text-neutral-600">월</th>
+                                          <th className="text-right py-2 px-4 text-xs font-semibold text-neutral-600">상여금</th>
+                                          <th className="text-center py-2 px-4 text-xs font-semibold text-neutral-600">신고상태</th>
+                                          <th className="text-left py-2 px-4 text-xs font-semibold text-neutral-600">신고일</th>
                                         </tr>
                                       </thead>
                                       <tbody>
                                         {monthlyBonus.map((m, idx) => (
-                                          <tr key={m.month} className={`border-b border-slate-100 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}>
-                                            <td className="py-2 px-4 font-medium text-slate-700">{m.month}</td>
+                                          <tr key={m.month} className={`border-b border-neutral-200 ${idx % 2 === 0 ? 'bg-white' : 'bg-neutral-50'}`}>
+                                            <td className="py-2 px-4 font-medium text-neutral-700">{m.month}</td>
                                             <td className="py-2 px-4 text-right">
                                               {m.bonus > 0
                                                 ? <span className="font-bold text-red-600">+{m.bonus.toLocaleString()}원</span>
-                                                : <span className="text-slate-300">-</span>
+                                                : <span className="text-neutral-300">-</span>
                                               }
                                             </td>
                                             <td className="py-2 px-4 text-center">
                                               {m.bonus === 0 ? (
-                                                <span className="text-xs text-slate-300">해당없음</span>
+                                                <span className="text-xs text-neutral-300">해당없음</span>
                                               ) : m.reported ? (
                                                 <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-semibold">✅ 신고완료</span>
                                               ) : (
                                                 <span className="bg-red-100 text-red-600 px-2 py-0.5 rounded-full text-xs font-semibold" style={{animation:'pulse 1s ease-in-out infinite'}}>🔴 미신고</span>
                                               )}
                                             </td>
-                                            <td className="py-2 px-4 text-xs text-slate-500">{m.reportDate || '-'}</td>
+                                            <td className="py-2 px-4 text-xs text-neutral-500">{m.reportDate || '-'}</td>
                                           </tr>
                                         ))}
                                         {/* 합계 행 */}
-                                        <tr className="bg-slate-100 border-t-2 border-slate-300">
-                                          <td className="py-2 px-4 font-bold text-slate-800">합계</td>
+                                        <tr className="bg-neutral-100 border-t-2 border-black">
+                                          <td className="py-2 px-4 font-bold text-black">합계</td>
                                           <td className="py-2 px-4 text-right font-bold text-red-600">{totalBonus > 0 ? `+${totalBonus.toLocaleString()}원` : '-'}</td>
                                           <td className="py-2 px-4 text-center text-xs">
                                             <span className="text-green-600 font-semibold">{reportedBonus.toLocaleString()}원 완료</span>
@@ -10992,9 +11039,9 @@
                     </div>
 
                     {/* 미지급 현황 */}
-                    <div className="bg-gradient-to-br from-red-50 to-orange-50 rounded-3xl shadow-xl border-2 border-red-200 p-8">
-                      <h2 className="text-xl font-bold text-red-900 mb-6">⚠️ 미지급 급여 현황</h2>
-                      
+                    <div className="bg-red-50 rounded-md border-2 border-red-300 p-8">
+                      <h2 className="text-xl font-black text-red-900 tracking-tight mb-6">⚠️ 미지급 급여 현황</h2>
+
                       {(() => {
                         const unpaid = salaryRecords.map(r => {
                           const emp = employees.find(e => e.id === r.employeeId);
@@ -11002,24 +11049,24 @@
                           const rem = Math.max(0, r.totalAmount - paid);
                           return { record: r, employee: emp, remaining: rem };
                         }).filter(i => i.remaining > 0);
-                        
+
                         const total = unpaid.reduce((s, i) => s + i.remaining, 0);
-                        
+
                         if (unpaid.length === 0) {
-                          return <div className="text-center py-8 text-slate-600"><p className="text-lg font-semibold">✅ 모든 급여 지급 완료!</p></div>;
+                          return <div className="text-center py-8 text-neutral-600"><p className="text-lg font-semibold">✅ 모든 급여 지급 완료!</p></div>;
                         }
-                        
+
                         return (
                           <>
-                            <div className="bg-white rounded-2xl p-6 mb-6 border-2 border-red-300">
-                              <p className="text-3xl font-bold text-red-600 text-center">{total.toLocaleString()}원</p>
-                              <p className="text-center text-slate-600 mt-2">총 미지급액 ({unpaid.length}건)</p>
+                            <div className="bg-white rounded-md p-6 mb-6 border-2 border-red-300">
+                              <p className="text-3xl font-black text-red-600 text-center">{total.toLocaleString()}원</p>
+                              <p className="text-center text-neutral-600 mt-2">총 미지급액 ({unpaid.length}건)</p>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                               {unpaid.map(({ record, employee, remaining }) => (
-                                <div key={record.id} className="bg-white rounded-xl p-4 border-2 border-orange-200">
-                                  <h4 className="font-bold text-slate-900">{employee?.name} ({employee?.position})</h4>
-                                  <p className="text-sm text-slate-600">{record.month}</p>
+                                <div key={record.id} className="bg-white rounded-md p-4 border-2 border-orange-200">
+                                  <h4 className="font-black text-black">{employee?.name} ({employee?.position})</h4>
+                                  <p className="text-sm text-neutral-600">{record.month}</p>
                                   <p className="text-xl font-bold text-red-600 mt-2">{remaining.toLocaleString()}원</p>
                                 </div>
                               ))}
