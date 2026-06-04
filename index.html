@@ -1288,6 +1288,10 @@
           });
           // 수정 모드 (v09.10): 도금작업 수정 중인 ID 저장. null이면 신규 작성 모드
           const [editingPlatingOrderId, setEditingPlatingOrderId] = useState(null);
+          // 💠 중복 발주 경고 모달: { items:[{productName,color,finish,dups:[{date,orderNum,qty}]}], onConfirm }
+          const [dupWarnModal, setDupWarnModal] = useState(null);
+          // 💠 재도금 수정 모드: 수정 중인 재도금 주문 ID. null이면 신규 등록 모드
+          const [editingReworkId, setEditingReworkId] = useState(null);
 
           // 📊 월별 누적 도금 내역 (v20260502.11) - 2번 탭 전용 state
           const [billingViewMode, setBillingViewMode] = useState('order'); // 'order' | 'billing'
@@ -2008,6 +2012,23 @@
             alert('제품 수정 완료!');
           };
 
+          // 💠 중복 발주 방지: 미입고(received=false)인 기존 발주 중 동일제품·동일색상 찾기 (마감 무관)
+          const findUnreceivedDuplicates = (productId, color) => {
+            const matches = [];
+            (history || []).forEach(order => {
+              (order.products || []).forEach(prod => {
+                if (prod.productId !== productId) return;
+                (prod.items || []).forEach(item => {
+                  if (item.received) return; // 입고완료 제외
+                  if (item.color === color) {
+                    matches.push({ orderNum: order.orderNum, date: order.date, qty: item.qty, finish: item.finish || '', isRework: order.type === 'rework' });
+                  }
+                });
+              });
+            });
+            return matches;
+          };
+
           const handleAddProductToOrder = (productId) => {
             if (!productId) return alert('제품을 선택하세요');
 
@@ -2067,6 +2088,7 @@
           const handleAddColorItem = (productId, grind) => {
             // 💠 v20260510: 이미 사용된 (색상, 유광/반광) 조합 제외하고 사용 가능한 첫 조합으로 추가
             let blocked = false;
+            let addedColor = null, addedProductName = '';
             const newProducts = orderForm.products.map(p => {
               if (p.productId === productId && p.grind === grind) {
                 const usedCombos = new Set();
@@ -2099,6 +2121,7 @@
                   blocked = true;
                   return p; // 모든 조합 소진 — 추가 안 함
                 }
+                addedColor = newColor; addedProductName = p.productName;
                 return {...p, items: [...p.items, { color: newColor, finish: newFinish, qty: 1 }]};
               }
               return p;
@@ -2106,6 +2129,17 @@
             if (blocked) {
               alert('⚠️ 모든 색상/유광 조합이 이미 사용 중입니다.');
               return;
+            }
+            // 💠 중복 발주 방지: 추가된 색상(마감 무관)에 미입고 발주가 있으면 경고 모달
+            if (addedColor) {
+              const dups = findUnreceivedDuplicates(productId, addedColor);
+              if (dups.length > 0) {
+                setDupWarnModal({
+                  items: [{ productName: addedProductName, color: addedColor, dups }],
+                  onConfirm: () => { setDupWarnModal(null); setOrderForm({ ...orderForm, products: newProducts }); }
+                });
+                return; // 모달에서 결정 — 추가 보류
+              }
             }
             setOrderForm({ ...orderForm, products: newProducts });
           };
@@ -2121,18 +2155,35 @@
           };
 
           const updateColorItem = (productId, grind, itemIndex, field, value) => {
-            const newProducts = orderForm.products.map(p => {
-              if (p.productId === productId && p.grind === grind) {
-                const newItems = [...p.items];
-                newItems[itemIndex] = { ...newItems[itemIndex], [field]: value };
-                return { ...p, items: newItems };
+            const applyChange = () => {
+              const newProducts = orderForm.products.map(p => {
+                if (p.productId === productId && p.grind === grind) {
+                  const newItems = [...p.items];
+                  newItems[itemIndex] = { ...newItems[itemIndex], [field]: value };
+                  return { ...p, items: newItems };
+                }
+                return p;
+              });
+              setOrderForm({ ...orderForm, products: newProducts });
+            };
+            // 💠 중복 발주 방지: 색상 변경 시 변경 후 색상이 미입고 발주와 겹치면 경고 모달 (마감 무관)
+            if (field === 'color') {
+              const targetProd = orderForm.products.find(p => p.productId === productId && p.grind === grind);
+              if (targetProd) {
+                const dups = findUnreceivedDuplicates(productId, value);
+                if (dups.length > 0) {
+                  setDupWarnModal({
+                    items: [{ productName: targetProd.productName, color: value, dups }],
+                    onConfirm: () => { setDupWarnModal(null); applyChange(); }
+                  });
+                  return; // 모달에서 결정 — 여기선 변경 보류
+                }
               }
-              return p;
-            });
-            setOrderForm({ ...orderForm, products: newProducts });
+            }
+            applyChange();
           };
 
-          const handleCreateOrder = () => {
+          const handleCreateOrder = (skipDupCheck) => {
             if (orderForm.products.length === 0) {
               alert('제품을 추가하세요');
               return;
@@ -2296,6 +2347,31 @@
               // ============================================================
               // 신규 작성 모드 (기존 로직)
               // ============================================================
+
+              // 💠 중복 발주 방지: 저장 직전, 미입고 동일색상 발주 전체 점검 (마감 무관, 색상 단위 중복 제거)
+              if (skipDupCheck !== true) {
+                const dupItems = [];
+                const seenKeys = new Set();
+                orderForm.products.forEach(product => {
+                  product.items.forEach(item => {
+                    const key = `${product.productId}|${item.color}`;
+                    if (seenKeys.has(key)) return; // 같은 제품+색상은 한 번만
+                    seenKeys.add(key);
+                    const dups = findUnreceivedDuplicates(product.productId, item.color);
+                    if (dups.length > 0) {
+                      dupItems.push({ productName: product.productName, color: item.color, dups });
+                    }
+                  });
+                });
+                if (dupItems.length > 0) {
+                  setDupWarnModal({
+                    items: dupItems,
+                    onConfirm: () => { setDupWarnModal(null); handleCreateOrder(true); }
+                  });
+                  return; // 모달에서 결정 — 생성 보류
+                }
+              }
+
               const existingOrdersOnDate = history.filter(h => h.date === orderForm.date);
               const orderNum = Math.max(0, ...existingOrdersOnDate.map(h => h.orderNum || 0)) + 1;
 
@@ -3196,7 +3272,7 @@
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260604.01</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260605.01</div>
                   </div>
                   
                   {/* v10.06: 헬퍼/봇 상태등 */}
@@ -5491,7 +5567,7 @@
 
                         {/* 작업 지시서 생성 버튼 (흑백 미니멀 톤) */}
                         <button
-                          onClick={handleCreateOrder}
+                          onClick={() => handleCreateOrder()}
                           className={`w-full text-white py-4 font-black text-base uppercase tracking-widest transition-all ${
                             editingPlatingOrderId !== null
                               ? 'bg-amber-700 hover:bg-amber-800'
@@ -5505,6 +5581,69 @@
                     )}
                   </div>
                 )}
+
+                {/* 💠 중복 발주 경고 모달 (흑백 미니멀 + 빨강 경고 포인트) */}
+                {dupWarnModal && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.6)'}}>
+                    <div className="bg-white border-2 border-black w-full max-w-md" style={{borderRadius:'8px', overflow:'hidden'}}>
+                      {/* 빨강 경고 헤더 */}
+                      <div className="bg-red-600 px-6 py-4">
+                        <div className="flex items-center gap-2.5">
+                          <span className="text-2xl leading-none">⚠️</span>
+                          <div>
+                            <h3 className="text-white text-lg font-black tracking-tight leading-none">중복 발주 주의</h3>
+                            <p className="text-red-100 text-[11px] font-bold mt-1.5">아직 입고되지 않은 동일 색상 발주가 있습니다</p>
+                          </div>
+                        </div>
+                      </div>
+                      {/* 본문: 겹치는 항목 리스트 */}
+                      <div className="px-6 py-5 space-y-3" style={{maxHeight:'50vh', overflowY:'auto'}}>
+                        {dupWarnModal.items.map((it, idx) => {
+                          const totalUnreceived = it.dups.reduce((s, d) => s + (d.qty || 0), 0);
+                          return (
+                            <div key={idx} className="border border-neutral-300 p-3" style={{borderRadius:'6px'}}>
+                              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                <span className="w-2 h-2 bg-black" style={{borderRadius:'2px'}}/>
+                                <span className="font-black text-black tracking-tight">{it.productName}</span>
+                                <span className="bg-black text-white text-[11px] font-black px-2 py-0.5 tracking-widest" style={{borderRadius:'4px'}}>{it.color}</span>
+                                <span className="ml-auto text-red-600 text-[12px] font-black whitespace-nowrap">미입고 {totalUnreceived}개</span>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5 pl-4">
+                                {it.dups.map((d, di) => (
+                                  d.isRework ? (
+                                    <span key={di} className="bg-amber-50 border border-amber-400 text-amber-800 text-[11px] font-black px-2 py-0.5" style={{borderRadius:'4px'}}>
+                                      ♻️ 재도금 {d.date || ''} · {d.qty || 0}개
+                                    </span>
+                                  ) : (
+                                    <span key={di} className="bg-neutral-100 border border-neutral-300 text-neutral-700 text-[11px] font-bold px-2 py-0.5" style={{borderRadius:'4px'}}>
+                                      {d.date || ''} {d.orderNum || ''}차 · {d.qty || 0}개
+                                    </span>
+                                  )
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {/* 버튼 */}
+                      <div className="flex gap-2 px-6 pb-6 pt-1">
+                        <button
+                          onClick={() => setDupWarnModal(null)}
+                          className="flex-1 py-3 border-2 border-black text-black font-black text-xs uppercase tracking-widest hover:bg-neutral-100"
+                          style={{borderRadius:'6px'}}>
+                          잠깐, 취소
+                        </button>
+                        <button
+                          onClick={() => { const cb = dupWarnModal.onConfirm; if (cb) cb(); }}
+                          className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-widest"
+                          style={{borderRadius:'6px'}}>
+                          그래도 발주
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* 재도금 요청 탭 */}
                 {/* 💠 v20260511: 1-3 재도금 요청 - 흑백 미니멀 톤 + 그리드 카드 선택 */}
                 {activeTab === 'rework' && (
@@ -5714,6 +5853,22 @@
                                         <div className="text-[11px] text-neutral-500 font-bold tracking-tight">{order.date} 요청</div>
                                       </div>
                                       <div className="flex gap-2 shrink-0">
+                                        <button type="button" onClick={() => {
+                                          setEditingPlatingOrderId(null);
+                                          setEditingReworkId(order.id);
+                                          setOrderForm({
+                                            date: order.date,
+                                            products: (order.products || []).map(p => ({
+                                              productId: p.productId,
+                                              productName: p.productName,
+                                              productImage: getProductImage(p),
+                                              items: (p.items || []).map(it => ({ ...it }))
+                                            }))
+                                          });
+                                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                                        }}
+                                          className="px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-black uppercase tracking-widest transition-all"
+                                          style={{borderRadius:'6px'}}>✏️ 수정</button>
                                         <button type="button" onClick={() => generateReworkExcel(order)}
                                           className="px-3 py-2 bg-white border-2 border-black hover:bg-black hover:text-white text-black text-[11px] font-black uppercase tracking-widest transition-all"
                                           style={{borderRadius:'6px'}}>📥 요청서</button>
@@ -5785,6 +5940,16 @@
                         </div>
                       );
                     })()}
+
+                    {/* 💠 재도금 수정 모드 배너 */}
+                    {editingReworkId !== null && (
+                      <div className="bg-amber-50 border-2 border-amber-600 px-4 py-3 flex items-center justify-between gap-3 flex-wrap" style={{borderRadius:'6px'}}>
+                        <span className="text-amber-900 font-black tracking-tight text-sm">✏️ 재도금 수정 모드 — 색상/수량을 고친 뒤 아래 [재도금 수정 저장]을 누르세요</span>
+                        <button type="button" onClick={() => { setEditingReworkId(null); setOrderForm({date: formatDate(new Date()), products: []}); }}
+                          className="bg-white border border-amber-600 text-amber-800 text-[11px] font-black px-3 py-1.5 uppercase tracking-widest hover:bg-amber-100"
+                          style={{borderRadius:'6px'}}>취소</button>
+                      </div>
+                    )}
 
                     {/* 제품 선택 - 그리드 카드 */}
                     <div className="bg-white border border-neutral-300 p-4" style={{borderRadius:'6px'}}>
@@ -5910,6 +6075,19 @@
                             if (orderForm.products.length === 0) return alert('제품을 추가하세요');
                             if (orderForm.products.some(p => p.items.length === 0)) return alert('각 제품에 재도금 색상을 추가하세요');
 
+                            // 💠 수정 모드: 기존 재도금 주문 덮어쓰기 (received 등 기존 상태는 불러올 때 보존됨)
+                            if (editingReworkId !== null) {
+                              const updated = history.map(h => h.id === editingReworkId
+                                ? { ...h, date: orderForm.date, products: orderForm.products }
+                                : h
+                              );
+                              saveHistory(updated);
+                              setEditingReworkId(null);
+                              setOrderForm({date: formatDate(new Date()), products: []});
+                              alert('재도금 요청이 수정되었습니다!');
+                              return;
+                            }
+
                             const reworkOrder = {
                               id: Date.now(),
                               date: orderForm.date,
@@ -5924,11 +6102,24 @@
                             alert('재도금 요청이 등록되었습니다!');
                             // 💠 v20260513: 1-3에 머무름 (이력이 아래에 자동으로 표시됨)
                           }}
-                          className="w-full py-4 bg-black hover:bg-neutral-800 text-white font-black text-base uppercase tracking-widest transition-all"
+                          className={`w-full py-4 text-white font-black text-base uppercase tracking-widest transition-all ${editingReworkId !== null ? 'bg-amber-700 hover:bg-amber-800' : 'bg-black hover:bg-neutral-800'}`}
                           style={{borderRadius:'6px'}}
                         >
-                          재도금 요청 등록
+                          {editingReworkId !== null ? '✏️ 재도금 수정 저장 (덮어쓰기)' : '재도금 요청 등록'}
                         </button>
+                        {editingReworkId !== null && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingReworkId(null);
+                              setOrderForm({date: formatDate(new Date()), products: []});
+                            }}
+                            className="w-full mt-2 py-3 bg-white border-2 border-neutral-400 text-neutral-700 font-black text-xs uppercase tracking-widest hover:bg-neutral-100 transition-all"
+                            style={{borderRadius:'6px'}}
+                          >
+                            수정 취소
+                          </button>
+                        )}
                       </div>
                     )}
 
@@ -6111,6 +6302,7 @@
                                       }))
                                     };
                                     setOrderForm(loaded);
+                                    setEditingReworkId(null);
                                     setEditingPlatingOrderId(order.id);
                                     setActiveTab('order');
                                     setTimeout(() => alert(`✏️ ${order.orderNum}차 작업 수정 모드\n\n색상/수량을 수정 후 [작업 지시서 생성]을 누르면 덮어쓰기 됩니다.\n도금소는 기존 그대로 유지됩니다.`), 200);
