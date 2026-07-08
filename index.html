@@ -827,6 +827,11 @@
           const saveChinaShipments = (d) => { setChinaShipments(d); localStorage.setItem('china_shipments', JSON.stringify(d)); };
           const [chinaBatchOrderPopup, setChinaBatchOrderPopup] = useState(false); // 일괄 발주 모달
           const [chinaShipmentReceivePopup, setChinaShipmentReceivePopup] = useState(null); // 수입 건 입고 처리 모달
+          const [chinaShipmentEditPopup, setChinaShipmentEditPopup] = useState(null); // 💠 v20260709.01: 발주 건 수정 모달
+          const [chinaRemitPopup, setChinaRemitPopup] = useState(false); // 💠 v20260709.01: 7-3 외환송금 직접 추가 모달
+          const [chinaRemitInputPopup, setChinaRemitInputPopup] = useState(null); // 💠 v20260709.01: 발주 건 외환송금 입력/수정 모달 (1단계)
+          const [chinaRemittances, setChinaRemittances] = useState(() => { try { return JSON.parse(localStorage.getItem('china_remittances')||'[]'); } catch { return []; } });
+          const saveChinaRemittances = (d) => { setChinaRemittances(d); localStorage.setItem('china_remittances', JSON.stringify(d)); };
           // 구버전 호환 (단일 제품 주문 — 폐기 예정이지만 데이터 보호)
           const [chinaOrders, setChinaOrders] = useState(() => { try { return JSON.parse(localStorage.getItem('china_orders')||'[]'); } catch { return []; } });
           const saveChinaOrders = (d) => { setChinaOrders(d); localStorage.setItem('china_orders', JSON.stringify(d)); };
@@ -2159,7 +2164,16 @@
               const newProducts = orderForm.products.map(p => {
                 if (p.productId === productId && p.grind === grind) {
                   const newItems = [...p.items];
-                  newItems[itemIndex] = { ...newItems[itemIndex], [field]: value };
+                  const updated = { ...newItems[itemIndex], [field]: value };
+                  // 💠 색상 변경 시 마감 정합성 보정: 은/14k대용금(glossOnly)은 반무광 없음 → 유광 고정, 동착(other)은 마감 없음
+                  if (field === 'color') {
+                    const cd = COLOR_DEFS.find(c => c.name === value);
+                    if (cd) {
+                      if (cd.finishType === 'glossOnly') updated.finish = '유광';
+                      else if (cd.finishType === 'other') updated.finish = '';
+                    }
+                  }
+                  newItems[itemIndex] = updated;
                   return { ...p, items: newItems };
                 }
                 return p;
@@ -3272,7 +3286,7 @@
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260605.01</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260709.01</div>
                   </div>
                   
                   {/* v10.06: 헬퍼/봇 상태등 */}
@@ -11279,7 +11293,9 @@
                       <div className="flex space-x-1">
                         {[
                           ['order', '다이캐스팅 주문 필요', '7-1'],
-                          ['completed', '주문 완료', '7-2']
+                          ['completed', '주문 완료', '7-2'],
+                          ['remittance', '외환송금', '7-3'],
+                          ['declaration', '수입신고관리', '7-4']
                         ].map(([tab, label, num]) => (
                           <button key={tab} onClick={() => setChinaTab(tab)}
                             className={`px-3 py-1.5 font-black text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 ${chinaTab === tab ? 'bg-black text-white' : 'text-neutral-500 hover:bg-neutral-100 hover:text-black'}`} style={{borderRadius:'2px'}}>
@@ -11289,6 +11305,61 @@
                         ))}
                       </div>
                     </div>
+
+                    {/* 💠 v20260709.01: 외상채무(미수 잔액) 박스 — 7-1~7-4 공통 상단 고정 · 위안(¥) 기준 · 미수 = 초기값 + 발주누적 */}
+                    {(() => {
+                      // 💠 v20260709.01: 9-1 최신 위안 원가로 실시간 계산 (원가 수정 시 미수 즉시 반영)
+                      const shipCNY = (sh) => (sh.products || []).reduce((a, p) => {
+                        const mp = masterProducts.find(m => String(m.id) === String(p.productId));
+                        const unitCNY = mp ? (parseFloat(mp.dieCastingCostCNY) || 0) : (parseFloat(p.unitCNY) || 0);
+                        return a + unitCNY * (p.qty || 0);
+                      }, 0);
+                      const orderTotalCNY = chinaShipments.reduce((s, sh) => s + shipCNY(sh), 0);
+                      const orderTotalKRW = chinaShipments.reduce((s, sh) => {
+                        const r = parseFloat(sh.rateKRWperCNY) || 0;
+                        return s + (r > 0 ? shipCNY(sh) * r : 0);
+                      }, 0);
+                      const orderTotalUSD = chinaShipments.reduce((s, sh) => {
+                        const r = parseFloat(sh.rateKRWperCNY) || 0, ru = parseFloat(sh.rateKRWperUSD) || 0;
+                        return s + ((r > 0 && ru > 0) ? (shipCNY(sh) * r / ru) : 0);
+                      }, 0);
+                      // 미수 잔액(위안 CNY) = 기초잔액(초기값) + 발주 누적(위안) − 외환송금 누적(위안)
+                      const remitTotalCNY = chinaRemittances.reduce((s, r) => s + (parseFloat(r.amountCNY) || 0), 0);
+                      const debtBalanceCNY = chinaDebtInitial + orderTotalCNY - remitTotalCNY;
+                      return (
+                        <div className="px-6 pt-4">
+                          <div className="bg-black p-5 text-white" style={{borderRadius:'6px'}}>
+                            <div className="flex items-start justify-between gap-4 flex-wrap">
+                              <div className="flex-1 min-w-[200px]">
+                                <div className="text-[11px] text-neutral-400 font-black uppercase tracking-widest mb-1">💵 중국 거래처 외상채무 (미수)</div>
+                                <div className="flex items-baseline gap-2 mb-2">
+                                  <span className="text-5xl font-black tracking-tight" style={{color:'#FEE500'}}>
+                                    ¥{debtBalanceCNY.toLocaleString(undefined, {maximumFractionDigits:2})}
+                                  </span>
+                                  <span className="text-sm font-bold text-neutral-300">위안(CNY) 잔액</span>
+                                </div>
+                                <div className="flex flex-wrap gap-2 text-[11px]">
+                                  <span className="bg-neutral-800 text-white px-2 py-0.5 font-black tracking-tight" style={{borderRadius:'4px'}}>
+                                    초기값 ¥{chinaDebtInitial.toLocaleString(undefined, {maximumFractionDigits:2})}
+                                  </span>
+                                  <span className="bg-neutral-800 text-white px-2 py-0.5 font-black tracking-tight" style={{borderRadius:'4px'}}>
+                                    발주 누적 ¥{orderTotalCNY.toLocaleString()}{orderTotalUSD>0?` / $${orderTotalUSD.toLocaleString(undefined, {maximumFractionDigits:2})}`:''}{orderTotalKRW>0?` / ₩${Math.round(orderTotalKRW).toLocaleString()}`:''}
+                                  </span>
+                                  {remitTotalCNY > 0 && (
+                                    <span className="px-2 py-0.5 font-black tracking-tight" style={{backgroundColor:'#FEE500', color:'#000', borderRadius:'4px'}}>
+                                      누적 송금 -¥{remitTotalCNY.toLocaleString()}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <button onClick={() => setChinaDebtPopup(true)}
+                                className="px-3 py-2 bg-white text-black hover:bg-neutral-200 text-[11px] font-black uppercase tracking-widest transition-all shrink-0"
+                                style={{borderRadius:'6px'}}>⚙️ 초기값 설정</button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* (구버전) 다이캐스팅 단일 주문 모달 — 신규 사용 안 함 */}
                     {chinaOrderPopup && (() => {
@@ -11469,12 +11540,18 @@
 
                     {/* 일괄 발주 모달 */}
                     {chinaBatchOrderPopup && (() => {
-                      const validCandidates = chinaOrderCandidates
+                      // 💠 v20260709.01: onlyId 있으면 선택(단건) 발주, 없으면 일괄 발주
+                      const onlyId = (chinaBatchOrderPopup && typeof chinaBatchOrderPopup === 'object') ? chinaBatchOrderPopup.onlyId : null;
+                      const sourceIds = onlyId != null ? [onlyId] : chinaOrderCandidates;
+                      const validCandidates = sourceIds
                         .map(pid => masterProducts.find(mp => String(mp.id) === String(pid)))
                         .filter(Boolean);
                       const handleSubmit = () => {
                         const shipmentDate = document.getElementById('chinaShipmentDate').value;
                         if (!shipmentDate) return alert('발주일을 선택하세요');
+                        // 발주일 기준환율 (원/위안, 원/달러) — 미입력 시 위안 금액만 기록
+                        const rateCNY = parseFloat(document.getElementById('chinaRateCNY')?.value) || 0;
+                        const rateUSD = parseFloat(document.getElementById('chinaRateUSD')?.value) || 0;
                         const checkedProducts = [];
                         validCandidates.forEach(p => {
                           const cb = document.getElementById(`chinaPick_${p.id}`);
@@ -11482,17 +11559,24 @@
                           if (cb?.checked) {
                             const qty = parseInt(qtyInp?.value) || 0;
                             if (qty > 0) {
+                              const unitCNY = parseFloat(p.dieCastingCostCNY) || 0;
                               checkedProducts.push({
                                 productId: p.id,
                                 productName: p.name,
                                 productImage: p.image,
                                 productCode: String(p.id),
-                                qty
+                                qty,
+                                unitCNY,
+                                amountCNY: unitCNY * qty
                               });
                             }
                           }
                         });
                         if (checkedProducts.length === 0) return alert('체크된 제품이 없거나 수량이 0입니다');
+                        // 발주 총액: 위안 합계 → 발주일 환율로 원화·달러 환산 (미수 반영용)
+                        const orderAmountCNY = checkedProducts.reduce((s, p) => s + (p.amountCNY || 0), 0);
+                        const orderAmountKRW = rateCNY > 0 ? orderAmountCNY * rateCNY : 0;
+                        const orderAmountUSD = (rateUSD > 0 && orderAmountKRW > 0) ? orderAmountKRW / rateUSD : 0;
                         const newShipment = {
                           id: Date.now(),
                           shipmentDate,
@@ -11501,24 +11585,33 @@
                           receivedDate: null,
                           amountTransferred: 0,
                           totalDebtOffset: 0,
+                          // 💠 v20260709.01: 발주일 기준 위안 원가 → 미수 반영
+                          rateKRWperCNY: rateCNY,
+                          rateKRWperUSD: rateUSD,
+                          orderAmountCNY,
+                          orderAmountKRW,
+                          orderAmountUSD,
                           invoiceFile: null,
                           invoiceCharges: null,
                           declarationMemo: '',
                           createdAt: new Date().toISOString()
                         };
+                        // 💠 v20260709.01: 발주일 환율 자동완성용 — 마지막 입력값 기억
+                        if (rateCNY > 0) localStorage.setItem('china_last_rate_cny', String(rateCNY));
+                        if (rateUSD > 0) localStorage.setItem('china_last_rate_usd', String(rateUSD));
                         saveChinaShipments([newShipment, ...chinaShipments]);
                         // 발주된 제품들은 후보에서 제거
                         const orderedIds = new Set(checkedProducts.map(p => p.productId));
                         saveChinaOrderCandidates(chinaOrderCandidates.filter(pid => !orderedIds.has(pid)));
                         setChinaBatchOrderPopup(false);
                         setChinaTab('completed');
-                        alert(`✅ 수입 건 등록 완료!\n발주일 ${shipmentDate}\n${checkedProducts.length}개 제품, 총 ${checkedProducts.reduce((s,p)=>s+p.qty,0).toLocaleString()}개\n\n7-2 주문 완료 탭으로 이동합니다`);
+                        alert(`✅ 수입 건 등록 완료!\n발주일 ${shipmentDate}\n${checkedProducts.length}개 제품, 총 ${checkedProducts.reduce((s,p)=>s+p.qty,0).toLocaleString()}개\n\n발주금액 ¥${orderAmountCNY.toLocaleString()}${orderAmountUSD>0?` ($${orderAmountUSD.toLocaleString(undefined,{maximumFractionDigits:2})})`:''}${orderAmountKRW>0?` (₩${Math.round(orderAmountKRW).toLocaleString()})`:''}\n\n7-2 주문 완료 탭으로 이동합니다`);
                       };
                       return (
                         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.5)'}}>
                           <div className="bg-white border-2 border-black w-full max-w-2xl max-h-[90vh] flex flex-col" style={{borderRadius:'6px'}}>
                             <div className="flex items-center justify-between p-5 pb-3 border-b-2 border-neutral-300 shrink-0">
-                              <h3 className="text-lg font-black text-black tracking-tight">📦 일괄 발주 (수입 건 등록)</h3>
+                              <h3 className="text-lg font-black text-black tracking-tight">📦 {onlyId != null ? '선택 발주' : '일괄 발주'} (수입 건 등록)</h3>
                               <button onClick={() => setChinaBatchOrderPopup(false)} className="text-neutral-400 hover:text-black text-xl font-bold">×</button>
                             </div>
 
@@ -11533,6 +11626,24 @@
                                   className="w-full px-3 py-2 border border-neutral-400 focus:border-black outline-none text-sm font-bold"
                                   style={{borderRadius:'6px'}}
                                 />
+                              </div>
+
+                              {/* 💠 v20260709.01: 발주일 기준환율 (미수 반영용, 미입력 시 위안 금액만 기록) */}
+                              <div className="mb-4 grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="block text-[11px] font-black text-neutral-500 uppercase tracking-widest mb-2">발주일 환율 (원/위안 ¥)</label>
+                                  <input type="number" id="chinaRateCNY" placeholder="예: 190"
+                                    defaultValue={localStorage.getItem('china_last_rate_cny') || ''}
+                                    className="w-full px-3 py-2 border border-neutral-400 focus:border-black outline-none text-sm font-bold"
+                                    style={{borderRadius:'6px'}}/>
+                                </div>
+                                <div>
+                                  <label className="block text-[11px] font-black text-neutral-500 uppercase tracking-widest mb-2">발주일 환율 (원/달러 $)</label>
+                                  <input type="number" id="chinaRateUSD" placeholder="예: 1350"
+                                    defaultValue={localStorage.getItem('china_last_rate_usd') || ''}
+                                    className="w-full px-3 py-2 border border-neutral-400 focus:border-black outline-none text-sm font-bold"
+                                    style={{borderRadius:'6px'}}/>
+                                </div>
                               </div>
 
                               {/* 일괄 토글 */}
@@ -11576,6 +11687,9 @@
                                         <div className="flex items-center gap-1 flex-wrap">
                                           <span className="bg-black text-white text-[9px] font-black px-1.5 py-0.5 tracking-widest" style={{borderRadius:'4px'}}>#{p.id}</span>
                                           <span className="font-black text-black tracking-tight text-sm truncate">{p.name}</span>
+                                        </div>
+                                        <div className="text-[10px] font-bold text-neutral-500 tracking-tight mt-0.5">
+                                          {Number(p.dieCastingCostCNY) > 0 ? `다이케스팅 ¥${Number(p.dieCastingCostCNY).toLocaleString()} / 개` : '⚠️ 9-1 위안 원가 미입력'}
                                         </div>
                                       </div>
                                       <div className="flex items-center gap-1.5 shrink-0">
@@ -11683,6 +11797,14 @@
                                     <span className="bg-black text-white text-[9px] font-black px-1.5 py-0.5 tracking-widest" style={{borderRadius:'4px'}}>#{p.id}</span>
                                     <span className="font-black text-black tracking-tight text-sm truncate flex-1 min-w-0">{p.name}</span>
                                   </div>
+                                  <div className="text-[10px] font-bold text-neutral-500 tracking-tight">
+                                    {Number(p.dieCastingCostCNY) > 0 ? `다이케스팅 ¥${Number(p.dieCastingCostCNY).toLocaleString()} / 개` : '⚠️ 위안 원가 미입력'}
+                                  </div>
+                                  {/* 💠 v20260709.01: 선택(단건) 발주 */}
+                                  <button onClick={() => setChinaBatchOrderPopup({onlyId: p.id})}
+                                    className="w-full px-2 py-1.5 bg-black hover:bg-neutral-800 text-white text-[11px] font-black uppercase tracking-widest transition-all"
+                                    style={{borderRadius:'6px'}}
+                                    title="이 제품만 바로 발주">📦 발주</button>
                                   <button onClick={() => {
                                     if (!confirm(`후보에서 제거하시겠어요?\n${p.name}`)) return;
                                     saveChinaOrderCandidates(chinaOrderCandidates.filter(x => x !== pid));
@@ -11698,6 +11820,94 @@
                       </div>
                     )}
 
+                    {/* 💠 v20260709.01: 발주 건 외환송금 입력/수정 모달 (1단계) */}
+                    {chinaRemitInputPopup && (() => {
+                      const ship = chinaRemitInputPopup;
+                      const isEdit = !!ship.remitted;
+                      const handleSave = () => {
+                        const date = document.getElementById('shipRemitDate').value;
+                        const amountCNY = parseFloat(document.getElementById('shipRemitAmountCNY').value) || 0;
+                        if (!date) return alert('송금일을 선택하세요');
+                        if (amountCNY <= 0) return alert('송금액(위안)을 입력하세요');
+                        saveChinaShipments(chinaShipments.map(s => s.id === ship.id ? {
+                          ...s, remitted: true, remitAmountCNY: amountCNY, remitDate: date
+                        } : s));
+                        // 7-3 외환송금 기록 갱신 (이 건의 기존 기록 제거 후 추가 → 수정 지원)
+                        const others = chinaRemittances.filter(r => r.shipmentId !== ship.id);
+                        saveChinaRemittances([{ id: Date.now(), date, amountCNY, shipmentId: ship.id }, ...others]);
+                        setChinaRemitInputPopup(null);
+                        alert(`✅ 외환송금 ¥${amountCNY.toLocaleString()} ${isEdit ? '수정' : '기록'} 완료\n미수금에서 차감되고, 수입신고 대기중으로 넘어갑니다.`);
+                      };
+                      return (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.5)'}}>
+                          <div className="bg-white border-2 border-black w-full max-w-md p-6" style={{borderRadius:'6px'}}>
+                            <div className="flex items-center justify-between mb-5 pb-3 border-b-2 border-neutral-300">
+                              <h3 className="text-lg font-black text-black tracking-tight">💸 외환송금 {isEdit ? '수정' : ''} <span className="text-[11px] text-neutral-400 font-bold">#{ship.id}</span></h3>
+                              <button onClick={() => setChinaRemitInputPopup(null)} className="text-neutral-400 hover:text-black text-xl font-bold">×</button>
+                            </div>
+                            <div className="bg-neutral-50 border border-neutral-300 p-3 mb-4 text-[11px] font-bold text-neutral-700 tracking-tight" style={{borderRadius:'6px'}}>
+                              💡 수입신고 전에 외환송금을 먼저 보냅니다. 송금액(위안)과 송금일을 기록하면 미수금에서 차감되고 '수입신고 대기중'이 됩니다.
+                            </div>
+                            <div className="mb-4">
+                              <label className="block text-[11px] font-black text-neutral-500 uppercase tracking-widest mb-2">송금액 (위안 ¥)</label>
+                              <input type="number" id="shipRemitAmountCNY" step="0.01" min="0" defaultValue={ship.remitAmountCNY || ''} placeholder="예: 5000" autoFocus
+                                className="w-full px-3 py-2 border border-neutral-400 focus:border-black outline-none font-black text-center text-base" style={{borderRadius:'6px'}}/>
+                            </div>
+                            <div className="mb-5">
+                              <label className="block text-[11px] font-black text-neutral-500 uppercase tracking-widest mb-2">송금일</label>
+                              <input type="date" id="shipRemitDate" defaultValue={ship.remitDate || formatDate(new Date())}
+                                className="w-full px-3 py-2 border border-neutral-400 focus:border-black outline-none text-sm font-bold" style={{borderRadius:'6px'}}/>
+                            </div>
+                            <div className="flex gap-2">
+                              <button onClick={() => setChinaRemitInputPopup(null)}
+                                className="flex-1 py-3 border border-neutral-400 text-neutral-700 font-black text-xs uppercase tracking-widest hover:bg-neutral-100" style={{borderRadius:'6px'}}>취소</button>
+                              <button onClick={handleSave}
+                                className="flex-1 py-3 bg-black hover:bg-neutral-800 text-white font-black text-xs uppercase tracking-widest" style={{borderRadius:'6px'}}>✓ 송금 저장</button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* 💠 v20260709.01: 외환송금 추가 모달 */}
+                    {chinaRemitPopup && (() => {
+                      const handleSave = () => {
+                        const date = document.getElementById('remitDate').value;
+                        const amountCNY = parseFloat(document.getElementById('remitAmountCNY').value) || 0;
+                        if (!date) return alert('송금일을 선택하세요');
+                        if (amountCNY <= 0) return alert('송금액(위안)을 입력하세요');
+                        saveChinaRemittances([{ id: Date.now(), date, amountCNY }, ...chinaRemittances]);
+                        setChinaRemitPopup(false);
+                        alert(`✅ 외환송금 ¥${amountCNY.toLocaleString()} 기록 완료\n미수금에서 자동 차감됩니다.`);
+                      };
+                      return (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.5)'}}>
+                          <div className="bg-white border-2 border-black w-full max-w-md p-6" style={{borderRadius:'6px'}}>
+                            <div className="flex items-center justify-between mb-5 pb-3 border-b-2 border-neutral-300">
+                              <h3 className="text-lg font-black text-black tracking-tight">💸 외환송금 추가</h3>
+                              <button onClick={() => setChinaRemitPopup(false)} className="text-neutral-400 hover:text-black text-xl font-bold">×</button>
+                            </div>
+                            <div className="mb-4">
+                              <label className="block text-[11px] font-black text-neutral-500 uppercase tracking-widest mb-2">송금일</label>
+                              <input type="date" id="remitDate" defaultValue={formatDate(new Date())}
+                                className="w-full px-3 py-2 border border-neutral-400 focus:border-black outline-none text-sm font-bold" style={{borderRadius:'6px'}}/>
+                            </div>
+                            <div className="mb-5">
+                              <label className="block text-[11px] font-black text-neutral-500 uppercase tracking-widest mb-2">송금액 (위안 ¥)</label>
+                              <input type="number" id="remitAmountCNY" step="0.01" min="0" placeholder="예: 5000" autoFocus
+                                className="w-full px-3 py-2 border border-neutral-400 focus:border-black outline-none font-black text-center text-base" style={{borderRadius:'6px'}}/>
+                            </div>
+                            <div className="flex gap-2">
+                              <button onClick={() => setChinaRemitPopup(false)}
+                                className="flex-1 py-3 border border-neutral-400 text-neutral-700 font-black text-xs uppercase tracking-widest hover:bg-neutral-100" style={{borderRadius:'6px'}}>취소</button>
+                              <button onClick={handleSave}
+                                className="flex-1 py-3 bg-black hover:bg-neutral-800 text-white font-black text-xs uppercase tracking-widest" style={{borderRadius:'6px'}}>✓ 송금 기록</button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
                     {/* 외상채무 초기값 설정 모달 */}
                     {chinaDebtPopup && (() => {
                       const [tmpVal, setTmpVal] = [{value: chinaDebtInitial}, () => {}];
@@ -11709,10 +11919,10 @@
                               <button onClick={() => setChinaDebtPopup(false)} className="text-neutral-400 hover:text-black text-xl font-bold">×</button>
                             </div>
                             <div className="bg-neutral-50 border border-neutral-300 p-3 mb-4 text-[11px] font-bold text-neutral-700 tracking-tight" style={{borderRadius:'6px'}}>
-                              💡 재무제표 상 중국 거래처 외상채무를 USD로 환산해 입력하세요. 입고 처리 시 신고-실제 차액이 자동 차감됩니다.
+                              💡 오늘 이전까지 밀린 중국 거래처 미수(기초 잔액)를 위안(¥)으로 입력하세요. 이후 발주 건이 여기에 누적 합산됩니다.
                             </div>
                             <div className="mb-5">
-                              <label className="block text-[11px] font-black text-neutral-500 uppercase tracking-widest mb-2">초기 외상채무 (USD)</label>
+                              <label className="block text-[11px] font-black text-neutral-500 uppercase tracking-widest mb-2">초기 외상채무 (위안 ¥)</label>
                               <input
                                 type="number"
                                 step="0.01"
@@ -11734,7 +11944,7 @@
                                 if (v < 0) return alert('0 이상 입력하세요');
                                 saveChinaDebtInitial(v);
                                 setChinaDebtPopup(false);
-                                alert(`초기 외상채무 ${v.toLocaleString()} USD 저장 완료`);
+                                alert(`초기 외상채무 ¥${v.toLocaleString()} 저장 완료`);
                               }}
                                 className="flex-1 py-3 bg-black hover:bg-neutral-800 text-white font-black text-xs uppercase tracking-widest"
                                 style={{borderRadius:'6px'}}>저장</button>
@@ -11897,6 +12107,107 @@
                       );
                     })()}
 
+                    {/* 💠 v20260709.01: 발주 건 수정 모달 (발주일·환율·수량 → 발주금액 재계산) */}
+                    {chinaShipmentEditPopup && (() => {
+                      const ship = chinaShipmentEditPopup;
+                      const handleSave = () => {
+                        const shipmentDate = document.getElementById('editShipmentDate').value;
+                        if (!shipmentDate) return alert('발주일을 선택하세요');
+                        const rateCNY = parseFloat(document.getElementById('editRateCNY')?.value) || 0;
+                        const rateUSD = parseFloat(document.getElementById('editRateUSD')?.value) || 0;
+                        const newProducts = ship.products.map(p => {
+                          const qty = parseInt(document.getElementById(`editQty_${p.productId}`)?.value) || 0;
+                          const mp = masterProducts.find(m => String(m.id) === String(p.productId));
+                          const unitCNY = parseFloat(mp?.dieCastingCostCNY) || parseFloat(p.unitCNY) || 0;
+                          return { ...p, qty, unitCNY, amountCNY: unitCNY * qty };
+                        }).filter(p => p.qty > 0);
+                        if (newProducts.length === 0) return alert('수량이 0보다 큰 제품이 없습니다');
+                        const orderAmountCNY = newProducts.reduce((s, p) => s + (p.amountCNY || 0), 0);
+                        const orderAmountKRW = rateCNY > 0 ? orderAmountCNY * rateCNY : 0;
+                        const orderAmountUSD = (rateUSD > 0 && orderAmountKRW > 0) ? orderAmountKRW / rateUSD : 0;
+                        if (rateCNY > 0) localStorage.setItem('china_last_rate_cny', String(rateCNY));
+                        if (rateUSD > 0) localStorage.setItem('china_last_rate_usd', String(rateUSD));
+                        saveChinaShipments(chinaShipments.map(s => s.id === ship.id ? {
+                          ...s, shipmentDate,
+                          rateKRWperCNY: rateCNY, rateKRWperUSD: rateUSD,
+                          products: newProducts,
+                          orderAmountCNY, orderAmountKRW, orderAmountUSD
+                        } : s));
+                        setChinaShipmentEditPopup(null);
+                        alert(`✅ 발주 건 수정 완료!\n발주금액 ¥${orderAmountCNY.toLocaleString()}${orderAmountUSD>0?` ($${orderAmountUSD.toLocaleString(undefined,{maximumFractionDigits:2})})`:''}${orderAmountKRW>0?` (₩${Math.round(orderAmountKRW).toLocaleString()})`:''}`);
+                      };
+                      return (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.5)'}}>
+                          <div className="bg-white border-2 border-black w-full max-w-2xl max-h-[90vh] flex flex-col" style={{borderRadius:'6px'}}>
+                            <div className="flex items-center justify-between p-5 pb-3 border-b-2 border-neutral-300 shrink-0">
+                              <h3 className="text-lg font-black text-black tracking-tight">✏️ 발주 건 수정 (#{ship.id})</h3>
+                              <button onClick={() => setChinaShipmentEditPopup(null)} className="text-neutral-400 hover:text-black text-xl font-bold">×</button>
+                            </div>
+                            <div className="p-5 overflow-y-auto flex-1">
+                              {/* 발주일 */}
+                              <div className="mb-4">
+                                <label className="block text-[11px] font-black text-neutral-500 uppercase tracking-widest mb-2">발주일</label>
+                                <input type="date" id="editShipmentDate" defaultValue={ship.shipmentDate || formatDate(new Date())}
+                                  className="w-full px-3 py-2 border border-neutral-400 focus:border-black outline-none text-sm font-bold" style={{borderRadius:'6px'}}/>
+                              </div>
+                              {/* 환율 */}
+                              <div className="mb-4 grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="block text-[11px] font-black text-neutral-500 uppercase tracking-widest mb-2">발주일 환율 (원/위안 ¥)</label>
+                                  <input type="number" id="editRateCNY" placeholder="예: 190" defaultValue={ship.rateKRWperCNY || localStorage.getItem('china_last_rate_cny') || ''}
+                                    className="w-full px-3 py-2 border border-neutral-400 focus:border-black outline-none text-sm font-bold" style={{borderRadius:'6px'}}/>
+                                </div>
+                                <div>
+                                  <label className="block text-[11px] font-black text-neutral-500 uppercase tracking-widest mb-2">발주일 환율 (원/달러 $)</label>
+                                  <input type="number" id="editRateUSD" placeholder="예: 1350" defaultValue={ship.rateKRWperUSD || localStorage.getItem('china_last_rate_usd') || ''}
+                                    className="w-full px-3 py-2 border border-neutral-400 focus:border-black outline-none text-sm font-bold" style={{borderRadius:'6px'}}/>
+                                </div>
+                              </div>
+                              {/* 제품 수량 */}
+                              <div className="mb-2">
+                                <span className="text-[11px] font-black text-neutral-500 uppercase tracking-widest">제품별 수량 (0으로 두면 제외)</span>
+                              </div>
+                              <div className="space-y-2">
+                                {ship.products.map(p => {
+                                  const mp = masterProducts.find(m => String(m.id) === String(p.productId));
+                                  const unitCNY = parseFloat(mp?.dieCastingCostCNY) || parseFloat(p.unitCNY) || 0;
+                                  return (
+                                    <div key={p.productId} className="flex items-center gap-3 bg-white border border-neutral-300 p-2" style={{borderRadius:'6px'}}>
+                                      {p.productImage ? (
+                                        <img src={p.productImage} alt={p.productName} className="w-10 h-10 object-cover border border-neutral-300 shrink-0" style={{borderRadius:'4px'}}/>
+                                      ) : (
+                                        <div className="w-10 h-10 bg-neutral-100 border border-neutral-300 flex items-center justify-center text-base shrink-0" style={{borderRadius:'4px'}}>📦</div>
+                                      )}
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-1 flex-wrap">
+                                          <span className="bg-black text-white text-[9px] font-black px-1.5 py-0.5 tracking-widest" style={{borderRadius:'4px'}}>#{p.productCode}</span>
+                                          <span className="font-black text-black tracking-tight text-sm truncate">{p.productName}</span>
+                                        </div>
+                                        <div className="text-[10px] font-bold text-neutral-500 tracking-tight mt-0.5">
+                                          {unitCNY > 0 ? `다이케스팅 ¥${unitCNY.toLocaleString()} / 개` : '⚠️ 9-1 위안 원가 미입력'}
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-1.5 shrink-0">
+                                        <input type="number" id={`editQty_${p.productId}`} defaultValue={p.qty} min="0"
+                                          className="w-20 px-2 py-1 border border-neutral-400 focus:border-black outline-none text-sm font-black text-center" style={{borderRadius:'4px'}}/>
+                                        <span className="text-[11px] font-bold text-neutral-500">개</span>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                            <div className="p-5 pt-3 border-t border-neutral-300 shrink-0 flex gap-2">
+                              <button onClick={() => setChinaShipmentEditPopup(null)}
+                                className="flex-1 py-3 border border-neutral-400 text-neutral-700 font-black text-xs uppercase tracking-widest hover:bg-neutral-100" style={{borderRadius:'6px'}}>취소</button>
+                              <button onClick={handleSave}
+                                className="flex-1 py-3 bg-black hover:bg-neutral-800 text-white font-black text-xs uppercase tracking-widest" style={{borderRadius:'6px'}}>✓ 수정 저장</button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
                     {/* 수입 건 입고 처리 모달 (다중 제품 단가 입력 + 청구파일) */}
                     {chinaShipmentReceivePopup && (() => {
                       const ship = chinaShipmentReceivePopup;
@@ -11930,7 +12241,7 @@
                         reader.readAsDataURL(file);
                       };
                       const handleSave = () => {
-                        if (!ship.receivedDate) return alert('입고일을 선택하세요');
+                        if (!ship.receivedDate) return alert('신고일을 선택하세요');
                         // 모든 제품에 단가 입력 확인
                         const missing = ship.products.find(p => !parseFloat(p.unitPriceActual));
                         if (missing) return alert(`${missing.productName}의 실제 단가를 입력하세요`);
@@ -11938,10 +12249,13 @@
                         const updatedProducts = ship.products.map(p => {
                           const ua = parseFloat(p.unitPriceActual) || 0;
                           const ud = parseFloat(p.unitPriceDeclared) || 0;
+                          // 💠 v20260709.01: 실제 입고수량 기록 (미입력 시 주문수량으로 간주)
+                          const rq = (p.receivedQty != null && p.receivedQty !== '') ? (parseInt(p.receivedQty) || 0) : p.qty;
                           return {
                             ...p,
                             unitPriceActual: ua,
                             unitPriceDeclared: ud,
+                            receivedQty: rq,
                             amountActual: ua * p.qty,
                             amountDeclared: ud * p.qty,
                             amountDebtOffset: (ua - ud) * p.qty
@@ -11965,14 +12279,14 @@
                         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.5)'}}>
                           <div className="bg-white border-2 border-black w-full max-w-3xl max-h-[90vh] flex flex-col" style={{borderRadius:'6px'}}>
                             <div className="flex items-center justify-between p-5 pb-3 border-b-2 border-neutral-300 shrink-0">
-                              <h3 className="text-lg font-black text-black tracking-tight">✓ 수입 건 입고 처리 ({ship.products.length}개 제품)</h3>
+                              <h3 className="text-lg font-black text-black tracking-tight">✓ 수입 신고 ({ship.products.length}개 제품)</h3>
                               <button onClick={() => setChinaShipmentReceivePopup(null)} className="text-neutral-400 hover:text-black text-xl font-bold">×</button>
                             </div>
 
                             <div className="p-5 overflow-y-auto flex-1 space-y-4">
-                              {/* 입고일 */}
+                              {/* 신고일 */}
                               <div>
-                                <label className="block text-[11px] font-black text-neutral-500 uppercase tracking-widest mb-2">① 입고일</label>
+                                <label className="block text-[11px] font-black text-neutral-500 uppercase tracking-widest mb-2">① 수입 신고일</label>
                                 <input
                                   type="date"
                                   value={ship.receivedDate || ''}
@@ -11995,7 +12309,21 @@
                                       )}
                                       <div className="flex-1 min-w-0">
                                         <div className="font-black text-black text-sm tracking-tight truncate">{p.productName}</div>
-                                        <div className="text-[10px] font-bold text-neutral-500">{p.qty.toLocaleString()}개</div>
+                                        <div className="text-[10px] font-bold text-neutral-500 flex items-center gap-1 mt-0.5 flex-wrap">
+                                          <span>주문 {p.qty.toLocaleString()}개</span>
+                                          <span className="text-neutral-300">→</span>
+                                          <span className="flex items-center gap-1">수입
+                                            <input type="number" min="0" placeholder={String(p.qty)}
+                                              value={p.receivedQty ?? ''}
+                                              onChange={(e) => setProduct(idx, {receivedQty: e.target.value})}
+                                              className="w-14 px-1 py-0.5 border border-neutral-400 focus:border-black outline-none text-[11px] font-black text-center" style={{borderRadius:'3px'}}
+                                              title="실제 수입 수량"/>
+                                            개
+                                          </span>
+                                          {p.receivedQty != null && p.receivedQty !== '' && parseInt(p.receivedQty) !== p.qty && (
+                                            <span className="text-red-600 font-black">({parseInt(p.receivedQty) - p.qty > 0 ? '+' : ''}{(parseInt(p.receivedQty) - p.qty).toLocaleString()})</span>
+                                          )}
+                                        </div>
                                       </div>
                                       <input
                                         type="number" step="0.01" min="0"
@@ -12041,22 +12369,9 @@
                                 </div>
                               )}
 
-                              {/* 외환 송금액 */}
-                              <div>
-                                <label className="block text-[11px] font-black text-neutral-500 uppercase tracking-widest mb-2">③ 외환 송금액 (USD) <span className="text-neutral-400 normal-case tracking-tight">— 비워두면 실제 총액 자동</span></label>
-                                <input
-                                  type="number" step="0.01" min="0"
-                                  value={ship.amountTransferred || ''}
-                                  onChange={(e) => setShip({amountTransferred: e.target.value})}
-                                  placeholder={totalActual > 0 ? totalActual.toString() : '0'}
-                                  className="w-full px-3 py-2 border border-neutral-400 focus:border-black outline-none font-black text-center"
-                                  style={{borderRadius:'6px'}}
-                                />
-                              </div>
-
                               {/* 청구파일 업로드 */}
                               <div>
-                                <label className="block text-[11px] font-black text-neutral-500 uppercase tracking-widest mb-2">④ 물류사 청구파일 (PDF / JPG / PNG)</label>
+                                <label className="block text-[11px] font-black text-neutral-500 uppercase tracking-widest mb-2">③ 물류사 청구파일 (PDF / JPG / PNG)</label>
                                 {ship.invoiceFile ? (
                                   <div className="flex items-center gap-2 bg-neutral-50 border border-neutral-300 p-3" style={{borderRadius:'6px'}}>
                                     <span className="text-2xl">📎</span>
@@ -12078,7 +12393,7 @@
 
                               {/* 메모 */}
                               <div>
-                                <label className="block text-[11px] font-black text-neutral-500 uppercase tracking-widest mb-2">⑤ 메모 (선택)</label>
+                                <label className="block text-[11px] font-black text-neutral-500 uppercase tracking-widest mb-2">④ 메모 (선택)</label>
                                 <input
                                   type="text"
                                   value={ship.declarationMemo || ''}
@@ -12096,7 +12411,7 @@
                                 style={{borderRadius:'6px'}}>취소</button>
                               <button onClick={handleSave}
                                 className="flex-1 py-3 bg-black hover:bg-neutral-800 text-white font-black text-xs uppercase tracking-widest"
-                                style={{borderRadius:'6px'}}>✓ 입고 등록</button>
+                                style={{borderRadius:'6px'}}>✓ 수입 신고 완료</button>
                             </div>
                           </div>
                         </div>
@@ -12114,35 +12429,6 @@
                       const debtBalance = chinaDebtInitial - totalDebtOffset;
                       return (
                       <div className="space-y-4 p-6">
-                        {/* 외상채무 잔액 박스 */}
-                        <div className="bg-black p-5 text-white" style={{borderRadius:'6px'}}>
-                          <div className="flex items-start justify-between gap-4 flex-wrap">
-                            <div className="flex-1 min-w-[200px]">
-                              <div className="text-[11px] text-neutral-400 font-black uppercase tracking-widest mb-1">💵 중국 거래처 외상채무</div>
-                              <div className="flex items-baseline gap-2 mb-2">
-                                <span className="text-5xl font-black tracking-tight" style={{color:'#FEE500'}}>
-                                  ${debtBalance.toLocaleString(undefined, {maximumFractionDigits:2})}
-                                </span>
-                                <span className="text-sm font-bold text-neutral-300">USD 잔액</span>
-                              </div>
-                              <div className="flex flex-wrap gap-2 text-[11px]">
-                                <span className="bg-neutral-800 text-white px-2 py-0.5 font-black tracking-tight" style={{borderRadius:'4px'}}>
-                                  초기값 ${chinaDebtInitial.toLocaleString(undefined, {maximumFractionDigits:2})}
-                                </span>
-                                <span className="bg-neutral-800 text-white px-2 py-0.5 font-black tracking-tight" style={{borderRadius:'4px'}}>
-                                  누적 차감 -${totalDebtOffset.toLocaleString(undefined, {maximumFractionDigits:2})}
-                                </span>
-                                <span className="bg-neutral-800 text-white px-2 py-0.5 font-black tracking-tight" style={{borderRadius:'4px'}}>
-                                  누적 송금 ${totalTransferred.toLocaleString(undefined, {maximumFractionDigits:2})}
-                                </span>
-                              </div>
-                            </div>
-                            <button onClick={() => setChinaDebtPopup(true)}
-                              className="px-3 py-2 bg-white text-black hover:bg-neutral-200 text-[11px] font-black uppercase tracking-widest transition-all shrink-0"
-                              style={{borderRadius:'6px'}}>⚙️ 초기값 설정</button>
-                          </div>
-                        </div>
-
                         {/* 컴팩트 헤더 + 필터 */}
                         <div className="bg-white border border-neutral-300 p-4" style={{borderRadius:'6px'}}>
                           <div className="flex items-center gap-3 flex-wrap">
@@ -12191,6 +12477,16 @@
                               {filtered.map(ship => {
                                 const indicatorColor = ship.received ? 'bg-neutral-300' : 'bg-black';
                                 const totalQty = ship.products.reduce((s,p) => s + (p.qty || 0), 0);
+                                // 💠 v20260709.01: 발주 건별 총액(9-1 최신 위안원가 기준) + 발주 경과일수
+                                const shipCNY = ship.products.reduce((a,p) => {
+                                  const mp = masterProducts.find(m => String(m.id) === String(p.productId));
+                                  const unitCNY = mp ? (parseFloat(mp.dieCastingCostCNY) || 0) : (parseFloat(p.unitCNY) || 0);
+                                  return a + unitCNY * (p.qty || 0);
+                                }, 0);
+                                const rCNY = parseFloat(ship.rateKRWperCNY) || 0, rUSD = parseFloat(ship.rateKRWperUSD) || 0;
+                                const shipKRW = rCNY > 0 ? shipCNY * rCNY : 0;
+                                const shipUSD = (rCNY > 0 && rUSD > 0) ? shipCNY * rCNY / rUSD : 0;
+                                const daysSince = ship.shipmentDate ? Math.round((new Date(formatDate(new Date())) - new Date(ship.shipmentDate)) / 86400000) : null;
                                 return (
                                   <div key={ship.id} className={`bg-white border-2 overflow-hidden flex ${ship.received ? 'border-neutral-200' : 'border-neutral-400'}`} style={{borderRadius:'6px'}}>
                                     <div className={`w-1 shrink-0 ${indicatorColor}`}></div>
@@ -12201,49 +12497,75 @@
                                           <div className="flex items-center gap-2 flex-wrap mb-1">
                                             <span className="bg-black text-white text-[10px] font-black px-2 py-0.5 tracking-widest" style={{borderRadius:'6px'}}>📦 수입 건 #{ship.id}</span>
                                             {ship.received ? (
-                                              <span className="bg-neutral-100 border border-neutral-700 text-neutral-900 text-[10px] px-2 py-0.5 font-black tracking-widest uppercase" style={{borderRadius:'6px'}}>✓ 입고완료</span>
+                                              <span className="bg-neutral-100 border border-neutral-700 text-neutral-900 text-[10px] px-2 py-0.5 font-black tracking-widest uppercase" style={{borderRadius:'6px'}}>✓ 수입신고 완료</span>
+                                            ) : ship.remitted ? (
+                                              <span className="bg-amber-100 border border-amber-700 text-amber-900 text-[10px] px-2 py-0.5 font-black tracking-widest uppercase" style={{borderRadius:'6px'}}>⏳ 수입신고 대기중</span>
                                             ) : (
-                                              <span className="bg-amber-100 border border-amber-700 text-amber-900 text-[10px] px-2 py-0.5 font-black tracking-widest uppercase" style={{borderRadius:'6px'}}>⏳ 입고대기</span>
+                                              <span className="bg-neutral-100 border border-neutral-400 text-neutral-600 text-[10px] px-2 py-0.5 font-black tracking-widest uppercase" style={{borderRadius:'6px'}}>💸 송금 전</span>
                                             )}
                                             <span className="text-[11px] font-bold text-neutral-700 tracking-tight">{ship.products.length}종 · {totalQty.toLocaleString()}개</span>
                                           </div>
                                           <div className="text-[11px] text-neutral-500 font-bold tracking-tight">
                                             발주일 {ship.shipmentDate}
-                                            {ship.received && ship.receivedDate && ` · 입고일 ${ship.receivedDate}`}
+                                            {daysSince != null && <span className="ml-1.5 bg-red-600 text-white px-1.5 py-0.5 tracking-widest" style={{borderRadius:'4px'}}>D+{daysSince}</span>}
+                                            {ship.received && ship.receivedDate && ` · 신고일 ${ship.receivedDate}`}
+                                          </div>
+                                          {/* 💠 v20260709.01: 발주 건별 총액 (9-1 최신 위안원가 기준) · 통화별 원색 구분 */}
+                                          <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                                            <span className="text-black text-[11px] font-black px-2 py-0.5 tracking-tight" style={{backgroundColor:'#FEE500', borderRadius:'4px'}}>¥{shipCNY.toLocaleString()}</span>
+                                            {shipUSD > 0 && <span className="text-black text-[11px] font-black px-2 py-0.5 tracking-tight" style={{backgroundColor:'#FEE500', borderRadius:'4px'}}>${shipUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span>}
+                                            {shipKRW > 0 && <span className="text-black text-[11px] font-black px-2 py-0.5 tracking-tight" style={{backgroundColor:'#FEE500', borderRadius:'4px'}}>₩{Math.round(shipKRW).toLocaleString()}</span>}
                                           </div>
                                         </div>
-                                        <div className="flex gap-2 shrink-0">
-                                          {!ship.received ? (
+                                        <div className="flex gap-2 shrink-0 flex-wrap justify-end">
+                                          {/* 1단계: 외환송금 (미송금 시) */}
+                                          {!ship.remitted && (
+                                            <button onClick={() => setChinaRemitInputPopup({...ship, remitDate: ship.remitDate || formatDate(new Date())})}
+                                              className="px-3 py-2 bg-white border-2 border-black hover:bg-black hover:text-white text-black text-[11px] font-black uppercase tracking-widest transition-all"
+                                              style={{borderRadius:'6px'}}>💸 외환송금</button>
+                                          )}
+                                          {/* 2단계: 수입신고 (송금완료 & 미신고) */}
+                                          {ship.remitted && !ship.received && (
                                             <button onClick={() => setChinaShipmentReceivePopup({
                                               ...ship,
-                                              receivedDate: formatDate(new Date()),
-                                              amountTransferred: '',
-                                              declarationMemo: '',
-                                              products: ship.products.map(p => ({...p, unitPriceActual: '', unitPriceDeclared: ''}))
+                                              receivedDate: ship.receivedDate || formatDate(new Date()),
+                                              declarationMemo: ship.declarationMemo || '',
+                                              products: ship.products.map(p => ({...p, unitPriceActual: p.unitPriceActual || '', unitPriceDeclared: p.unitPriceDeclared || '', receivedQty: p.receivedQty ?? p.qty}))
                                             })}
-                                              className="px-3 py-2 bg-white border-2 border-black hover:bg-black hover:text-white text-black text-[11px] font-black uppercase tracking-widest transition-all"
-                                              style={{borderRadius:'6px'}}>✓ 입고 처리</button>
-                                          ) : (
-                                            <button onClick={() => {
-                                              if (!confirm('입고 처리를 취소하시겠어요? 외상채무 차감도 되돌립니다.')) return;
-                                              const updated = chinaShipments.map(s => s.id === ship.id ? {
-                                                ...s, received: false, receivedDate: null,
-                                                amountTransferred: 0, totalDebtOffset: 0,
-                                                invoiceFile: null,
-                                                products: s.products.map(p => ({
-                                                  productId: p.productId, productName: p.productName,
-                                                  productImage: p.productImage, productCode: p.productCode,
-                                                  qty: p.qty
-                                                }))
-                                              } : s);
-                                              saveChinaShipments(updated);
-                                            }}
-                                              className="px-3 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 text-[11px] font-black uppercase tracking-widest transition-all"
-                                              style={{borderRadius:'6px'}}>↶ 입고 취소</button>
+                                              className="px-3 py-2 bg-black hover:bg-neutral-800 text-white text-[11px] font-black uppercase tracking-widest transition-all"
+                                              style={{borderRadius:'6px'}}>📋 수입신고</button>
                                           )}
+                                          {/* 신고수정 (신고완료 시) */}
+                                          {ship.received && (
+                                            <button onClick={() => setChinaShipmentReceivePopup({
+                                              ...ship,
+                                              receivedDate: ship.receivedDate || formatDate(new Date()),
+                                              declarationMemo: ship.declarationMemo || '',
+                                              products: ship.products.map(p => ({...p, unitPriceActual: p.unitPriceActual || '', unitPriceDeclared: p.unitPriceDeclared || '', receivedQty: p.receivedQty ?? p.qty}))
+                                            })}
+                                              className="px-3 py-2 bg-white border-2 border-neutral-400 hover:border-black hover:bg-black hover:text-white text-neutral-700 text-[11px] font-black uppercase tracking-widest transition-all"
+                                              style={{borderRadius:'6px'}}
+                                              title="수입신고 내용 수정">✏️ 신고수정</button>
+                                          )}
+                                          {/* 송금수정 (송금완료 시) */}
+                                          {ship.remitted && (
+                                            <button onClick={() => setChinaRemitInputPopup({...ship})}
+                                              className="px-3 py-2 bg-white border-2 border-neutral-400 hover:border-black hover:bg-black hover:text-white text-neutral-700 text-[11px] font-black uppercase tracking-widest transition-all"
+                                              style={{borderRadius:'6px'}}
+                                              title="외환송금 내용 수정">✏️ 송금수정</button>
+                                          )}
+                                          {/* 발주수정 (미신고 시) */}
+                                          {!ship.received && (
+                                            <button onClick={() => setChinaShipmentEditPopup({...ship})}
+                                              className="px-3 py-2 bg-white border-2 border-neutral-400 hover:border-black hover:bg-black hover:text-white text-neutral-700 text-[11px] font-black uppercase tracking-widest transition-all"
+                                              style={{borderRadius:'6px'}}
+                                              title="발주 건 수정">✏️ 발주수정</button>
+                                          )}
+                                          {/* 삭제 */}
                                           <button onClick={() => {
                                             if (!confirm(`이 수입 건을 삭제하시겠어요?\n\n발주일 ${ship.shipmentDate}\n${ship.products.length}종 · ${totalQty.toLocaleString()}개`)) return;
                                             saveChinaShipments(chinaShipments.filter(s => s.id !== ship.id));
+                                            if (ship.remitted) saveChinaRemittances(chinaRemittances.filter(r => r.shipmentId !== ship.id));
                                           }}
                                             className="p-2 text-red-500 hover:bg-red-50"
                                             style={{borderRadius:'6px'}}
@@ -12261,8 +12583,20 @@
                                               <div className="w-9 h-9 bg-white border border-neutral-300 flex items-center justify-center text-xs shrink-0" style={{borderRadius:'4px'}}>📦</div>
                                             )}
                                             <span className="bg-black text-white text-[9px] font-black px-1.5 py-0.5 tracking-widest shrink-0" style={{borderRadius:'4px'}}>#{p.productCode}</span>
-                                            <span className="font-black text-black tracking-tight truncate flex-1 min-w-0">{p.productName}</span>
-                                            <span className="font-black text-black tracking-tight shrink-0 text-sm">{p.qty.toLocaleString()}<span className="text-[11px] text-neutral-500 ml-0.5">개</span></span>
+                                            <div className="flex-1 min-w-0 flex items-baseline gap-1.5">
+                                              <span className="font-black text-black tracking-tight truncate">{p.productName}</span>
+                                              {(() => {
+                                                const mp = masterProducts.find(m => String(m.id) === String(p.productId));
+                                                const unitCNY = mp ? (parseFloat(mp.dieCastingCostCNY) || 0) : (parseFloat(p.unitCNY) || 0);
+                                                return unitCNY > 0 ? <span className="text-red-600 font-black tracking-tight shrink-0 text-[12px]">- ¥{unitCNY.toLocaleString()}</span> : null;
+                                              })()}
+                                            </div>
+                                            <span className="font-black text-black tracking-tight shrink-0 text-sm">
+                                              {p.qty.toLocaleString()}<span className="text-[11px] text-neutral-500 ml-0.5">개</span>
+                                              {ship.received && p.receivedQty != null && Number(p.receivedQty) !== p.qty && (
+                                                <span className="text-red-600 text-[11px] ml-1 font-black">→수입 {Number(p.receivedQty).toLocaleString()}</span>
+                                              )}
+                                            </span>
                                             {ship.received && p.unitPriceActual && (
                                               <span className="text-[10px] font-bold tracking-tight shrink-0 hidden md:inline">
                                                 <span className="text-neutral-700">${p.unitPriceActual}</span> / <span className="text-amber-800">${p.unitPriceDeclared}</span>
@@ -12316,6 +12650,69 @@
                       </div>
                       );
                     })()}
+
+                    {/* 💠 v20260709.01: 7-3 외환송금 */}
+                    {chinaTab === 'remittance' && (
+                      <div className="space-y-4 p-6">
+                        {/* 헤더 + 송금 추가 */}
+                        <div className="bg-white border border-neutral-300 p-4" style={{borderRadius:'6px'}}>
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <h2 className="font-black text-black flex items-center shrink-0 tracking-tight">
+                              <span className="text-base">💸 외환송금</span>
+                              <span className="ml-2 bg-black text-white text-[10px] font-black px-2 py-0.5 tracking-widest" style={{borderRadius:'6px'}}>7-3</span>
+                            </h2>
+                            <div className="h-6 w-px bg-neutral-300 hidden md:block"></div>
+                            <button onClick={() => setChinaRemitPopup(true)}
+                              className="px-3 py-1.5 bg-black hover:bg-neutral-800 text-white text-xs font-black uppercase tracking-widest transition-all" style={{borderRadius:'6px'}}>
+                              + 송금 추가
+                            </button>
+                            <span className="bg-black text-white text-[11px] font-black px-2.5 py-1 tracking-widest shrink-0" style={{borderRadius:'6px'}}>
+                              {chinaRemittances.length}건
+                            </span>
+                          </div>
+                        </div>
+                        {/* 설명 */}
+                        <div className="bg-neutral-50 border border-neutral-300 px-4 py-3 flex items-start gap-3 flex-wrap" style={{borderRadius:'6px'}}>
+                          <span className="bg-black text-white text-[10px] font-black px-2 py-0.5 tracking-widest shrink-0 mt-0.5" style={{borderRadius:'6px'}}>💡 안내</span>
+                          <span className="text-neutral-700 font-bold tracking-tight text-[12px] flex-1 min-w-[200px]">송금할 때마다 날짜와 금액(위안 ¥)을 기록하세요. 상단 미수금(외상채무)에서 자동으로 차감됩니다.</span>
+                        </div>
+                        {/* 송금 리스트 */}
+                        {chinaRemittances.length === 0 ? (
+                          <div className="bg-white border border-neutral-300 p-12 text-center" style={{borderRadius:'6px'}}>
+                            <div className="text-4xl mb-3">💸</div>
+                            <p className="font-black text-neutral-500 tracking-tight mb-3">아직 송금 기록이 없습니다</p>
+                            <button onClick={() => setChinaRemitPopup(true)}
+                              className="px-4 py-2 bg-black hover:bg-neutral-800 text-white text-xs font-black uppercase tracking-widest" style={{borderRadius:'6px'}}>+ 송금 추가</button>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {[...chinaRemittances].sort((a,b) => (b.date||'').localeCompare(a.date||'')).map(r => (
+                              <div key={r.id} className="bg-white border-2 border-neutral-400 p-3 flex items-center gap-3" style={{borderRadius:'6px'}}>
+                                <span className="bg-black text-white text-[10px] font-black px-2 py-0.5 tracking-widest shrink-0" style={{borderRadius:'6px'}}>💸 송금</span>
+                                <span className="text-sm font-bold text-neutral-700 tracking-tight">{r.date}</span>
+                                <span className="flex-1"></span>
+                                <span className="text-black text-sm font-black px-2.5 py-1 tracking-tight" style={{backgroundColor:'#FEE500', borderRadius:'4px'}}>¥{Number(r.amountCNY).toLocaleString()}</span>
+                                <button onClick={() => {
+                                  if (!confirm(`이 송금 기록을 삭제할까요?\n${r.date} · ¥${Number(r.amountCNY).toLocaleString()}\n\n미수금이 다시 늘어납니다.`)) return;
+                                  saveChinaRemittances(chinaRemittances.filter(x => x.id !== r.id));
+                                }} className="p-2 text-red-500 hover:bg-red-50" style={{borderRadius:'6px'}} title="송금 기록 삭제"><Trash /></button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* 7-4 수입신고관리 (준비 중) */}
+                    {chinaTab === 'declaration' && (
+                      <div className="space-y-4 p-6">
+                        <div className="bg-white border border-neutral-300 p-10 text-center" style={{borderRadius:'6px'}}>
+                          <div className="text-3xl mb-3">📋</div>
+                          <div className="text-base font-black text-black tracking-tight">수입신고관리 (준비 중)</div>
+                          <div className="text-sm text-neutral-500 font-bold mt-2 tracking-tight">연(회계연도) 기준 수입신고·결산 관리 메뉴가 곧 추가됩니다.</div>
+                        </div>
+                      </div>
+                    )}
                   </>
                 )}
 
@@ -14648,6 +15045,14 @@
                                                   placeholder="원 (상품 1개당)"
                                                   className="w-full px-2 py-1.5 border border-neutral-300 focus:border-black outline-none text-sm bg-white" style={{borderRadius:'2px'}}/>
                                               </div>
+                                              {/* 💠 v20260709.01: 다이케스팅 중국원가 (위안, 상품 1개당) — 7번 중국발주 발주일 기준 계산용 */}
+                                              <div>
+                                                <label className="block text-[10px] font-bold text-neutral-600 mb-1 uppercase tracking-wider">다이케스팅 중국원가 <span className="text-[9px] text-neutral-500 normal-case tracking-normal font-medium">(위안 ¥)</span></label>
+                                                <input type="number" value={form.dieCastingCostCNY||''}
+                                                  onChange={e=>setForm(p=>({...p, dieCastingCostCNY: e.target.value}))}
+                                                  placeholder="¥ 위안 (상품 1개당)"
+                                                  className="w-full px-2 py-1.5 border border-neutral-300 focus:border-black outline-none text-sm bg-white" style={{borderRadius:'2px'}}/>
+                                              </div>
                                             </div>
 
                                             {/* v10.03: 색상카드의 도금 단가 요약 (읽기전용) */}
@@ -15152,6 +15557,8 @@
                                         grindCost: form.grindCost||'',
                                         // 💠 v20260521.03 Phase 3-fix: 다이케스팅 원가 (헤어핀 전용, 상품별 1개당)
                                         dieCastingCost: form.dieCastingCost||'',
+                                        // 💠 v20260709.01: 다이케스팅 중국원가 (위안, 상품별 1개당) — 7번 발주일 기준 계산용
+                                        dieCastingCostCNY: form.dieCastingCostCNY||'',
                                         // 💠 v20260521.03 Phase 3-fix: 봉재공임/라벨 (곱창·셀룰로오스, 상품별)
                                         sewingCost: form.sewingCost||'',
                                         labelPlainCost: form.labelPlainCost||'',
