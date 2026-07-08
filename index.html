@@ -3286,7 +3286,7 @@
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260709.01</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260709.02</div>
                   </div>
                   
                   {/* v10.06: 헬퍼/봇 상태등 */}
@@ -11326,6 +11326,11 @@
                       // 미수 잔액(위안 CNY) = 기초잔액(초기값) + 발주 누적(위안) − 외환송금 누적(위안)
                       const remitTotalCNY = chinaRemittances.reduce((s, r) => s + (parseFloat(r.amountCNY) || 0), 0);
                       const debtBalanceCNY = chinaDebtInitial + orderTotalCNY - remitTotalCNY;
+                      // 💠 v20260709.02: 잔액 달러/원화 환산 (최근 발주 환율 기준)
+                      const lastRateCNY = parseFloat(localStorage.getItem('china_last_rate_cny')) || 0;
+                      const lastRateUSD = parseFloat(localStorage.getItem('china_last_rate_usd')) || 0;
+                      const balanceKRW = lastRateCNY > 0 ? debtBalanceCNY * lastRateCNY : 0;
+                      const balanceUSD = (lastRateCNY > 0 && lastRateUSD > 0) ? debtBalanceCNY * lastRateCNY / lastRateUSD : 0;
                       return (
                         <div className="px-6 pt-4">
                           <div className="bg-black p-5 text-white" style={{borderRadius:'6px'}}>
@@ -11343,7 +11348,7 @@
                                     초기값 ¥{chinaDebtInitial.toLocaleString(undefined, {maximumFractionDigits:2})}
                                   </span>
                                   <span className="bg-neutral-800 text-white px-2 py-0.5 font-black tracking-tight" style={{borderRadius:'4px'}}>
-                                    발주 누적 ¥{orderTotalCNY.toLocaleString()}{orderTotalUSD>0?` / $${orderTotalUSD.toLocaleString(undefined, {maximumFractionDigits:2})}`:''}{orderTotalKRW>0?` / ₩${Math.round(orderTotalKRW).toLocaleString()}`:''}
+                                    잔액 ¥{debtBalanceCNY.toLocaleString(undefined, {maximumFractionDigits:2})}{balanceUSD>0?` / $${balanceUSD.toLocaleString(undefined, {maximumFractionDigits:2})}`:''}{balanceKRW>0?` / ₩${Math.round(balanceKRW).toLocaleString()}`:''}
                                   </span>
                                   {remitTotalCNY > 0 && (
                                     <span className="px-2 py-0.5 font-black tracking-tight" style={{backgroundColor:'#FEE500', color:'#000', borderRadius:'4px'}}>
@@ -12575,8 +12580,15 @@
 
                                       {/* 포함 제품 리스트 */}
                                       <div className="bg-neutral-50 border border-neutral-200 p-2 mb-2 space-y-1.5" style={{borderRadius:'6px'}}>
-                                        {ship.products.map(p => (
-                                          <div key={p.productId} className="flex items-center gap-2 text-sm">
+                                        {ship.products.map(p => {
+                                          const mp = masterProducts.find(m => String(m.id) === String(p.productId));
+                                          const unitCNY = mp ? (parseFloat(mp.dieCastingCostCNY) || 0) : (parseFloat(p.unitCNY) || 0);
+                                          const lineCNY = unitCNY * (p.qty || 0);
+                                          const rCNY = parseFloat(ship.rateKRWperCNY) || 0, rUSD = parseFloat(ship.rateKRWperUSD) || 0;
+                                          const lineKRW = rCNY > 0 ? lineCNY * rCNY : 0;
+                                          const lineUSD = (rCNY > 0 && rUSD > 0) ? lineCNY * rCNY / rUSD : 0;
+                                          return (
+                                          <div key={p.productId} className="flex items-center gap-2 text-sm flex-wrap">
                                             {p.productImage ? (
                                               <img src={p.productImage} alt={p.productName} className="w-9 h-9 object-cover border border-neutral-300 shrink-0" style={{borderRadius:'4px'}}/>
                                             ) : (
@@ -12585,11 +12597,7 @@
                                             <span className="bg-black text-white text-[9px] font-black px-1.5 py-0.5 tracking-widest shrink-0" style={{borderRadius:'4px'}}>#{p.productCode}</span>
                                             <div className="flex-1 min-w-0 flex items-baseline gap-1.5">
                                               <span className="font-black text-black tracking-tight truncate">{p.productName}</span>
-                                              {(() => {
-                                                const mp = masterProducts.find(m => String(m.id) === String(p.productId));
-                                                const unitCNY = mp ? (parseFloat(mp.dieCastingCostCNY) || 0) : (parseFloat(p.unitCNY) || 0);
-                                                return unitCNY > 0 ? <span className="text-red-600 font-black tracking-tight shrink-0 text-[12px]">- ¥{unitCNY.toLocaleString()}</span> : null;
-                                              })()}
+                                              {unitCNY > 0 && <span className="text-red-600 font-black tracking-tight shrink-0 text-[12px]">- ¥{unitCNY.toLocaleString()}</span>}
                                             </div>
                                             <span className="font-black text-black tracking-tight shrink-0 text-sm">
                                               {p.qty.toLocaleString()}<span className="text-[11px] text-neutral-500 ml-0.5">개</span>
@@ -12602,8 +12610,17 @@
                                                 <span className="text-neutral-700">${p.unitPriceActual}</span> / <span className="text-amber-800">${p.unitPriceDeclared}</span>
                                               </span>
                                             )}
+                                            {/* 💠 v20260709.02: 상품별 주문 금액(소계) ¥/$/₩ */}
+                                            {lineCNY > 0 && (
+                                              <span className="shrink-0 flex items-center gap-1 ml-auto">
+                                                <span className="text-black text-[10px] font-black px-1.5 py-0.5 tracking-tight" style={{backgroundColor:'#FEE500', borderRadius:'3px'}}>¥{lineCNY.toLocaleString()}</span>
+                                                {lineUSD > 0 && <span className="text-black text-[10px] font-black px-1.5 py-0.5 tracking-tight" style={{backgroundColor:'#FEE500', borderRadius:'3px'}}>${lineUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span>}
+                                                {lineKRW > 0 && <span className="text-black text-[10px] font-black px-1.5 py-0.5 tracking-tight" style={{backgroundColor:'#FEE500', borderRadius:'3px'}}>₩{Math.round(lineKRW).toLocaleString()}</span>}
+                                              </span>
+                                            )}
                                           </div>
-                                        ))}
+                                          );
+                                        })}
                                       </div>
 
                                       {/* 청구파일 + 송금/채무 (입고 완료 시) */}
