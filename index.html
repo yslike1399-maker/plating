@@ -846,6 +846,10 @@
           const [chinaDebtInitial, setChinaDebtInitial] = useState(() => parseFloat(localStorage.getItem('china_debt_initial') || '0'));
           const saveChinaDebtInitial = (v) => { setChinaDebtInitial(v); localStorage.setItem('china_debt_initial', String(v)); };
           const [chinaDebtPopup, setChinaDebtPopup] = useState(false); // 외상채무 초기값 설정 모달
+          // 💠 v20260709.03: 7번 중요정보(중국 송금계좌·창고주소) — 편집 가능 + 원클릭 복사
+          const [chinaRemitInfo, setChinaRemitInfo] = useState(() => { try { return JSON.parse(localStorage.getItem('china_remit_info')||'{}'); } catch { return {}; } });
+          const saveChinaRemitInfo = (d) => { setChinaRemitInfo(d); localStorage.setItem('china_remit_info', JSON.stringify(d)); };
+          const [chinaRemitInfoPopup, setChinaRemitInfoPopup] = useState(false); // 중요정보 편집 모달
           const [chinaReceivePopup, setChinaReceivePopup] = useState(null); // 입고 처리 모달 (단가 입력)
           const savePolishStocks = (d) => { setPolishStocks(d); localStorage.setItem('polish_stocks', JSON.stringify(d)); };
           
@@ -3286,7 +3290,7 @@
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260709.02</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260709.03</div>
                   </div>
                   
                   {/* v10.06: 헬퍼/봇 상태등 */}
@@ -10195,6 +10199,59 @@
                     </div>{/* end grid */}
                     <div className="bg-white rounded-md border border-neutral-300 p-8">
                       <h2 className="text-xl font-black text-black tracking-tight mb-6">📊 프리랜서별 통계</h2>
+
+                      {/* 💠 v20260709.03: 이번 달 전체 신고예정 요약 — 지급일(paidDate) 귀속월 기준 · 미신고분 이월 합산 */}
+                      {freelancers.length > 0 && (() => {
+                        const thisMonth = formatDate(new Date()).substring(0,7);
+                        const monLabel = parseInt(thisMonth.substring(5,7), 10) + '월';
+                        // 신고예정 = 지급됨(paidDate) + 미신고 + 지급월 ≤ 이번 달
+                        const dueWorks = freelancerWorks.filter(w => !w.taxReported && w.paidDate && w.paidDate.substring(0,7) <= thisMonth);
+                        const carryWorks = dueWorks.filter(w => w.paidDate.substring(0,7) < thisMonth);
+                        const thisWorks = dueWorks.filter(w => w.paidDate.substring(0,7) === thisMonth);
+                        const sumTotal = dueWorks.reduce((s,w)=>s+(w.total||0),0);
+                        const sumTax = dueWorks.reduce((s,w)=>s+(w.tax||0),0);
+                        const sumPay = dueWorks.reduce((s,w)=>s+(w.payment||0),0);
+                        return (
+                          <div className="bg-black text-white rounded-md p-5 mb-6">
+                            <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                              <div className="text-[13px] font-black tracking-tight">🗓️ {monLabel} 신고예정 <span className="text-neutral-400 font-bold">(전체 프리랜서 합산 · 지급일 기준)</span></div>
+                              <div className="flex gap-2 flex-wrap text-[11px]">
+                                <span className="bg-neutral-800 px-2 py-0.5 rounded font-black">총 {dueWorks.length}건</span>
+                                {carryWorks.length > 0 && (
+                                  <span className="px-2 py-0.5 rounded font-black" style={{backgroundColor:'#FEE500', color:'#000'}}>지난달 이월 {carryWorks.length}건 합산</span>
+                                )}
+                              </div>
+                            </div>
+                            {dueWorks.length === 0 ? (
+                              <div className="text-neutral-400 text-xs font-bold">이번 달 신고예정 건이 없습니다 (지급 완료 & 미신고 건 없음)</div>
+                            ) : (
+                              <div className="flex gap-6 flex-wrap">
+                                <div>
+                                  <div className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest mb-0.5">이번 달 지급분</div>
+                                  <div className="text-sm font-black">{thisWorks.length}건 · {thisWorks.reduce((s,w)=>s+(w.payment||0),0).toLocaleString()}원</div>
+                                </div>
+                                <div>
+                                  <div className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest mb-0.5">이월 미신고분</div>
+                                  <div className="text-sm font-black" style={{color: carryWorks.length>0 ? '#FEE500' : '#fff'}}>{carryWorks.length}건 · {carryWorks.reduce((s,w)=>s+(w.payment||0),0).toLocaleString()}원</div>
+                                </div>
+                                <div className="border-l border-neutral-700 pl-6">
+                                  <div className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest mb-0.5">신고예정 세전</div>
+                                  <div className="text-sm font-black">{sumTotal.toLocaleString()}원</div>
+                                </div>
+                                <div>
+                                  <div className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest mb-0.5">원천세(3.3%)</div>
+                                  <div className="text-sm font-black" style={{color:'#f87171'}}>{sumTax.toLocaleString()}원</div>
+                                </div>
+                                <div>
+                                  <div className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest mb-0.5">세후 지급액</div>
+                                  <div className="text-base font-black">{sumPay.toLocaleString()}원</div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+
                       {freelancers.length === 0 ? (
                         <p className="text-neutral-400 text-center py-8">등록된 프리랜서가 없습니다</p>
                       ) : (
@@ -10206,6 +10263,15 @@
                             const unpaidAmount = totalPayment - paidAmount;
                             const unreportedWorks = works.filter(w=>!w.taxReported&&w.paidDate);
                             const unreportedTax = unreportedWorks.reduce((s,w)=>s+w.tax,0);
+                            // 💠 v20260709.03: 이번 달 신고예정 (지급월 ≤ 이번 달인 미신고 건) · 이월분 구분
+                            const flThisMonth = formatDate(new Date()).substring(0,7);
+                            const flMonLabel = parseInt(flThisMonth.substring(5,7), 10) + '월';
+                            const dueWorks = unreportedWorks.filter(w => w.paidDate.substring(0,7) <= flThisMonth);
+                            const dueCarryWorks = dueWorks.filter(w => w.paidDate.substring(0,7) < flThisMonth);
+                            const dueThisWorks = dueWorks.filter(w => w.paidDate.substring(0,7) === flThisMonth);
+                            const dueTotal = dueWorks.reduce((s,w)=>s+(w.total||0),0);
+                            const dueTax = dueWorks.reduce((s,w)=>s+(w.tax||0),0);
+                            const duePay = dueWorks.reduce((s,w)=>s+(w.payment||0),0);
                             const avatarColors = ['bg-blue-500','bg-emerald-500','bg-violet-500','bg-amber-500','bg-rose-500','bg-cyan-500'];
                             const avatarColor = avatarColors[flIdx % avatarColors.length];
 
@@ -10241,7 +10307,7 @@
                                     <span className="text-black font-bold">{totalPayment.toLocaleString()}원</span>
                                     <span className="text-neutral-500">지급 {paidAmount.toLocaleString()}원</span>
                                     {unpaidAmount > 0 && <span className="text-red-500 font-bold">미지급 {unpaidAmount.toLocaleString()}원</span>}
-                                    {unreportedTax > 0 && <span className="text-red-600 font-bold">미신고세금 {unreportedTax.toLocaleString()}원</span>}
+                                    {dueWorks.length > 0 && <span className="text-black font-black px-2 py-0.5 rounded" style={{backgroundColor:'#FEE500'}}>🗓️ {flMonLabel} 신고예정 {dueWorks.length}건</span>}
                                   </div>
                                 </div>
 
@@ -10274,40 +10340,62 @@
                                       <span className="text-neutral-500">미지급</span>
                                       <span className={`font-bold ${unpaidAmount > 0 ? 'text-red-500' : 'text-neutral-400'}`}>{unpaidAmount.toLocaleString()}원</span>
                                     </div>
-                                    {unreportedTax > 0 && (
+                                    {dueWorks.length > 0 && (
                                       <div className="flex justify-between gap-4 text-xs">
-                                        <span className="text-neutral-500">미신고 세금</span>
-                                        <span className="font-bold text-red-600">{unreportedTax.toLocaleString()}원</span>
+                                        <span className="text-neutral-500">{flMonLabel} 신고예정(세후)</span>
+                                        <span className="font-black text-black">{duePay.toLocaleString()}원</span>
                                       </div>
                                     )}
 
-                                    {/* 미신고 세금 상세 */}
-                                    {unreportedTax > 0 && (
-                                      <div className="mt-3 bg-red-50 rounded-md p-3 border border-red-200">
-                                        <p className="text-xs font-bold text-red-700 mb-2">📋 미신고 세금 내역 ({unreportedWorks.length}건)</p>
+                                    {/* 💠 v20260709.03: 이번 달 신고예정 상세 — 지급월 귀속 · 이월 합산 · 신고완료 버튼 */}
+                                    {dueWorks.length > 0 && (
+                                      <div className="mt-3 rounded-md p-3 border-2 border-black bg-neutral-50">
+                                        <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+                                          <p className="text-xs font-black text-black">🗓️ {flMonLabel} 신고예정 ({dueWorks.length}건)</p>
+                                          {dueCarryWorks.length > 0 && (
+                                            <span className="text-[10px] font-black px-2 py-0.5 rounded" style={{backgroundColor:'#FEE500', color:'#000'}}>지난달 이월 {dueCarryWorks.length}건 합산</span>
+                                          )}
+                                        </div>
                                         <div className="space-y-1.5">
                                           <div className="flex justify-between text-xs text-neutral-600">
+                                            <span>이번 달 지급분</span>
+                                            <span className="font-semibold">{dueThisWorks.length}건 · {dueThisWorks.reduce((s,w)=>s+(w.payment||0),0).toLocaleString()}원</span>
+                                          </div>
+                                          <div className="flex justify-between text-xs" style={{color: dueCarryWorks.length>0 ? '#b45309' : '#737373'}}>
+                                            <span>이월 미신고분</span>
+                                            <span className="font-semibold">{dueCarryWorks.length}건 · {dueCarryWorks.reduce((s,w)=>s+(w.payment||0),0).toLocaleString()}원</span>
+                                          </div>
+                                          <div className="flex justify-between text-xs text-neutral-600 border-t border-neutral-300 pt-1.5 mt-1">
                                             <span>세전 금액</span>
-                                            <span className="font-semibold">{unreportedWorks.reduce((s,w)=>s+w.total,0).toLocaleString()}원</span>
+                                            <span className="font-semibold">{dueTotal.toLocaleString()}원</span>
                                           </div>
                                           <div className="flex justify-between text-xs text-red-600">
-                                            <span>세금(3.3%)</span>
-                                            <span className="font-semibold">{unreportedTax.toLocaleString()}원</span>
+                                            <span>원천세(3.3%)</span>
+                                            <span className="font-semibold">{dueTax.toLocaleString()}원</span>
                                           </div>
-                                          <div className="flex justify-between text-xs text-neutral-700">
-                                            <span>세후 금액</span>
-                                            <span className="font-semibold">{unreportedWorks.reduce((s,w)=>s+w.payment,0).toLocaleString()}원</span>
+                                          <div className="flex justify-between text-xs text-black">
+                                            <span className="font-bold">세후 지급액</span>
+                                            <span className="font-black">{duePay.toLocaleString()}원</span>
                                           </div>
-                                          <div className="border-t border-red-200 pt-1.5 mt-1">
+                                          <div className="border-t border-neutral-300 pt-1.5 mt-1">
                                             <p className="text-xs text-neutral-500 font-semibold mb-1">세부 내역:</p>
-                                            {unreportedWorks.slice(0,3).map(w=>(
+                                            {dueWorks.slice(0,3).map(w=>(
                                               <p key={w.id} className="text-xs text-neutral-500 mb-0.5">
-                                                • {w.paidDate} ({w.itemName})<br/>
+                                                • {w.paidDate} ({w.itemName}){w.paidDate.substring(0,7) < flThisMonth && <span className="ml-1 text-[10px] font-black" style={{color:'#b45309'}}>[이월]</span>}<br/>
                                                 <span className="ml-2 text-neutral-400">세전 {w.total.toLocaleString()} → 세금 {w.tax.toLocaleString()} → 세후 {w.payment.toLocaleString()}원</span>
                                               </p>
                                             ))}
-                                            {unreportedWorks.length > 3 && <p className="text-xs text-neutral-400">외 {unreportedWorks.length-3}건...</p>}
+                                            {dueWorks.length > 3 && <p className="text-xs text-neutral-400">외 {dueWorks.length-3}건...</p>}
                                           </div>
+                                          <button onClick={() => {
+                                            if (!confirm(`${freelancer.name}님 ${flMonLabel} 신고예정 ${dueWorks.length}건을 신고완료 처리할까요?` + (dueCarryWorks.length>0 ? `\n(지난달 이월 ${dueCarryWorks.length}건 포함)` : ''))) return;
+                                            const dueIds = new Set(dueWorks.map(w=>w.id));
+                                            saveFreelancerWorks(freelancerWorks.map(w => dueIds.has(w.id) ? {...w, taxReported:true, taxReportMonth: flThisMonth} : w));
+                                            alert(`✅ ${freelancer.name}님 ${flMonLabel} 신고완료 처리 (${dueWorks.length}건)`);
+                                          }}
+                                            className="w-full mt-2 py-2 bg-black hover:bg-neutral-800 text-white font-black text-xs rounded-md tracking-tight">
+                                            🗓️ {flMonLabel} 신고완료 처리 ({dueWorks.length}건)
+                                          </button>
                                         </div>
                                       </div>
                                     )}
@@ -11366,6 +11454,50 @@
                       );
                     })()}
 
+                    {/* 💠 v20260709.03: 중요정보 박스 — 중국 송금계좌 2개(항목명+내용) · 창고주소 · 원클릭 복사 */}
+                    {(() => {
+                      const info = chinaRemitInfo || {};
+                      const copyText = (text, label) => {
+                        if (!text || !text.trim()) { alert('복사할 내용이 없습니다. ✏️ 수정에서 먼저 입력하세요.'); return; }
+                        navigator.clipboard.writeText(text.trim());
+                        alert(`📋 ${label} 복사되었습니다!`);
+                      };
+                      const rows = [
+                        { label: info.acc1Label || '송금계좌 ①', value: info.acc1Value, icon: '🏦' },
+                        { label: info.acc2Label || '송금계좌 ②', value: info.acc2Value, icon: '🏦' },
+                        { label: '중국 창고주소', value: info.warehouse, icon: '📦' },
+                      ];
+                      return (
+                        <div className="px-6 pt-3">
+                          <div className="bg-white border-2 border-black p-4" style={{borderRadius:'6px'}}>
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="text-[11px] text-neutral-500 font-black uppercase tracking-widest">📌 중요정보 (송금계좌 · 창고주소)</div>
+                              <button onClick={() => setChinaRemitInfoPopup(true)}
+                                className="px-3 py-1.5 bg-black text-white hover:bg-neutral-800 text-[11px] font-black uppercase tracking-widest transition-all shrink-0"
+                                style={{borderRadius:'6px'}}>✏️ 수정</button>
+                            </div>
+                            <div className="space-y-2">
+                              {rows.map((r, i) => (
+                                <div key={i} className="flex items-start gap-3 bg-neutral-50 border border-neutral-200 p-3" style={{borderRadius:'6px'}}>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-[11px] font-black text-black tracking-tight mb-0.5">{r.icon} {r.label}</div>
+                                    {r.value && r.value.trim() ? (
+                                      <div className="text-[13px] font-bold text-neutral-700 tracking-tight whitespace-pre-wrap break-all">{r.value}</div>
+                                    ) : (
+                                      <div className="text-[12px] font-bold text-neutral-400 tracking-tight">미입력 — ✏️ 수정에서 입력하세요</div>
+                                    )}
+                                  </div>
+                                  <button onClick={() => copyText(r.value, r.label)}
+                                    className="px-3 py-2 bg-white border border-black text-black hover:bg-black hover:text-white text-[11px] font-black uppercase tracking-widest transition-all shrink-0"
+                                    style={{borderRadius:'6px'}}>📋 복사</button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
                     {/* (구버전) 다이캐스팅 단일 주문 모달 — 신규 사용 안 함 */}
                     {chinaOrderPopup && (() => {
                       const cur = chinaOrderPopup;
@@ -11950,6 +12082,64 @@
                                 saveChinaDebtInitial(v);
                                 setChinaDebtPopup(false);
                                 alert(`초기 외상채무 ¥${v.toLocaleString()} 저장 완료`);
+                              }}
+                                className="flex-1 py-3 bg-black hover:bg-neutral-800 text-white font-black text-xs uppercase tracking-widest"
+                                style={{borderRadius:'6px'}}>저장</button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* 💠 v20260709.03: 중요정보 편집 모달 (송금계좌 2개 항목명+내용 · 창고주소) */}
+                    {chinaRemitInfoPopup && (() => {
+                      const info = chinaRemitInfo || {};
+                      return (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.5)'}}>
+                          <div className="bg-white border-2 border-black w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto" style={{borderRadius:'6px'}}>
+                            <div className="flex items-center justify-between mb-5 pb-3 border-b-2 border-neutral-300">
+                              <h3 className="text-lg font-black text-black tracking-tight">📌 중요정보 수정</h3>
+                              <button onClick={() => setChinaRemitInfoPopup(false)} className="text-neutral-400 hover:text-black text-xl font-bold">×</button>
+                            </div>
+                            <div className="bg-neutral-50 border border-neutral-300 p-3 mb-4 text-[11px] font-bold text-neutral-700 tracking-tight" style={{borderRadius:'6px'}}>
+                              💡 송금계좌 2개(항목명 + 내용)와 중국 창고주소를 입력하세요. 항목명은 화면 라벨로 쓰이고, 📋 복사는 <b>내용만</b> 복사됩니다.
+                            </div>
+                            {/* 송금계좌 ① */}
+                            <div className="mb-4">
+                              <label className="block text-[11px] font-black text-neutral-500 uppercase tracking-widest mb-2">🏦 송금계좌 ① 항목명</label>
+                              <input type="text" id="remitAcc1Label" defaultValue={info.acc1Label || ''} placeholder="예: 위안화 계좌"
+                                className="w-full px-3 py-2 border border-neutral-400 focus:border-black outline-none text-sm font-bold mb-2" style={{borderRadius:'6px'}} />
+                              <textarea id="remitAcc1Value" defaultValue={info.acc1Value || ''} rows={3} placeholder="은행명 / 계좌번호 / 예금주 / SWIFT 등"
+                                className="w-full px-3 py-2 border border-neutral-400 focus:border-black outline-none text-sm font-bold resize-y" style={{borderRadius:'6px'}} />
+                            </div>
+                            {/* 송금계좌 ② */}
+                            <div className="mb-4">
+                              <label className="block text-[11px] font-black text-neutral-500 uppercase tracking-widest mb-2">🏦 송금계좌 ② 항목명</label>
+                              <input type="text" id="remitAcc2Label" defaultValue={info.acc2Label || ''} placeholder="예: 달러 계좌"
+                                className="w-full px-3 py-2 border border-neutral-400 focus:border-black outline-none text-sm font-bold mb-2" style={{borderRadius:'6px'}} />
+                              <textarea id="remitAcc2Value" defaultValue={info.acc2Value || ''} rows={3} placeholder="은행명 / 계좌번호 / 예금주 / SWIFT 등"
+                                className="w-full px-3 py-2 border border-neutral-400 focus:border-black outline-none text-sm font-bold resize-y" style={{borderRadius:'6px'}} />
+                            </div>
+                            {/* 창고주소 */}
+                            <div className="mb-5">
+                              <label className="block text-[11px] font-black text-neutral-500 uppercase tracking-widest mb-2">📦 중국 창고주소</label>
+                              <textarea id="remitWarehouse" defaultValue={info.warehouse || ''} rows={3} placeholder="중국 창고 주소 (수취인 · 전화 포함 가능)"
+                                className="w-full px-3 py-2 border border-neutral-400 focus:border-black outline-none text-sm font-bold resize-y" style={{borderRadius:'6px'}} />
+                            </div>
+                            <div className="flex gap-2">
+                              <button onClick={() => setChinaRemitInfoPopup(false)}
+                                className="flex-1 py-3 border border-neutral-400 text-neutral-700 font-black text-xs uppercase tracking-widest hover:bg-neutral-100"
+                                style={{borderRadius:'6px'}}>취소</button>
+                              <button onClick={() => {
+                                saveChinaRemitInfo({
+                                  acc1Label: document.getElementById('remitAcc1Label').value.trim(),
+                                  acc1Value: document.getElementById('remitAcc1Value').value.trim(),
+                                  acc2Label: document.getElementById('remitAcc2Label').value.trim(),
+                                  acc2Value: document.getElementById('remitAcc2Value').value.trim(),
+                                  warehouse: document.getElementById('remitWarehouse').value.trim(),
+                                });
+                                setChinaRemitInfoPopup(false);
+                                alert('📌 중요정보 저장 완료');
                               }}
                                 className="flex-1 py-3 bg-black hover:bg-neutral-800 text-white font-black text-xs uppercase tracking-widest"
                                 style={{borderRadius:'6px'}}>저장</button>
