@@ -3290,7 +3290,7 @@
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260709.03</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260710.01</div>
                   </div>
                   
                   {/* v10.06: 헬퍼/봇 상태등 */}
@@ -3455,6 +3455,10 @@
                         workorderImages,             // 💠 v20260513: 1-2 작업지시서 이미지 매핑 (IndexedDB → JSON, PC 간 동기화)
                         // 💠 v20260513: 7번 중국 발주 + 알림 설정 누락분 보완
                         chinaShipments, chinaOrders, chinaOrderCandidates, chinaDebtInitial,
+                        // 💠 v20260710.01: 7번 중국 외환송금 + 중요정보 + 마지막 환율 백업 누락분 보완
+                        chinaRemittances, chinaRemitInfo,
+                        chinaLastRateCNY: localStorage.getItem('china_last_rate_cny') || '',
+                        chinaLastRateUSD: localStorage.getItem('china_last_rate_usd') || '',
                         timerSettings,
                         // 💠 v20260520.02: 10번 원가/마진 설정 + 옵션 마스터
                         costMarginSettings, costMarginOptions,
@@ -3555,6 +3559,11 @@
                             if (data.chinaOrders) saveChinaOrders(data.chinaOrders);
                             if (data.chinaOrderCandidates) saveChinaOrderCandidates(data.chinaOrderCandidates);
                             if (typeof data.chinaDebtInitial === 'number') saveChinaDebtInitial(data.chinaDebtInitial);
+                            // 💠 v20260710.01: 7번 중국 외환송금 + 중요정보 + 마지막 환율 복원
+                            if (Array.isArray(data.chinaRemittances)) saveChinaRemittances(data.chinaRemittances);
+                            if (data.chinaRemitInfo && typeof data.chinaRemitInfo === 'object') saveChinaRemitInfo(data.chinaRemitInfo);
+                            if (data.chinaLastRateCNY) localStorage.setItem('china_last_rate_cny', String(data.chinaLastRateCNY));
+                            if (data.chinaLastRateUSD) localStorage.setItem('china_last_rate_usd', String(data.chinaLastRateUSD));
                             if (data.timerSettings) saveTimerSettings(data.timerSettings);
                             // 💠 v20260520.02: 10번 원가/마진 설정 + 옵션 마스터 복원
                             if (data.costMarginSettings) saveCostMarginSettings({ ...defaultCostMarginSettings(), ...data.costMarginSettings });
