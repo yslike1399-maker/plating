@@ -1031,6 +1031,20 @@
           const [freelancerWorks, setFreelancerWorks] = useState([]);
           const [filterMonth, setFilterMonth] = useState('');
           const [filterFreelancerId, setFilterFreelancerId] = useState('');
+          // 💠 v20260710.03: 1-3 도금작업내역 현재/과거이력 하위탭 ('current' | 'archive'), 완료=모든 색상행 입고완료
+          const [historyView, setHistoryView] = useState('current');
+          // 💠 v20260710.03: 1-4 재도금 현재/과거이력 하위탭, 완료=모든 색상행 입고완료
+          const [reworkView, setReworkView] = useState('current');
+          // 💠 v20260710.03: 1-5 선연마 현재/과거이력 하위탭, 완료=보관수량(remaining) 0 (소진)
+          const [polishView, setPolishView] = useState('current');
+          // 💠 v20260710.03: 맨 위로 스크롤 버튼 (긴 목록에서 상단 복귀) — 300px 이상 내리면 표시
+          const [showTopBtn, setShowTopBtn] = useState(false);
+          useEffect(() => {
+            const onScroll = () => setShowTopBtn(window.scrollY > 300);
+            window.addEventListener('scroll', onScroll, { passive: true });
+            onScroll();
+            return () => window.removeEventListener('scroll', onScroll);
+          }, []);
           
           // 급여관리 데이터
           const [employees, setEmployees] = useState([]);
@@ -3283,6 +3297,15 @@
           return (
             <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/20 flex">
 
+              {/* 💠 v20260710.03: 맨 위로 스크롤 버튼 (긴 목록에서 상단 복귀) */}
+              {showTopBtn && (
+                <button type="button" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                  className="fixed bottom-6 right-6 z-[100] w-12 h-12 bg-black text-white shadow-xl hover:bg-neutral-700 flex items-center justify-center text-xl font-black border-2 border-white transition-all"
+                  style={{borderRadius:'50%'}} title="맨 위로" aria-label="맨 위로">
+                  ↑
+                </button>
+              )}
+
               {/* 사이드바 */}
               <aside className="w-48 shrink-0 bg-white border-r-2 border-black flex flex-col sticky top-0 h-screen z-50">
                 {/* 로고 */}
@@ -3290,7 +3313,7 @@
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260710.01</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260710.02</div>
                   </div>
                   
                   {/* v10.06: 헬퍼/봇 상태등 */}
@@ -5846,19 +5869,31 @@
 
                     {/* 💠 v20260513: 재도금 요청 이력 (상단 배치) */}
                     {(() => {
-                      const reworks = history.filter(h => h.type === 'rework').sort((a,b) => (b.date||'').localeCompare(a.date||''));
+                      const allReworks = history.filter(h => h.type === 'rework').sort((a,b) => (b.date||'').localeCompare(a.date||''));
+                      // 💠 v20260710.03: 완료 = 모든 색상행 입고완료(received)
+                      const isReworkComplete = (o) => (o.products||[]).length > 0 && o.products.every(p => (p.items||[]).length > 0 && (p.items||[]).every(it => it.received));
+                      const currentReworks = allReworks.filter(o => !isReworkComplete(o) || o.historyReturned);
+                      const archiveReworks = allReworks.filter(o => isReworkComplete(o) && !o.historyReturned);
+                      const shownReworks = reworkView === 'archive' ? archiveReworks : currentReworks;
                       return (
                         <div className="space-y-3">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-[11px] font-black text-neutral-500 uppercase tracking-widest">📋 재도금 이력</span>
-                            <span className="bg-black text-white text-[10px] font-black px-2 py-0.5 tracking-widest" style={{borderRadius:'6px'}}>{reworks.length}건</span>
+                            {/* 💠 v20260710.03: 현재/과거이력 하위탭 */}
+                            {[{k:'current',l:'현재',c:currentReworks.length},{k:'archive',l:'과거이력',c:archiveReworks.length}].map(t => (
+                              <button key={t.k} type="button" onClick={() => setReworkView(t.k)}
+                                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 border-2 ${reworkView === t.k ? 'bg-black text-white border-black' : 'bg-white text-neutral-500 border-neutral-300 hover:border-neutral-500'}`} style={{borderRadius:'6px'}}>
+                                {t.l}
+                                <span className={`text-[10px] font-black px-1.5 py-0.5 ${reworkView === t.k ? 'bg-white text-black' : 'bg-neutral-200 text-neutral-500'}`} style={{borderRadius:'4px'}}>{t.c}</span>
+                              </button>
+                            ))}
                           </div>
-                          {reworks.length === 0 ? (
+                          {shownReworks.length === 0 ? (
                             <div className="bg-white border border-neutral-300 p-8 text-center" style={{borderRadius:'6px'}}>
-                              <p className="font-black text-neutral-500 tracking-tight text-sm">등록된 재도금 요청이 없습니다</p>
+                              <p className="font-black text-neutral-500 tracking-tight text-sm">{reworkView === 'archive' ? '과거이력이 없습니다' : '진행 중인 재도금이 없습니다'}</p>
                             </div>
                           ) : (
-                            reworks.map(order => {
+                            shownReworks.map(order => {
                               const totalQty = order.products.reduce((s,p) => s + (p.items?.reduce((ss,it) => ss + (it.qty||0), 0) || 0), 0);
                               const allReceived = order.products.every(p => (p.items||[]).every(it => it.received));
                               const indicatorColor = allReceived ? 'bg-neutral-300' : 'bg-black';
@@ -5899,6 +5934,22 @@
                                         <button type="button" onClick={() => generateReworkExcel(order)}
                                           className="px-3 py-2 bg-white border-2 border-black hover:bg-black hover:text-white text-black text-[11px] font-black uppercase tracking-widest transition-all"
                                           style={{borderRadius:'6px'}}>📥 요청서</button>
+                                        {/* 💠 v20260710.03: 과거이력 복귀 / 현재→과거이력 */}
+                                        {reworkView === 'archive' ? (
+                                          <button type="button" onClick={() => {
+                                            const updated = history.map(h => h.id === order.id ? { ...h, historyReturned: true } : h);
+                                            saveHistory(updated);
+                                          }}
+                                            className="px-3 py-2 bg-white border-2 border-blue-600 hover:bg-blue-600 hover:text-white text-blue-700 text-[11px] font-black uppercase tracking-widest transition-all"
+                                            style={{borderRadius:'6px'}}>↩ 현재로 복귀</button>
+                                        ) : (order.historyReturned && isReworkComplete(order) && (
+                                          <button type="button" onClick={() => {
+                                            const updated = history.map(h => h.id === order.id ? { ...h, historyReturned: false } : h);
+                                            saveHistory(updated);
+                                          }}
+                                            className="px-3 py-2 bg-white border-2 border-neutral-500 hover:bg-neutral-700 hover:text-white text-neutral-700 text-[11px] font-black uppercase tracking-widest transition-all"
+                                            style={{borderRadius:'6px'}}>📁 과거이력으로</button>
+                                        ))}
                                         <button type="button" onClick={() => handleDeleteOrder(order.id)}
                                           className="p-2 text-red-500 hover:bg-red-50"
                                           style={{borderRadius:'6px'}}
@@ -6284,15 +6335,34 @@
                       </div>
                     </div>
 
-                    {history.filter(h => !h.type || h.type === 'work').length === 0 ? (
-                      <div className="bg-white border border-neutral-300 p-12 text-center" style={{borderRadius:'6px'}}>
-                        <div className="flex justify-center mb-3"><Calendar /></div>
-                        <p className="font-black text-neutral-500 tracking-tight">작업 내역이 없습니다</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {history.filter(h => !h.type || h.type === 'work').map(order => {
-                          const allReceived = order.products.every(p => (p.items||[]).every(it => it.received));
+                    {(() => {
+                      const workOrders = history.filter(h => !h.type || h.type === 'work');
+                      // 💠 v20260710.03: 완료 = 모든 색상행이 입고완료(received) — 청구일 무관 (대장님 확정 기준)
+                      const isHistComplete = (o) => (o.products||[]).length > 0 && o.products.every(p => (p.items||[]).length > 0 && (p.items||[]).every(it => it.received));
+                      const currentOrders = workOrders.filter(o => !isHistComplete(o) || o.historyReturned);
+                      const archiveOrders = workOrders.filter(o => isHistComplete(o) && !o.historyReturned);
+                      const shownOrders = historyView === 'archive' ? archiveOrders : currentOrders;
+                      return (
+                      <>
+                        {/* 💠 v20260710.03: 현재/과거이력 하위탭 */}
+                        <div className="flex items-center gap-2">
+                          {[{k:'current',l:'현재',c:currentOrders.length},{k:'archive',l:'과거이력',c:archiveOrders.length}].map(t => (
+                            <button key={t.k} type="button" onClick={() => setHistoryView(t.k)}
+                              className={`px-4 py-2 text-[11px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 border-2 ${historyView === t.k ? 'bg-black text-white border-black' : 'bg-white text-neutral-500 border-neutral-300 hover:border-neutral-500'}`} style={{borderRadius:'6px'}}>
+                              {t.l}
+                              <span className={`text-[10px] font-black px-1.5 py-0.5 ${historyView === t.k ? 'bg-white text-black' : 'bg-neutral-200 text-neutral-500'}`} style={{borderRadius:'4px'}}>{t.c}</span>
+                            </button>
+                          ))}
+                        </div>
+                        {shownOrders.length === 0 ? (
+                          <div className="bg-white border border-neutral-300 p-12 text-center" style={{borderRadius:'6px'}}>
+                            <div className="flex justify-center mb-3"><Calendar /></div>
+                            <p className="font-black text-neutral-500 tracking-tight">{historyView === 'archive' ? '과거이력이 없습니다' : '진행 중인 작업이 없습니다'}</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {shownOrders.map(order => {
+                              const allReceived = order.products.every(p => (p.items||[]).every(it => it.received));
                           const indicatorColor = allReceived ? 'bg-neutral-300' : 'bg-black';
                           return (
                           <div key={order.id} className={`bg-white border-2 overflow-hidden flex ${allReceived ? 'border-neutral-200 opacity-80' : 'border-neutral-400'}`} style={{borderRadius:'6px'}}>
@@ -6345,6 +6415,22 @@
                                   <button type="button" onClick={() => handleCopyCalendar(order)}
                                     className="px-3 py-2 bg-white border-2 border-black hover:bg-black hover:text-white text-black text-[11px] font-black uppercase tracking-widest transition-all"
                                     style={{borderRadius:'6px'}}>📅 캘린더</button>
+                                  {/* 💠 v20260710.03: 과거이력 복귀 / 현재→과거이력 되돌리기 */}
+                                  {historyView === 'archive' ? (
+                                    <button type="button" onClick={() => {
+                                      const updated = history.map(h => h.id === order.id ? { ...h, historyReturned: true } : h);
+                                      saveHistory(updated);
+                                    }}
+                                      className="px-3 py-2 bg-white border-2 border-blue-600 hover:bg-blue-600 hover:text-white text-blue-700 text-[11px] font-black uppercase tracking-widest transition-all"
+                                      style={{borderRadius:'6px'}}>↩ 현재로 복귀</button>
+                                  ) : (order.historyReturned && isHistComplete(order) && (
+                                    <button type="button" onClick={() => {
+                                      const updated = history.map(h => h.id === order.id ? { ...h, historyReturned: false } : h);
+                                      saveHistory(updated);
+                                    }}
+                                      className="px-3 py-2 bg-white border-2 border-neutral-500 hover:bg-neutral-700 hover:text-white text-neutral-700 text-[11px] font-black uppercase tracking-widest transition-all"
+                                      style={{borderRadius:'6px'}}>📁 과거이력으로</button>
+                                  ))}
                                   <button type="button" onClick={() => handleDeleteOrder(order.id)}
                                     className="p-2 text-red-500 hover:bg-red-50"
                                     style={{borderRadius:'6px'}}
@@ -6444,9 +6530,12 @@
                             </div>
                           </div>
                           );
-                        })}
-                      </div>
-                    )}
+                            })}
+                          </div>
+                        )}
+                      </>
+                      );
+                    })()}
                   </div>
                 )}
                 {activeTab === 'polishStock' && (
@@ -6736,14 +6825,31 @@
                     )}
 
                     {/* 목록 (빈 상태) */}
-                    {polishStocks.length === 0 ? (
-                      <div className="bg-white border border-neutral-300 p-12 text-center" style={{borderRadius:'6px'}}>
-                        <div className="text-4xl mb-3">🔩</div>
-                        <p className="font-black text-neutral-500 tracking-tight">등록된 선연마재고(고은도금보관)가 없습니다</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {[...polishStocks].sort((a,b) => {
+                    {(() => {
+                      // 💠 v20260710.03: 완료 = 보관수량 0 (소진) → 과거이력
+                      const currentStocks = polishStocks.filter(s => s.remaining > 0 || s.historyReturned);
+                      const archiveStocks = polishStocks.filter(s => s.remaining === 0 && !s.historyReturned);
+                      const shownStocks = polishView === 'archive' ? archiveStocks : currentStocks;
+                      return (
+                      <>
+                        {/* 💠 v20260710.03: 현재/과거이력 하위탭 */}
+                        <div className="flex items-center gap-2">
+                          {[{k:'current',l:'현재',c:currentStocks.length},{k:'archive',l:'과거이력(소진)',c:archiveStocks.length}].map(t => (
+                            <button key={t.k} type="button" onClick={() => setPolishView(t.k)}
+                              className={`px-4 py-2 text-[11px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 border-2 ${polishView === t.k ? 'bg-black text-white border-black' : 'bg-white text-neutral-500 border-neutral-300 hover:border-neutral-500'}`} style={{borderRadius:'6px'}}>
+                              {t.l}
+                              <span className={`text-[10px] font-black px-1.5 py-0.5 ${polishView === t.k ? 'bg-white text-black' : 'bg-neutral-200 text-neutral-500'}`} style={{borderRadius:'4px'}}>{t.c}</span>
+                            </button>
+                          ))}
+                        </div>
+                        {shownStocks.length === 0 ? (
+                          <div className="bg-white border border-neutral-300 p-12 text-center" style={{borderRadius:'6px'}}>
+                            <div className="text-4xl mb-3">🔩</div>
+                            <p className="font-black text-neutral-500 tracking-tight">{polishView === 'archive' ? '과거이력(소진)이 없습니다' : '보관 중인 선연마재고가 없습니다'}</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-4">
+                            {[...shownStocks].sort((a,b) => {
                           // 💠 v20260513: 재고 0(소진)은 항상 하단
                           const aOut = a.remaining === 0 ? 1 : 0;
                           const bOut = b.remaining === 0 ? 1 : 0;
@@ -6810,6 +6916,14 @@
                                   )}
                                   <button onClick={() => setPolishEditPopup(stock)}
                                     className="px-3 py-2 bg-white border-2 border-black hover:bg-black hover:text-white text-black text-[11px] font-black uppercase tracking-widest transition-all" style={{borderRadius:'6px'}} title="수량/메모 직접 수정">✏️ 수정</button>
+                                  {/* 💠 v20260710.03: 과거이력 복귀 / 현재→과거이력 */}
+                                  {polishView === 'archive' ? (
+                                    <button onClick={() => savePolishStocks(polishStocks.map(s => s.id === stock.id ? {...s, historyReturned: true} : s))}
+                                      className="px-3 py-2 bg-white border-2 border-blue-600 hover:bg-blue-600 hover:text-white text-blue-700 text-[11px] font-black uppercase tracking-widest transition-all" style={{borderRadius:'6px'}}>↩ 현재로 복귀</button>
+                                  ) : (stock.historyReturned && stock.remaining === 0 && (
+                                    <button onClick={() => savePolishStocks(polishStocks.map(s => s.id === stock.id ? {...s, historyReturned: false} : s))}
+                                      className="px-3 py-2 bg-white border-2 border-neutral-500 hover:bg-neutral-700 hover:text-white text-neutral-700 text-[11px] font-black uppercase tracking-widest transition-all" style={{borderRadius:'6px'}}>📁 과거이력으로</button>
+                                  ))}
                                   <button onClick={() => { if(confirm('삭제?')) savePolishStocks(polishStocks.filter(s=>s.id!==stock.id)); }}
                                     className="p-2 text-red-500 hover:bg-red-50" style={{borderRadius:'6px'}}><Trash /></button>
                                 </div>
@@ -6859,9 +6973,12 @@
                             </div>
                           </div>
                           );
-                        })}
-                      </div>
-                    )}
+                            })}
+                          </div>
+                        )}
+                      </>
+                      );
+                    })()}
                   </div>
                 )}
                 </>
@@ -9850,9 +9967,9 @@
                                   const endDate = document.getElementById('filterEndDate')?.value;
                                   const paidDate = document.getElementById('filterPaidDate')?.value;
                                   
-                                  return freelancerWorks.filter(work => {
+                                  const filtered = freelancerWorks.filter(work => {
                                     let match = true;
-                                    
+
                                     // 프리랜서별 필터
                                     if (filterFreelancerId) {
                                       match = match && work.freelancerId === parseInt(filterFreelancerId);
@@ -9874,16 +9991,16 @@
                                     }
                                     
                                     return match;
-                                  })
-                                  .sort((a, b) => b.workDate.localeCompare(a.workDate)) // 날짜 내림차순 정렬
-                                  .map(work => {
+                                  }).sort((a, b) => b.workDate.localeCompare(a.workDate)); // 날짜 내림차순 정렬
+
+                                  // 💠 v20260710.03: 한 행 렌더 헬퍼 (진행중/완료 섹션 공통)
+                                  const renderRow = (work) => {
                                     const freelancer = freelancers.find(f => f.id === work.freelancerId);
                                     const freelancerIdx = freelancers.findIndex(f => f.id === work.freelancerId);
                                     const barColors = ['#3b82f6','#10b981','#8b5cf6','#f59e0b','#ef4444','#06b6d4','#f97316','#ec4899'];
                                     const barColor = barColors[freelancerIdx % barColors.length] || '#94a3b8';
-                                    const isDone = work.paid && work.taxReported; // 지급+세금신고 모두 완료
                                     return (
-                                      <tr key={work.id} className={`border-b border-neutral-200 hover:bg-neutral-50 ${receiptCheckedWorks.includes(work.id) ? 'bg-yellow-50' : ''}`} style={{borderLeft: `4px solid ${barColor}`, ...(isDone ? {textDecoration:'line-through', textDecorationColor:'#dc2626', textDecorationThickness:'2px'} : {})}}>
+                                      <tr key={work.id} className={`border-b border-neutral-200 hover:bg-neutral-50 ${receiptCheckedWorks.includes(work.id) ? 'bg-yellow-50' : ''}`} style={{borderLeft: `4px solid ${barColor}`}}>
                                         <td className="py-3 px-2 text-center bg-yellow-50/40 border-r border-neutral-200">
                                           <input type="checkbox"
                                             checked={receiptCheckedWorks.includes(work.id)}
@@ -9931,7 +10048,7 @@
                                                 : 'bg-black text-white hover:bg-neutral-800'
                                             }`}
                                           >
-                                            {work.paid ? '지급함' : '지급전'}
+                                            {work.paid ? '지급완료' : '지급전'}
                                           </button>
                                         </td>
                                         <td className="text-center py-3 px-4">
@@ -9949,9 +10066,12 @@
                                         </td>
                                         <td className="text-center py-3 px-4">
                                           <div className="flex flex-col items-center gap-1">
+                                            {/* 💠 v20260710.02: 세금신고 대상은 지급 완료(지급일 있음) 건만 — 지급전+미신고는 체크 비활성화 (기존 신고건은 유지·해제 가능) */}
                                             <input
                                               type="checkbox"
                                               checked={work.taxReported}
+                                              disabled={!work.paidDate && !work.taxReported}
+                                              title={!work.paidDate && !work.taxReported ? '지급 완료(지급일 입력) 후 세금신고 가능합니다' : ''}
                                               onChange={(e) => {
                                                 const checked = e.target.checked;
                                                 const updated = freelancerWorks.map(w =>
@@ -9965,7 +10085,7 @@
                                                 );
                                                 saveFreelancerWorks(updated);
                                               }}
-                                              className="w-5 h-5 accent-black"
+                                              className="w-5 h-5 accent-black disabled:opacity-30 disabled:cursor-not-allowed"
                                             />
                                             {work.taxReported && (
                                               <input
@@ -10012,7 +10132,58 @@
                                         </td>
                                       </tr>
                                     );
-                                  });
+                                  };
+
+                                  // 💠 v20260710.03: 프리랜서별 그룹핑 (이름 가나다순)
+                                  const groupByFreelancer = (works) => {
+                                    const groups = [];
+                                    works.forEach(w => {
+                                      let g = groups.find(x => x.fid === w.freelancerId);
+                                      if (!g) { g = { fid: w.freelancerId, works: [] }; groups.push(g); }
+                                      g.works.push(w);
+                                    });
+                                    groups.sort((a, b) => {
+                                      const na = (freelancers.find(f => f.id === a.fid)?.name) || '';
+                                      const nb = (freelancers.find(f => f.id === b.fid)?.name) || '';
+                                      return na.localeCompare(nb, 'ko');
+                                    });
+                                    return groups;
+                                  };
+
+                                  // 💠 v20260710.03: 진행중/완료 섹션 (상=진행중, 하=완료 · 각 섹션 프리랜서별 그룹)
+                                  const renderSection = (title, works, accent) => (
+                                    <React.Fragment key={title}>
+                                      <tr>
+                                        <td colSpan={15} className="py-2.5 px-4 font-black text-sm tracking-tight text-white" style={{background: accent}}>
+                                          {title} <span className="text-[11px] font-bold opacity-80">· {works.length}건</span>
+                                        </td>
+                                      </tr>
+                                      {works.length === 0 ? (
+                                        <tr><td colSpan={15} className="text-center py-6 text-neutral-400 text-xs font-bold">해당 작업이 없습니다</td></tr>
+                                      ) : groupByFreelancer(works).map(g => {
+                                        const fname = (freelancers.find(f => f.id === g.fid)?.name) || '삭제된 프리랜서';
+                                        return (
+                                          <React.Fragment key={title + '-' + g.fid}>
+                                            <tr>
+                                              <td colSpan={15} className="py-1.5 px-4 bg-neutral-100 border-b border-neutral-300 font-black text-xs text-neutral-700">
+                                                ▸ {fname} <span className="text-neutral-400">({g.works.length}건)</span>
+                                              </td>
+                                            </tr>
+                                            {g.works.map(renderRow)}
+                                          </React.Fragment>
+                                        );
+                                      })}
+                                    </React.Fragment>
+                                  );
+
+                                  const activeWorks = filtered.filter(w => !(w.paid && w.taxReported));
+                                  const doneWorks = filtered.filter(w => w.paid && w.taxReported);
+                                  return (
+                                    <>
+                                      {renderSection('🔵 진행중', activeWorks, '#1d4ed8')}
+                                      {renderSection('✅ 완료', doneWorks, '#059669')}
+                                    </>
+                                  );
                                 })()}
                               </tbody>
                             </table>
