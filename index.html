@@ -3313,7 +3313,7 @@
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260710.02</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260710.03</div>
                   </div>
                   
                   {/* v10.06: 헬퍼/봇 상태등 */}
@@ -11577,10 +11577,12 @@
                     {/* 💠 v20260709.01: 외상채무(미수 잔액) 박스 — 7-1~7-4 공통 상단 고정 · 위안(¥) 기준 · 미수 = 초기값 + 발주누적 */}
                     {(() => {
                       // 💠 v20260709.01: 9-1 최신 위안 원가로 실시간 계산 (원가 수정 시 미수 즉시 반영)
+                      // 💠 v20260710.03: 출고수량 확정 입력 시 그 수량으로 미수(외상채무) 자동 재계산 (미입력 시 주문수량)
                       const shipCNY = (sh) => (sh.products || []).reduce((a, p) => {
                         const mp = masterProducts.find(m => String(m.id) === String(p.productId));
                         const unitCNY = mp ? (parseFloat(mp.dieCastingCostCNY) || 0) : (parseFloat(p.unitCNY) || 0);
-                        return a + unitCNY * (p.qty || 0);
+                        const effQty = (p.receivedQty != null && p.receivedQty !== '') ? (parseInt(p.receivedQty) || 0) : (p.qty || 0);
+                        return a + unitCNY * effQty;
                       }, 0);
                       const orderTotalCNY = chinaShipments.reduce((s, sh) => s + shipCNY(sh), 0);
                       const orderTotalKRW = chinaShipments.reduce((s, sh) => {
@@ -12590,15 +12592,36 @@
                       const setProduct = (idx, patch) => setShip({
                         products: ship.products.map((p, i) => i === idx ? {...p, ...patch} : p)
                       });
-                      // 자동 계산
-                      let totalActual = 0, totalDeclared = 0;
+                      // 💠 v20260710.04: 신고단가(USD)만 입력 → 신고총액 계산, 이 건 외환송금액(¥→USD 환산)과 비교
+                      const rateCNY = parseFloat(ship.rateKRWperCNY) || 0;
+                      const rateUSD = parseFloat(ship.rateKRWperUSD) || 0;
+                      const remitCNY = parseFloat(ship.remitAmountCNY) || 0;
+                      const remitUSD = (rateCNY > 0 && rateUSD > 0) ? remitCNY * rateCNY / rateUSD : 0;
+                      let totalDeclared = 0;
                       ship.products.forEach(p => {
-                        const ua = parseFloat(p.unitPriceActual) || 0;
                         const ud = parseFloat(p.unitPriceDeclared) || 0;
-                        totalActual += ua * p.qty;
-                        totalDeclared += ud * p.qty;
+                        const oq = (p.receivedQty != null && p.receivedQty !== '') ? (parseInt(p.receivedQty) || 0) : p.qty;
+                        totalDeclared += ud * oq;
                       });
-                      const totalDebtOffset = totalActual - totalDeclared;
+                      const declareDiff = remitUSD - totalDeclared; // +면 송금이 더 큼(신고 여유), -면 신고가 송금 초과
+                      // 💠 v20260710.04: 이전 신고완료 건들의 누적 신고 차액(송금−신고). +면 신고 부족(추가), -면 신고 초과(삭감)
+                      const priorGapUSD = chinaShipments
+                        .filter(s => s.received && s.id !== ship.id)
+                        .reduce((sum, s) => {
+                          const rc = parseFloat(s.rateKRWperCNY) || 0, ru = parseFloat(s.rateKRWperUSD) || 0;
+                          const remU = (s.remitUSD != null && s.remitUSD > 0)
+                            ? s.remitUSD
+                            : ((rc > 0 && ru > 0) ? (parseFloat(s.remitAmountCNY) || 0) * rc / ru : 0);
+                          if (remU <= 0) return sum; // 환율 없어 USD 비교 불가 → 누적 제외
+                          const decU = (s.totalDeclaredUSD != null)
+                            ? s.totalDeclaredUSD
+                            : (s.products || []).reduce((a, p) => {
+                                const ud = parseFloat(p.unitPriceDeclared) || 0;
+                                const rq = (p.receivedQty != null && p.receivedQty !== '') ? (parseInt(p.receivedQty) || 0) : (p.qty || 0);
+                                return a + ud * rq;
+                              }, 0);
+                          return sum + (remU - decU);
+                        }, 0);
                       const handleFileChange = async (e) => {
                         const file = e.target.files?.[0];
                         if (!file) return;
@@ -12617,33 +12640,26 @@
                       };
                       const handleSave = () => {
                         if (!ship.receivedDate) return alert('신고일을 선택하세요');
-                        // 모든 제품에 단가 입력 확인
-                        const missing = ship.products.find(p => !parseFloat(p.unitPriceActual));
-                        if (missing) return alert(`${missing.productName}의 실제 단가를 입력하세요`);
-                        // 제품별 amount 계산
+                        // 💠 v20260710.04: 신고단가 입력 확인 (실제단가는 9-1 상품관리 기준이라 제거)
+                        const missing = ship.products.find(p => !parseFloat(p.unitPriceDeclared));
+                        if (missing) return alert(`${missing.productName}의 신고단가를 입력하세요`);
                         const updatedProducts = ship.products.map(p => {
-                          const ua = parseFloat(p.unitPriceActual) || 0;
                           const ud = parseFloat(p.unitPriceDeclared) || 0;
-                          // 💠 v20260709.01: 실제 입고수량 기록 (미입력 시 주문수량으로 간주)
                           const rq = (p.receivedQty != null && p.receivedQty !== '') ? (parseInt(p.receivedQty) || 0) : p.qty;
                           return {
                             ...p,
-                            unitPriceActual: ua,
                             unitPriceDeclared: ud,
                             receivedQty: rq,
-                            amountActual: ua * p.qty,
-                            amountDeclared: ud * p.qty,
-                            amountDebtOffset: (ua - ud) * p.qty
+                            amountDeclared: ud * rq
                           };
                         });
-                        const transferred = parseFloat(ship.amountTransferred) || totalActual;
                         const updated = chinaShipments.map(s => s.id === ship.id ? {
                           ...s,
                           received: true,
                           receivedDate: ship.receivedDate,
                           products: updatedProducts,
-                          amountTransferred: transferred,
-                          totalDebtOffset,
+                          totalDeclaredUSD: totalDeclared,
+                          remitUSD,
                           invoiceFile: ship.invoiceFile,
                           declarationMemo: ship.declarationMemo || ''
                         } : s);
@@ -12671,11 +12687,45 @@
                                 />
                               </div>
 
-                              {/* 제품별 단가 입력 */}
+                              {/* 💠 v20260710.04: 이 건 외환송금액 (주문건 기준으로 보낸 금액) */}
+                              <div className="bg-neutral-900 text-white p-3" style={{borderRadius:'6px'}}>
+                                <div className="flex items-center justify-between gap-2 flex-wrap">
+                                  <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">💸 이 건 외환송금액</div>
+                                  <div className="flex items-baseline gap-2 flex-wrap">
+                                    <span className="text-lg font-black" style={{color:'#FEE500'}}>¥{remitCNY.toLocaleString()}</span>
+                                    {remitUSD > 0
+                                      ? <span className="text-sm font-bold text-neutral-300">≈ ${remitUSD.toLocaleString(undefined,{maximumFractionDigits:2})}</span>
+                                      : <span className="text-[10px] font-bold text-amber-300">환율 미입력(발주수정에서 환율 입력 시 USD 환산)</span>}
+                                  </div>
+                                </div>
+                                <div className="text-[10px] text-neutral-500 font-bold mt-1">이 송금액에 맞춰 아래 신고단가를 정하세요</div>
+                              </div>
+
+                              {/* 💠 v20260710.04: 이전 신고완료 건 누적 부족/초과분 안내 */}
+                              {Math.abs(priorGapUSD) >= 0.5 && (
+                                <div className={`p-3 border-2 ${priorGapUSD > 0 ? 'bg-amber-50 border-amber-700' : 'bg-blue-50 border-blue-700'}`} style={{borderRadius:'6px'}}>
+                                  <div className={`text-[12px] font-black tracking-tight ${priorGapUSD > 0 ? 'text-amber-900' : 'text-blue-900'}`}>
+                                    {priorGapUSD > 0
+                                      ? `⚠️ 이전 주문건 신고 누적 부족분이 $${priorGapUSD.toLocaleString(undefined, {maximumFractionDigits:2})} 입니다. 이번에 추가하여 신고해주세요.`
+                                      : `⚠️ 이전 주문건 신고 누적 초과분이 $${Math.abs(priorGapUSD).toLocaleString(undefined, {maximumFractionDigits:2})} 입니다. 이번에 삭감 후 신고해주세요.`}
+                                  </div>
+                                  {remitUSD > 0 && (
+                                    <div className={`text-[11px] font-bold mt-1.5 ${priorGapUSD > 0 ? 'text-amber-800' : 'text-blue-800'}`}>
+                                      권장 신고총액 ≈ 이번 송금 ${remitUSD.toLocaleString(undefined, {maximumFractionDigits:2})} {priorGapUSD > 0 ? '+' : '−'} ${Math.abs(priorGapUSD).toLocaleString(undefined, {maximumFractionDigits:2})} = <span className="font-black">${(remitUSD + priorGapUSD).toLocaleString(undefined, {maximumFractionDigits:2})}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* 제품별 신고단가 입력 */}
                               <div>
-                                <label className="block text-[11px] font-black text-neutral-500 uppercase tracking-widest mb-2">② 제품별 단가 입력 (USD)</label>
+                                <label className="block text-[11px] font-black text-neutral-500 uppercase tracking-widest mb-2">② 제품별 신고단가 입력 (USD)</label>
                                 <div className="space-y-2">
-                                  {ship.products.map((p, idx) => (
+                                  {ship.products.map((p, idx) => {
+                                    const mp = masterProducts.find(m => String(m.id) === String(p.productId));
+                                    const costCNY = mp ? (parseFloat(mp.dieCastingCostCNY) || 0) : (parseFloat(p.unitCNY) || 0);
+                                    const outQty = (p.receivedQty != null && p.receivedQty !== '') ? (parseInt(p.receivedQty) || 0) : p.qty;
+                                    return (
                                     <div key={p.productId} className="flex items-center gap-2 bg-neutral-50 border border-neutral-300 p-2" style={{borderRadius:'6px'}}>
                                       {p.productImage ? (
                                         <img src={p.productImage} alt={p.productName} className="w-10 h-10 object-cover border border-neutral-300 shrink-0" style={{borderRadius:'4px'}}/>
@@ -12687,60 +12737,58 @@
                                         <div className="text-[10px] font-bold text-neutral-500 flex items-center gap-1 mt-0.5 flex-wrap">
                                           <span>주문 {p.qty.toLocaleString()}개</span>
                                           <span className="text-neutral-300">→</span>
-                                          <span className="flex items-center gap-1">수입
-                                            <input type="number" min="0" placeholder={String(p.qty)}
-                                              value={p.receivedQty ?? ''}
-                                              onChange={(e) => setProduct(idx, {receivedQty: e.target.value})}
-                                              className="w-14 px-1 py-0.5 border border-neutral-400 focus:border-black outline-none text-[11px] font-black text-center" style={{borderRadius:'3px'}}
-                                              title="실제 수입 수량"/>
-                                            개
-                                          </span>
-                                          {p.receivedQty != null && p.receivedQty !== '' && parseInt(p.receivedQty) !== p.qty && (
-                                            <span className="text-red-600 font-black">({parseInt(p.receivedQty) - p.qty > 0 ? '+' : ''}{(parseInt(p.receivedQty) - p.qty).toLocaleString()})</span>
+                                          <span className="text-black font-black">중국실출고 {outQty.toLocaleString()}개</span>
+                                          {outQty !== p.qty && (
+                                            <span className="text-red-600 font-black">({outQty - p.qty > 0 ? '+' : ''}{(outQty - p.qty).toLocaleString()})</span>
                                           )}
+                                          {costCNY > 0 && <span className="text-neutral-400">· 실제원가 ¥{costCNY.toLocaleString()}(9-1)</span>}
                                         </div>
                                       </div>
-                                      <input
-                                        type="number" step="0.01" min="0"
-                                        placeholder="실제"
-                                        value={p.unitPriceActual || ''}
-                                        onChange={(e) => setProduct(idx, {unitPriceActual: e.target.value})}
-                                        className="w-20 px-2 py-1 border border-neutral-400 focus:border-black outline-none text-xs font-black text-center"
-                                        style={{borderRadius:'4px'}}
-                                        title="실제 단가 (USD)"
-                                      />
-                                      <input
-                                        type="number" step="0.01" min="0"
-                                        placeholder="신고"
-                                        value={p.unitPriceDeclared || ''}
-                                        onChange={(e) => setProduct(idx, {unitPriceDeclared: e.target.value})}
-                                        className="w-20 px-2 py-1 border-2 border-amber-700 focus:border-black outline-none text-xs font-black text-center text-amber-900"
-                                        style={{borderRadius:'4px'}}
-                                        title="신고 단가 (USD)"
-                                      />
+                                      <div className="flex flex-col items-end shrink-0">
+                                        <input
+                                          type="number" step="0.01" min="0"
+                                          placeholder="신고단가"
+                                          value={p.unitPriceDeclared || ''}
+                                          onChange={(e) => setProduct(idx, {unitPriceDeclared: e.target.value})}
+                                          className="w-24 px-2 py-1 border-2 border-amber-700 focus:border-black outline-none text-xs font-black text-center text-amber-900"
+                                          style={{borderRadius:'4px'}}
+                                          title="신고단가 (USD)"
+                                        />
+                                        {parseFloat(p.unitPriceDeclared) > 0 && (
+                                          <span className="text-[9px] font-bold text-neutral-500 mt-0.5">= ${(parseFloat(p.unitPriceDeclared) * outQty).toLocaleString(undefined,{maximumFractionDigits:2})}</span>
+                                        )}
+                                      </div>
                                     </div>
-                                  ))}
+                                    );
+                                  })}
                                 </div>
                               </div>
 
-                              {/* 자동 계산 */}
-                              {totalActual > 0 && (
+                              {/* 💠 v20260710.04: 신고총액 vs 외환송금액 비교 */}
+                              {totalDeclared > 0 && (
                                 <div className="bg-black p-3 text-white" style={{borderRadius:'6px'}}>
-                                  <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400 mb-2">📊 자동 계산</div>
+                                  <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400 mb-2">📊 신고 vs 송금 비교 (실출고수량 × 신고단가)</div>
                                   <div className="grid grid-cols-3 gap-2 text-center">
-                                    <div>
-                                      <div className="text-[10px] text-neutral-400 font-bold tracking-tight">실제 총액</div>
-                                      <div className="text-base font-black tracking-tight">${totalActual.toLocaleString(undefined, {maximumFractionDigits:2})}</div>
-                                    </div>
                                     <div>
                                       <div className="text-[10px] text-amber-300 font-bold tracking-tight">신고 총액</div>
                                       <div className="text-base font-black tracking-tight text-amber-300">${totalDeclared.toLocaleString(undefined, {maximumFractionDigits:2})}</div>
                                     </div>
                                     <div>
-                                      <div className="text-[10px] font-bold tracking-tight" style={{color:'#FEE500'}}>채무 차감</div>
-                                      <div className="text-base font-black tracking-tight" style={{color:'#FEE500'}}>${totalDebtOffset.toLocaleString(undefined, {maximumFractionDigits:2})}</div>
+                                      <div className="text-[10px] text-neutral-400 font-bold tracking-tight">외환송금(환산)</div>
+                                      <div className="text-base font-black tracking-tight">{remitUSD > 0 ? `$${remitUSD.toLocaleString(undefined, {maximumFractionDigits:2})}` : '—'}</div>
+                                    </div>
+                                    <div>
+                                      <div className="text-[10px] font-bold tracking-tight" style={{color:'#FEE500'}}>차이 (송금−신고)</div>
+                                      <div className="text-base font-black tracking-tight" style={{color: remitUSD <= 0 ? '#a3a3a3' : (Math.abs(declareDiff) < 0.5 ? '#4ade80' : '#FEE500')}}>
+                                        {remitUSD > 0 ? `${declareDiff > 0 ? '+' : ''}$${declareDiff.toLocaleString(undefined, {maximumFractionDigits:2})}` : '—'}
+                                      </div>
                                     </div>
                                   </div>
+                                  {remitUSD > 0 && Math.abs(declareDiff) >= 0.5 && (
+                                    <div className="text-[10px] font-bold text-center mt-2" style={{color:'#FEE500'}}>
+                                      {declareDiff > 0 ? '신고총액이 송금액보다 적습니다 (신고단가↑ 여지)' : '신고총액이 송금액을 초과합니다 (신고단가↓ 검토)'}
+                                    </div>
+                                  )}
                                 </div>
                               )}
 
@@ -12856,7 +12904,8 @@
                                 const shipCNY = ship.products.reduce((a,p) => {
                                   const mp = masterProducts.find(m => String(m.id) === String(p.productId));
                                   const unitCNY = mp ? (parseFloat(mp.dieCastingCostCNY) || 0) : (parseFloat(p.unitCNY) || 0);
-                                  return a + unitCNY * (p.qty || 0);
+                                  const effQty = (p.receivedQty != null && p.receivedQty !== '') ? (parseInt(p.receivedQty) || 0) : (p.qty || 0);
+                                  return a + unitCNY * effQty;
                                 }, 0);
                                 const rCNY = parseFloat(ship.rateKRWperCNY) || 0, rUSD = parseFloat(ship.rateKRWperUSD) || 0;
                                 const shipKRW = rCNY > 0 ? shipCNY * rCNY : 0;
@@ -12953,7 +13002,8 @@
                                         {ship.products.map(p => {
                                           const mp = masterProducts.find(m => String(m.id) === String(p.productId));
                                           const unitCNY = mp ? (parseFloat(mp.dieCastingCostCNY) || 0) : (parseFloat(p.unitCNY) || 0);
-                                          const lineCNY = unitCNY * (p.qty || 0);
+                                          const effQty = (p.receivedQty != null && p.receivedQty !== '') ? (parseInt(p.receivedQty) || 0) : (p.qty || 0);
+                                          const lineCNY = unitCNY * effQty;
                                           const rCNY = parseFloat(ship.rateKRWperCNY) || 0, rUSD = parseFloat(ship.rateKRWperUSD) || 0;
                                           const lineKRW = rCNY > 0 ? lineCNY * rCNY : 0;
                                           const lineUSD = (rCNY > 0 && rUSD > 0) ? lineCNY * rCNY / rUSD : 0;
@@ -12969,15 +13019,33 @@
                                               <span className="font-black text-black tracking-tight truncate">{p.productName}</span>
                                               {unitCNY > 0 && <span className="text-red-600 font-black tracking-tight shrink-0 text-[12px]">- ¥{unitCNY.toLocaleString()}</span>}
                                             </div>
-                                            <span className="font-black text-black tracking-tight shrink-0 text-sm">
-                                              {p.qty.toLocaleString()}<span className="text-[11px] text-neutral-500 ml-0.5">개</span>
-                                              {ship.received && p.receivedQty != null && Number(p.receivedQty) !== p.qty && (
-                                                <span className="text-red-600 text-[11px] ml-1 font-black">→수입 {Number(p.receivedQty).toLocaleString()}</span>
+                                            <span className="font-black text-black tracking-tight shrink-0 text-sm flex items-center gap-1">
+                                              <span title="주문수량">{p.qty.toLocaleString()}<span className="text-[11px] text-neutral-500 ml-0.5">개</span></span>
+                                              <span className="text-neutral-300">→</span>
+                                              {ship.received ? (
+                                                <span className="text-[11px] text-neutral-600 font-black" title="중국 실출고 수량">중국실출고 {((p.receivedQty != null && p.receivedQty !== '') ? Number(p.receivedQty) : p.qty).toLocaleString()}개</span>
+                                              ) : (
+                                                <span className="flex items-center gap-0.5 text-[11px] text-neutral-500 font-bold" title="중국에서 실제 출고한 수량">중국실출고
+                                                  <input type="number" min="0" placeholder={String(p.qty)}
+                                                    value={p.receivedQty ?? ''}
+                                                    onChange={(e) => {
+                                                      const val = e.target.value;
+                                                      saveChinaShipments(chinaShipments.map(s => s.id === ship.id ? {
+                                                        ...s,
+                                                        products: s.products.map(pp => String(pp.productId) === String(p.productId) ? {...pp, receivedQty: val} : pp)
+                                                      } : s));
+                                                    }}
+                                                    className="w-14 px-1 py-0.5 border border-neutral-400 focus:border-black outline-none text-[11px] font-black text-center text-black" style={{borderRadius:'3px'}}/>
+                                                  개
+                                                </span>
+                                              )}
+                                              {p.receivedQty != null && p.receivedQty !== '' && Number(p.receivedQty) !== p.qty && (
+                                                <span className="text-red-600 text-[11px] font-black">({Number(p.receivedQty) - p.qty > 0 ? '+' : ''}{(Number(p.receivedQty) - p.qty).toLocaleString()})</span>
                                               )}
                                             </span>
-                                            {ship.received && p.unitPriceActual && (
-                                              <span className="text-[10px] font-bold tracking-tight shrink-0 hidden md:inline">
-                                                <span className="text-neutral-700">${p.unitPriceActual}</span> / <span className="text-amber-800">${p.unitPriceDeclared}</span>
+                                            {ship.received && p.unitPriceDeclared && (
+                                              <span className="text-[10px] font-bold tracking-tight shrink-0 hidden md:inline text-amber-800">
+                                                신고 ${p.unitPriceDeclared}
                                               </span>
                                             )}
                                             {/* 💠 v20260709.02: 상품별 주문 금액(소계) ¥/$/₩ */}
@@ -13013,11 +13081,17 @@
                                           )}
                                           <div className="bg-neutral-100 border border-neutral-400 px-3 py-2" style={{borderRadius:'4px'}}>
                                             <div className="text-[9px] font-black text-neutral-700 uppercase tracking-widest">외환 송금</div>
-                                            <div className="font-black text-black tracking-tight">${(ship.amountTransferred || 0).toLocaleString(undefined, {maximumFractionDigits:2})}</div>
+                                            <div className="font-black text-black tracking-tight">
+                                              ¥{(ship.remitAmountCNY || 0).toLocaleString()}
+                                              {(() => { const ru = ship.remitUSD || ((rCNY>0&&rUSD>0)?(ship.remitAmountCNY||0)*rCNY/rUSD:0); return ru>0 ? <span className="text-[10px] text-neutral-500 ml-1">≈ ${ru.toLocaleString(undefined,{maximumFractionDigits:2})}</span> : null; })()}
+                                            </div>
                                           </div>
                                           <div className="bg-black px-3 py-2 text-white" style={{borderRadius:'4px'}}>
-                                            <div className="text-[9px] font-black uppercase tracking-widest" style={{color:'#FEE500'}}>채무 차감</div>
-                                            <div className="font-black tracking-tight" style={{color:'#FEE500'}}>${(ship.totalDebtOffset || 0).toLocaleString(undefined, {maximumFractionDigits:2})}</div>
+                                            <div className="text-[9px] font-black uppercase tracking-widest" style={{color:'#FEE500'}}>신고 총액 (송금 대비)</div>
+                                            <div className="font-black tracking-tight" style={{color:'#FEE500'}}>
+                                              ${(ship.totalDeclaredUSD || 0).toLocaleString(undefined, {maximumFractionDigits:2})}
+                                              {(() => { const ru = ship.remitUSD || ((rCNY>0&&rUSD>0)?(ship.remitAmountCNY||0)*rCNY/rUSD:0); const d = ru - (ship.totalDeclaredUSD||0); return ru>0 ? <span className="text-[10px] ml-1" style={{color: Math.abs(d)<0.5?'#4ade80':'#fca5a5'}}>({d>0?'+':''}${d.toLocaleString(undefined,{maximumFractionDigits:2})})</span> : null; })()}
+                                            </div>
                                           </div>
                                           {ship.declarationMemo && (
                                             <div className="md:col-span-3 bg-neutral-50 border border-neutral-200 px-3 py-2 text-neutral-600" style={{borderRadius:'4px'}}>
