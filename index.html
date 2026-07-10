@@ -3313,7 +3313,7 @@
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260710.03</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260710.04</div>
                   </div>
                   
                   {/* v10.06: 헬퍼/봇 상태등 */}
@@ -11594,7 +11594,10 @@
                         return s + ((r > 0 && ru > 0) ? (shipCNY(sh) * r / ru) : 0);
                       }, 0);
                       // 미수 잔액(위안 CNY) = 기초잔액(초기값) + 발주 누적(위안) − 외환송금 누적(위안)
-                      const remitTotalCNY = chinaRemittances.reduce((s, r) => s + (parseFloat(r.amountCNY) || 0), 0);
+                      // 💠 v20260710.04: 송금 단일기준 = 발주건 송금(ship.remitAmountCNY) + 7-3 직접추가(shipmentId 없는 것). chinaRemittances의 발주연동 항목은 중복이라 제외
+                      const remitShipCNY = chinaShipments.reduce((s, sh) => s + (sh.remitted ? (parseFloat(sh.remitAmountCNY) || 0) : 0), 0);
+                      const remitStandaloneCNY = chinaRemittances.filter(r => !r.shipmentId).reduce((s, r) => s + (parseFloat(r.amountCNY) || 0), 0);
+                      const remitTotalCNY = remitShipCNY + remitStandaloneCNY;
                       const debtBalanceCNY = chinaDebtInitial + orderTotalCNY - remitTotalCNY;
                       // 💠 v20260709.02: 잔액 달러/원화 환산 (최근 발주 환율 기준)
                       const lastRateCNY = parseFloat(localStorage.getItem('china_last_rate_cny')) || 0;
@@ -13113,7 +13116,19 @@
                     })()}
 
                     {/* 💠 v20260709.01: 7-3 외환송금 */}
-                    {chinaTab === 'remittance' && (
+                    {chinaTab === 'remittance' && (() => {
+                      // 💠 v20260710.04: 송금 단일기준 병합 — 발주건 송금(ship) + 7-3 직접추가(shipmentId 없는 것). 발주연동 중복 항목 제외
+                      const mergedRemits = [
+                        ...chinaShipments.filter(sh => sh.remitted).map(sh => ({
+                          id: 'ship-' + sh.id,
+                          date: sh.remitDate || sh.shipmentDate || '',
+                          amountCNY: parseFloat(sh.remitAmountCNY) || 0,
+                          shipmentId: sh.id,
+                          source: 'ship'
+                        })),
+                        ...chinaRemittances.filter(r => !r.shipmentId).map(r => ({ ...r, source: 'standalone' }))
+                      ].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+                      return (
                       <div className="space-y-4 p-6">
                         {/* 헤더 + 송금 추가 */}
                         <div className="bg-white border border-neutral-300 p-4" style={{borderRadius:'6px'}}>
@@ -13128,7 +13143,7 @@
                               + 송금 추가
                             </button>
                             <span className="bg-black text-white text-[11px] font-black px-2.5 py-1 tracking-widest shrink-0" style={{borderRadius:'6px'}}>
-                              {chinaRemittances.length}건
+                              {mergedRemits.length}건
                             </span>
                           </div>
                         </div>
@@ -13138,7 +13153,7 @@
                           <span className="text-neutral-700 font-bold tracking-tight text-[12px] flex-1 min-w-[200px]">송금할 때마다 날짜와 금액(위안 ¥)을 기록하세요. 상단 미수금(외상채무)에서 자동으로 차감됩니다.</span>
                         </div>
                         {/* 송금 리스트 */}
-                        {chinaRemittances.length === 0 ? (
+                        {mergedRemits.length === 0 ? (
                           <div className="bg-white border border-neutral-300 p-12 text-center" style={{borderRadius:'6px'}}>
                             <div className="text-4xl mb-3">💸</div>
                             <p className="font-black text-neutral-500 tracking-tight mb-3">아직 송금 기록이 없습니다</p>
@@ -13147,22 +13162,33 @@
                           </div>
                         ) : (
                           <div className="space-y-2">
-                            {[...chinaRemittances].sort((a,b) => (b.date||'').localeCompare(a.date||'')).map(r => (
+                            {mergedRemits.map(r => (
                               <div key={r.id} className="bg-white border-2 border-neutral-400 p-3 flex items-center gap-3" style={{borderRadius:'6px'}}>
                                 <span className="bg-black text-white text-[10px] font-black px-2 py-0.5 tracking-widest shrink-0" style={{borderRadius:'6px'}}>💸 송금</span>
-                                <span className="text-sm font-bold text-neutral-700 tracking-tight">{r.date}</span>
+                                {r.source === 'ship' && (
+                                  <span className="bg-neutral-200 text-neutral-800 text-[10px] font-black px-2 py-0.5 tracking-widest shrink-0" style={{borderRadius:'6px'}}>발주 #{r.shipmentId}</span>
+                                )}
+                                <span className="text-sm font-bold text-neutral-700 tracking-tight">{r.date || '-'}</span>
                                 <span className="flex-1"></span>
                                 <span className="text-black text-sm font-black px-2.5 py-1 tracking-tight" style={{backgroundColor:'#FEE500', borderRadius:'4px'}}>¥{Number(r.amountCNY).toLocaleString()}</span>
-                                <button onClick={() => {
-                                  if (!confirm(`이 송금 기록을 삭제할까요?\n${r.date} · ¥${Number(r.amountCNY).toLocaleString()}\n\n미수금이 다시 늘어납니다.`)) return;
-                                  saveChinaRemittances(chinaRemittances.filter(x => x.id !== r.id));
-                                }} className="p-2 text-red-500 hover:bg-red-50" style={{borderRadius:'6px'}} title="송금 기록 삭제"><Trash /></button>
+                                {r.source === 'ship' ? (
+                                  <button onClick={() => {
+                                    const sh = chinaShipments.find(s => s.id === r.shipmentId);
+                                    if (sh) setChinaRemitInputPopup({...sh});
+                                  }} className="px-2 py-1 text-neutral-600 hover:bg-neutral-100 text-[10px] font-black uppercase tracking-widest" style={{borderRadius:'6px'}} title="발주 건 송금 수정 (7-2)">✏️ 수정</button>
+                                ) : (
+                                  <button onClick={() => {
+                                    if (!confirm(`이 송금 기록을 삭제할까요?\n${r.date} · ¥${Number(r.amountCNY).toLocaleString()}\n\n미수금이 다시 늘어납니다.`)) return;
+                                    saveChinaRemittances(chinaRemittances.filter(x => x.id !== r.id));
+                                  }} className="p-2 text-red-500 hover:bg-red-50" style={{borderRadius:'6px'}} title="송금 기록 삭제"><Trash /></button>
+                                )}
                               </div>
                             ))}
                           </div>
                         )}
                       </div>
-                    )}
+                      );
+                    })()}
 
                     {/* 7-4 수입신고관리 (준비 중) */}
                     {chinaTab === 'declaration' && (
