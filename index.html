@@ -490,7 +490,14 @@
           const [soldoutPopup, setSoldoutPopup] = useState(false);
           const [todayOffPopup, setTodayOffPopup] = useState(false);
           const [productMgmtTab, setProductMgmtTab] = useState('master');
-          
+
+          // 💠 진열장(다이) 관리 — 칸 레이아웃만 저장, 실제 배정은 상품마스터 positions가 단일 원본
+          // shelf: { id, name(색상명 예 "파란색"), prefix(접두어 예 "파"), columns(열별 칸수 배열 예 [3,5,4]), colorHex, createdAt } · 구버전 slots/cols는 getColumns가 자동 변환
+          const [displayShelves, setDisplayShelves] = useState(() => { try { return JSON.parse(localStorage.getItem('display_shelves')||'[]'); } catch { return []; } });
+          const saveDisplayShelves = (data) => { setDisplayShelves(data); localStorage.setItem('display_shelves', JSON.stringify(data)); };
+          const [shelfEditPopup, setShelfEditPopup] = useState(null); // 진열장 추가/수정 모달 { id?, name, prefix, slots, cols, colorHex }
+          const [shelfSlotPopup, setShelfSlotPopup] = useState(null); // 칸 배정 모달 { shelf, slotNo, posValue }
+
           // 부자재 바코드 (사은품, 실리콘논슬립 등)
           const [accessoryBarcodes, setAccessoryBarcodes] = useState(() => { try { return JSON.parse(localStorage.getItem('accessory_barcodes')||'[]'); } catch { return []; } });
           const saveAccessoryBarcodes = (next) => { setAccessoryBarcodes(next); localStorage.setItem('accessory_barcodes', JSON.stringify(next)); };
@@ -3317,7 +3324,7 @@
                   <div>
                     <div className="text-sm font-black text-black tracking-tight">LACEROOM</div>
                     <div className="text-[10px] font-bold text-neutral-500 tracking-widest">통합관리</div>
-                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260714.01</div>
+                    <div className="text-[10px] text-neutral-400 mt-1 font-bold">v20260714.02</div>
                   </div>
                   
                   {/* v10.06: 헬퍼/봇 상태등 */}
@@ -3392,6 +3399,7 @@
                         { key: 'master', label: '상품 마스터', num: '9-1', setter: setProductMgmtTab, current: productMgmtTab },
                         { key: 'soldout', label: '일시품절', num: '9-2', setter: setProductMgmtTab, current: productMgmtTab },
                         { key: 'todayoff', label: '오늘출발OFF', num: '9-3', setter: setProductMgmtTab, current: productMgmtTab },
+                        { key: 'shelf', label: '진열장 관리', num: '9-4', setter: setProductMgmtTab, current: productMgmtTab },
                       ],
                     };
                     const subTabs = subTabsMap[tab];
@@ -3493,6 +3501,8 @@
                         productNameAliases,
                         // 💠 v20260521.01 Phase 5-B-2-a: 일별 마진 결과 누적
                         costMarginDailyResults,
+                        // 💠 진열장(다이) 레이아웃
+                        displayShelves,
                         exportDate: new Date().toISOString(),
                         appVersion: 'v20260521.01'
                       };
@@ -3599,6 +3609,8 @@
                             if (data.productNameAliases && typeof data.productNameAliases === 'object') saveProductNameAliases(data.productNameAliases);
                             // 💠 v20260521.01 Phase 5-B-2-a: 일별 결과 누적 복원
                             if (data.costMarginDailyResults && typeof data.costMarginDailyResults === 'object') saveCostMarginDailyResults(data.costMarginDailyResults);
+                            // 💠 진열장(다이) 레이아웃 복원
+                            if (Array.isArray(data.displayShelves)) saveDisplayShelves(data.displayShelves);
                             // 💠 v20260513: 1-2 작업지시서 이미지 매핑 IndexedDB 복원 (PC 간 동기화)
                             if (data.workorderImages && typeof data.workorderImages === 'object') {
                               (async () => {
@@ -14813,6 +14825,11 @@
                           style={{borderRadius:'2px'}}>
                           9-3 오늘출발OFF
                         </button>
+                        <button onClick={() => setProductMgmtTab('shelf')}
+                          className={`flex-1 py-2.5 text-sm font-black uppercase tracking-wider transition-all ${productMgmtTab==='shelf' ? 'bg-black text-white' : 'text-neutral-500 hover:bg-neutral-100 hover:text-black'}`}
+                          style={{borderRadius:'2px'}}>
+                          9-4 진열장 관리
+                        </button>
                       </div>
 
                       {/* 9-1 상품 마스터 등록/관리 */}
@@ -15023,6 +15040,24 @@
                                                   const bi = colorOrder.indexOf(b);
                                                   return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
                                                 });
+                                                // 💠 위치(다이) 중복 감지: 대괄호 제거·앞뒤공백 정리한 값으로 전 상품 사용현황 집계
+                                                const normPos = (v) => (v||'').replace(/[\[\]]/g,'').trim();
+                                                const posUsage = {}; // 정규화위치 → [{productName, color, self}]
+                                                (masterProducts||[]).forEach(mp => {
+                                                  if (mp.id === form.id) return; // 현재 편집 상품은 form 기준으로 아래에서 집계
+                                                  const mpPos = mp.positions || {};
+                                                  Object.keys(mpPos).forEach(c => {
+                                                    const n = normPos(mpPos[c]);
+                                                    if (!n) return;
+                                                    (posUsage[n] = posUsage[n] || []).push({ productName: mp.name || '(이름없음)', color: c, self: false });
+                                                  });
+                                                });
+                                                { const fPos = form.positions || {};
+                                                  Object.keys(fPos).forEach(c => {
+                                                    const n = normPos(fPos[c]);
+                                                    if (!n) return;
+                                                    (posUsage[n] = posUsage[n] || []).push({ productName: form.name || '(현재 상품)', color: c, self: true });
+                                                  }); }
                                                 return sortedColors.map((color, idx) => {
                                                   const barcodes = form.barcodes || {};
                                                   const positions = form.positions || {};
@@ -15036,6 +15071,10 @@
                                                   const pos = positions[color] || '';
                                                   const customName = customColorNames[color] || '';
                                                   const posRaw = pos.replace(/^\[/, '').replace(/\]$/, '');
+                                                  // 💠 이 색상 위치값이 다른 상품/다른 색상에서 이미 쓰이는지 (자기 자신 제외)
+                                                  const posNorm = normPos(pos);
+                                                  const posConflicts = posNorm ? (posUsage[posNorm]||[]).filter(u => !(u.self && u.color === color)) : [];
+                                                  const hasPosConflict = posConflicts.length > 0;
                                                   const isMatte = color.includes('(반광)');
                                                   const isMulti = isMultiStageColor(color);
                                                   const factoryDisplay = getFactoryColorDisplay(color);
@@ -15158,27 +15197,40 @@
                                                         <span className={`text-[9px] min-w-[26px] font-mono shrink-0 text-right ${labelTextColor}`}>{val.length}/11</span>
                                                       </div>
                                                       {/* 위치 */}
-                                                      <div className="flex items-center gap-1 mb-1.5 min-w-0">
-                                                        <span className={`text-[10px] w-9 shrink-0 font-medium ${labelTextColor}`}>위치</span>
-                                                        <span className={`text-xs font-bold shrink-0 ${valueTextColor}`}>[</span>
-                                                        <input type="text" value={posRaw}
-                                                          disabled={isLocked}
-                                                          onClick={(e)=>e.stopPropagation()}
-                                                          onChange={e=>{
-                                                            const raw = e.target.value.slice(0, 6);
-                                                            const wrapped = raw ? `[${raw}]` : '';
-                                                            setForm(p=>({...p, positions: {...(p.positions||{}), [color]: wrapped}, _focusedColor: color}));
-                                                          }}
-                                                          onCompositionEnd={e=>{
-                                                            const raw = e.target.value.slice(0, 6);
-                                                            const wrapped = raw ? `[${raw}]` : '';
-                                                            setForm(p=>({...p, positions: {...(p.positions||{}), [color]: wrapped}, _focusedColor: color}));
-                                                          }}
-                                                          placeholder={isLocked?'🔒':'노1'}
-                                                          maxLength={6}
-                                                          className={`flex-1 min-w-0 px-2 py-1 border text-xs text-center outline-none ${inputBgClass}`}
-                                                          style={{borderRadius:'2px'}}/>
-                                                        <span className={`text-xs font-bold shrink-0 ${valueTextColor}`}>]</span>
+                                                      <div className="mb-1.5">
+                                                        <div className="flex items-center gap-1 min-w-0">
+                                                          <span className={`text-[10px] w-9 shrink-0 font-medium ${labelTextColor}`}>위치</span>
+                                                          <span className={`text-xs font-bold shrink-0 ${valueTextColor}`}>[</span>
+                                                          <input type="text" value={posRaw}
+                                                            disabled={isLocked}
+                                                            onClick={(e)=>e.stopPropagation()}
+                                                            onChange={e=>{
+                                                              const raw = e.target.value.slice(0, 6);
+                                                              const wrapped = raw ? `[${raw}]` : '';
+                                                              setForm(p=>({...p, positions: {...(p.positions||{}), [color]: wrapped}, _focusedColor: color}));
+                                                            }}
+                                                            onCompositionEnd={e=>{
+                                                              const raw = e.target.value.slice(0, 6);
+                                                              const wrapped = raw ? `[${raw}]` : '';
+                                                              setForm(p=>({...p, positions: {...(p.positions||{}), [color]: wrapped}, _focusedColor: color}));
+                                                            }}
+                                                            placeholder={isLocked?'🔒':'노1'}
+                                                            maxLength={6}
+                                                            className={`flex-1 min-w-0 px-2 py-1 border text-xs text-center outline-none ${
+                                                              hasPosConflict && !isLocked
+                                                                ? (isFocused ? 'bg-red-950 text-red-200 border-red-500' : 'bg-red-50 text-red-700 border-red-500')
+                                                                : inputBgClass
+                                                            }`}
+                                                            style={{borderRadius:'2px'}}/>
+                                                          <span className={`text-xs font-bold shrink-0 ${valueTextColor}`}>]</span>
+                                                        </div>
+                                                        {/* 💠 다이 위치 중복 경고 (잠금 아닐 때만) */}
+                                                        {hasPosConflict && !isLocked && (
+                                                          <div className={`mt-1 text-[9px] font-bold leading-tight break-keep ${isFocused ? 'text-red-300' : 'text-red-600'}`}
+                                                            title={posConflicts.map(u => `${u.productName}·${u.color}`).join('\n')}>
+                                                            ⚠️ 이미 사용 중: {posConflicts[0].productName}·{posConflicts[0].color}{posConflicts.length>1?` 외 ${posConflicts.length-1}곳`:''}
+                                                          </div>
+                                                        )}
                                                       </div>
                                                       {/* 라벨명 */}
                                                       <div className="flex items-center gap-1 min-w-0">
@@ -16170,6 +16222,32 @@
                                       if (!form.colors?.length) return alert('색상을 1개 이상 선택하세요');
                                       const dup = masterProducts.find(p=>p.name===form.name.trim() && p.type===form.type && (!isEdit || p.id!==form.id));
                                       if (dup) return alert('같은 타입에 동일한 상품명이 이미 있습니다.');
+                                      // 💠 다이 위치 중복 검사: 저장 전 다른 상품·같은 상품 다른 색상과 겹치는 위치값 안내 (강제 차단 아님)
+                                      {
+                                        const normPos2 = (v) => (v||'').replace(/[\[\]]/g,'').trim();
+                                        const otherUsage = {}; // 정규화위치 → [{productName, color}]
+                                        masterProducts.forEach(mp => {
+                                          if (isEdit && mp.id === form.id) return;
+                                          const mpPos = mp.positions || {};
+                                          Object.keys(mpPos).forEach(c => {
+                                            const n = normPos2(mpPos[c]); if (!n) return;
+                                            (otherUsage[n] = otherUsage[n] || []).push({ productName: mp.name || '(이름없음)', color: c });
+                                          });
+                                        });
+                                        const fPos = form.positions || {};
+                                        const conflictLines = [];
+                                        const seenInForm = {}; // 같은 상품 내 색상 간 중복 감지
+                                        (form.colors||[]).forEach(c => {
+                                          const n = normPos2(fPos[c]); if (!n) return;
+                                          (otherUsage[n] || []).forEach(u => conflictLines.push(`· [${n}] ${c} ↔ ${u.productName}·${u.color}`));
+                                          if (seenInForm[n]) conflictLines.push(`· [${n}] ${c} ↔ (같은 상품) ${seenInForm[n]}`);
+                                          else seenInForm[n] = c;
+                                        });
+                                        if (conflictLines.length > 0) {
+                                          const ok = confirm(`⚠️ 다이 위치가 겹칩니다 (${conflictLines.length}건)\n\n${conflictLines.slice(0,15).join('\n')}${conflictLines.length>15?`\n… 외 ${conflictLines.length-15}건`:''}\n\n의도적으로 같은 다이에 배치하는 게 아니라면 위치를 수정하세요.\n\n그래도 이대로 저장할까요?`);
+                                          if (!ok) return;
+                                        }
+                                      }
                                       const item = {
                                         id: form.id||Date.now(),
                                         type: form.type,
@@ -18247,9 +18325,344 @@
                           )}
                         </div>
                       )}
+
+                      {/* 9-4 진열장(다이) 관리 — 칸 배정 시 9-1 위치값 자동 반영 */}
+                      {productMgmtTab === 'shelf' && (() => {
+                        const norm = (v) => (v||'').replace(/[\[\]]/g,'').trim();
+                        // 위치값 → 배정 목록 [{productId, productName, image, color, type}]
+                        const posMap = {};
+                        (masterProducts||[]).forEach(mp => {
+                          const pos = mp.positions||{};
+                          Object.keys(pos).forEach(c => {
+                            const n = norm(pos[c]); if(!n) return;
+                            (posMap[n] = posMap[n]||[]).push({ productId: mp.id, productName: mp.name||'(이름없음)', image: mp.image, color: c, type: mp.type });
+                          });
+                        });
+                        const shelfColorHex = (name, saved) => {
+                          if (saved) return saved;
+                          const m = {'노':'#f59e0b','파':'#3b82f6','빨':'#ef4444','초':'#22c55e','검':'#374151','흰':'#d1d5db','회':'#9ca3af','분':'#ec4899','보':'#8b5cf6','주':'#f97316','갈':'#92400e','청':'#0891b2'};
+                          return m[(name||'').trim()[0]] || '#64748b';
+                        };
+                        // 배경색 밝기에 따라 글자색 자동 (밝으면 검정, 어두우면 흰색)
+                        const hexTextColor = (hx) => {
+                          const h = (hx||'').replace('#',''); if (h.length<6) return '#000';
+                          const r=parseInt(h.slice(0,2),16), g=parseInt(h.slice(2,4),16), b=parseInt(h.slice(4,6),16);
+                          return (0.299*r + 0.587*g + 0.114*b)/255 > 0.62 ? '#000' : '#fff';
+                        };
+                        // 열별 칸수 배열 (legacy slots/cols → columns 자동 변환)
+                        const getColumns = (shelf) => {
+                          if (Array.isArray(shelf.columns) && shelf.columns.length) return shelf.columns.map(c=>Math.max(0,parseInt(c)||0)).filter(c=>c>0);
+                          const slots = parseInt(shelf.slots)||0, cols = Math.max(1, parseInt(shelf.cols)||1);
+                          if (!slots) return [];
+                          const base = Math.floor(slots/cols), rem = slots%cols;
+                          return Array.from({length:cols},(_,i)=> base+(i<rem?1:0)).filter(c=>c>0);
+                        };
+                        // 접두어 일치 + 번호 > 총칸수 → 진열장 밖(초과) 위치값
+                        const outOfRange = (shelf, total) => {
+                          const res = [];
+                          Object.keys(posMap).forEach(n => {
+                            if (!shelf.prefix || !n.startsWith(shelf.prefix)) return;
+                            const numStr = n.slice(shelf.prefix.length);
+                            const num = parseInt(numStr, 10);
+                            if (String(num) === numStr.trim() && num > total) res.push({ n, num, items: posMap[n] });
+                          });
+                          return res.sort((a,b)=>a.num-b.num);
+                        };
+                        // 칸 삭제 (A방식: 뒤 번호 당김 + 배정된 제품 위치값 자동 이동)
+                        const deleteSlot = (shelf, no, colIdx) => {
+                          if (!confirm(`${shelf.prefix}${no} 칸을 삭제할까요?\n\n뒤 번호가 하나씩 당겨지고, 배정된 제품 위치값도 함께 이동합니다.`)) return;
+                          saveMasterProducts(masterProducts.map(mp => {
+                            const pos = {...(mp.positions||{})}; let ch=false;
+                            Object.keys(pos).forEach(color => {
+                              const v = norm(pos[color]); if (!v.startsWith(shelf.prefix)) return;
+                              const numStr = v.slice(shelf.prefix.length); const k = parseInt(numStr,10);
+                              if (String(k)!==numStr.trim()) return;
+                              if (k===no) { delete pos[color]; ch=true; }
+                              else if (k>no) { pos[color]=`[${shelf.prefix}${k-1}]`; ch=true; }
+                            });
+                            return ch ? {...mp, positions:pos} : mp;
+                          }));
+                          const cols = getColumns(shelf);
+                          const newCols = cols.map((c,i)=> i===colIdx ? c-1 : c).filter(c=>c>0);
+                          saveDisplayShelves(displayShelves.map(s => s.id===shelf.id ? {...s, columns:newCols, slots:undefined, cols:undefined} : s));
+                        };
+                        return (
+                          <div className="space-y-4">
+                            <div className="flex items-center justify-between gap-3 flex-wrap">
+                              <div className="text-sm text-neutral-500 font-bold">진열장 칸에 제품·색상을 배정하면 <span className="text-black">9-1 상품마스터 위치값</span>에 자동 반영됩니다. · 칸 위에 마우스를 올리면 <span className="text-red-600">삭제(×)</span>가 보입니다.</div>
+                              <button onClick={()=>setShelfEditPopup({ name:'', prefix:'', columns:[5,5,5], colorHex:'' })}
+                                className="px-4 py-2 bg-black text-white text-sm font-black uppercase tracking-wider hover:bg-neutral-800" style={{borderRadius:'2px'}}>+ 진열장 추가</button>
+                            </div>
+
+                            {displayShelves.length === 0 && (
+                              <div className="border-2 border-dashed border-neutral-300 py-16 text-center text-neutral-400 font-bold" style={{borderRadius:'2px'}}>
+                                아직 진열장이 없습니다. <span className="text-black">+ 진열장 추가</span>로 시작하세요.
+                              </div>
+                            )}
+
+                            {displayShelves.map(shelf => {
+                              const hex = shelfColorHex(shelf.name, shelf.colorHex);
+                              const txt = hexTextColor(hex);
+                              const columns = getColumns(shelf);
+                              let running = 0;
+                              const colData = columns.map(cnt => { const start=running+1; running+=cnt; return {cnt, start}; });
+                              const total = running;
+                              const oor = outOfRange(shelf, total);
+                              const usedCount = Array.from({length: total}, (_,i)=> (posMap[`${shelf.prefix}${i+1}`]||[]).length>0).filter(Boolean).length;
+                              return (
+                                <div key={shelf.id} className="border-2" style={{borderRadius:'2px', borderColor: hex, background: hex+'12'}}>
+                                  <div className="flex items-center justify-between gap-2 px-4 py-3 flex-wrap" style={{background: hex}}>
+                                    <div className="flex items-center gap-3 flex-wrap">
+                                      <span className="w-5 h-5 rounded-full shrink-0" style={{background:'#ffffff', border:`2px solid ${txt}`, opacity:0.9}}></span>
+                                      <span className="text-lg font-black tracking-tight" style={{color:txt}}>{shelf.name}</span>
+                                      <span className="text-xs font-mono font-bold" style={{color:txt, opacity:0.85}}>[{shelf.prefix}1~{shelf.prefix}{total}]</span>
+                                      <span className="text-xs font-bold" style={{color:txt, opacity:0.85}}>{usedCount}/{total}칸 · {columns.length}열</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                      <button onClick={()=>setShelfEditPopup({ ...shelf, columns: getColumns(shelf) })} className="px-3 py-1.5 text-xs font-black uppercase bg-white text-black border-2 border-white hover:bg-neutral-100" style={{borderRadius:'2px'}}>수정</button>
+                                      <button onClick={()=>{ if(!confirm(`"${shelf.name}" 진열장을 삭제할까요?\n\n칸 레이아웃만 삭제되고, 제품에 입력된 위치값은 그대로 유지됩니다.`)) return; saveDisplayShelves(displayShelves.filter(s=>s.id!==shelf.id)); }}
+                                        className="px-3 py-1.5 text-xs font-black uppercase bg-white text-red-600 border-2 border-white hover:bg-red-50" style={{borderRadius:'2px'}}>삭제</button>
+                                    </div>
+                                  </div>
+                                  <div className="p-3">
+                                    <div className="flex gap-3 overflow-x-auto pb-1 items-start">
+                                      {colData.map((col, ci) => (
+                                        <div key={ci} className="flex flex-col gap-2 shrink-0" style={{width:'150px'}}>
+                                          <div className="text-[9px] font-black text-neutral-400 text-center uppercase tracking-wider">{ci+1}열 · {col.cnt}칸</div>
+                                          {Array.from({length: col.cnt}, (_,ri)=>{
+                                            const slotNo = col.start + ri;
+                                            const posValue = `${shelf.prefix}${slotNo}`;
+                                            const items = posMap[posValue] || [];
+                                            const first = items[0];
+                                            const dup = items.length > 1;
+                                            return (
+                                              <div key={slotNo} className="relative group">
+                                                <div onClick={()=>setShelfSlotPopup({ shelf, slotNo, posValue })} role="button"
+                                                  className={`border-2 p-2 text-left transition-all min-h-[92px] flex flex-col cursor-pointer ${first ? 'bg-white hover:shadow-md' : 'border-dashed hover:opacity-70'}`}
+                                                  style={{borderRadius:'2px', borderColor: first ? hex : hex+'66', background: first ? '#fff' : hex+'12'}}>
+                                                  <span className="text-[10px] font-mono font-black mb-1 shrink-0" style={{color: hex, filter:'brightness(0.75)'}}>{posValue}</span>
+                                                  {first ? (
+                                                    <div className="flex items-start gap-2 min-w-0 flex-1">
+                                                      {first.image ? <img src={first.image} alt="" className="w-11 h-11 object-cover border border-neutral-300 shrink-0" style={{borderRadius:'2px'}}/> : <div className="w-11 h-11 bg-neutral-100 border border-neutral-300 flex items-center justify-center text-sm shrink-0" style={{borderRadius:'2px'}}>📦</div>}
+                                                      <div className="min-w-0 flex-1">
+                                                        <div className="text-[11px] font-black text-black leading-tight break-keep" style={{display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden'}}>{first.productName}</div>
+                                                        <div className="text-[10px] font-bold text-neutral-500 truncate mt-0.5">{first.color}</div>
+                                                      </div>
+                                                    </div>
+                                                  ) : (
+                                                    <span className="text-[10px] text-neutral-400 font-bold m-auto">빈 칸</span>
+                                                  )}
+                                                  {dup && <span className="absolute top-1 right-1 bg-red-600 text-white text-[8px] font-black px-1 py-0.5" style={{borderRadius:'2px'}} title={items.map(x=>`${x.productName}·${x.color}`).join('\n')}>중복 {items.length}</span>}
+                                                </div>
+                                                <button onClick={(e)=>{ e.stopPropagation(); deleteSlot(shelf, slotNo, ci); }} title="칸 삭제 (뒤 번호 당김)"
+                                                  className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-600 text-white text-xs font-black flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow z-10">×</button>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      ))}
+                                    </div>
+                                    {oor.length > 0 && (
+                                      <div className="mt-3 pt-3 border-t-2 border-dashed border-red-300">
+                                        <div className="text-[11px] font-black text-red-600 mb-1.5">⚠️ 진열장 밖 (총 {total}칸 초과 위치값) — 칸/열을 늘리거나 위치를 옮겨주세요</div>
+                                        <div className="flex flex-wrap gap-1.5">
+                                          {oor.map(o => o.items.map((it,ii)=>(
+                                            <button key={o.n+'_'+ii} onClick={()=>setShelfSlotPopup({ shelf, slotNo: o.num, posValue: o.n })}
+                                              className="flex items-center gap-1 px-2 py-1 border-2 border-red-400 bg-red-50 text-[10px] font-bold hover:bg-red-100" style={{borderRadius:'2px'}}>
+                                              <span className="font-mono font-black text-red-700">{o.n}</span>
+                                              <span className="text-neutral-700 truncate max-w-[120px]">{it.productName}·{it.color}</span>
+                                            </button>
+                                          )))}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 )}
+
+                {/* 진열장 추가/수정 모달 */}
+                {shelfEditPopup && (() => {
+                  const f = shelfEditPopup;
+                  const isEdit = !!f.id;
+                  const setF = (patch)=>setShelfEditPopup(prev=>({...prev,...patch}));
+                  const effPrefix = ((f.prefix||'').trim()||(f.name||'').trim()[0]||'?');
+                  const save = () => {
+                    const name = (f.name||'').trim();
+                    if (!name) return alert('진열장 색상/이름을 입력하세요 (예: 파란색)');
+                    const prefix = (f.prefix||'').trim() || name[0];
+                    const columns = (f.columns||[]).map(c=>Math.max(0,Math.min(50,parseInt(c)||0))).filter(c=>c>0);
+                    if (!columns.length) return alert('열을 1개 이상 추가하고 칸수를 입력하세요');
+                    const clash = displayShelves.find(s => s.prefix===prefix && (!isEdit || s.id!==f.id));
+                    if (clash) { if(!confirm(`접두어 "${prefix}"를 쓰는 진열장(${clash.name})이 이미 있습니다.\n같은 접두어면 위치값이 겹칩니다. 그래도 저장할까요?`)) return; }
+                    const rec = { id: f.id||Date.now(), name, prefix, columns, colorHex: f.colorHex||'', createdAt: f.createdAt||new Date().toISOString() };
+                    saveDisplayShelves(isEdit ? displayShelves.map(s=>s.id===f.id?rec:s) : [...displayShelves, rec]);
+                    setShelfEditPopup(null);
+                  };
+                  return (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.6)'}}>
+                      <div className="bg-white border-2 border-black w-full max-w-sm p-6" style={{borderRadius:'2px'}}>
+                        <div className="flex items-center justify-between mb-4 pb-3 border-b-2 border-neutral-300">
+                          <h3 className="text-lg font-black text-black tracking-tight">{isEdit?'진열장 수정':'진열장 추가'}</h3>
+                          <button onClick={()=>setShelfEditPopup(null)} className="text-neutral-400 hover:text-black text-xl font-bold">×</button>
+                        </div>
+                        <div className="space-y-3">
+                          <div>
+                            <label className="block text-[11px] font-black text-black mb-1 uppercase tracking-wider">색상 / 이름</label>
+                            <input type="text" value={f.name||''} autoFocus
+                              onChange={e=>{ const v=e.target.value; const auto = !f.prefix || f.prefix===((f.name||'').trim()[0]||''); setF({name:v, prefix: auto ? (v.trim()[0]||'') : f.prefix}); }}
+                              placeholder="예: 파란색" maxLength={10}
+                              className="w-full px-3 py-2 border-2 border-neutral-300 focus:border-black outline-none text-sm" style={{borderRadius:'2px'}}/>
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-black text-black mb-1 uppercase tracking-wider">접두어</label>
+                            <input type="text" value={f.prefix||''} onChange={e=>setF({prefix:e.target.value.slice(0,3)})}
+                              placeholder="파" maxLength={3}
+                              className="w-full px-3 py-2 border-2 border-neutral-300 focus:border-black outline-none text-sm text-center font-black" style={{borderRadius:'2px'}}/>
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-black text-black mb-1.5 uppercase tracking-wider">진열장 구성 <span className="font-normal normal-case tracking-normal text-neutral-400">— 열마다 칸수 (예: 1열 3칸, 2열 5칸)</span></label>
+                            <div className="space-y-1.5">
+                              {(f.columns||[]).map((c,i)=>(
+                                <div key={i} className="flex items-center gap-2">
+                                  <span className="text-xs font-black text-neutral-500 w-9 shrink-0">{i+1}열</span>
+                                  <input type="number" value={c} min="1" max="50"
+                                    onChange={e=>setF({columns:(f.columns||[]).map((x,j)=>j===i?e.target.value:x)})}
+                                    className="flex-1 min-w-0 px-3 py-1.5 border-2 border-neutral-300 focus:border-black outline-none text-sm text-center" style={{borderRadius:'2px'}}/>
+                                  <span className="text-xs font-bold text-neutral-500 shrink-0">칸</span>
+                                  <button onClick={()=>setF({columns:(f.columns||[]).filter((_,j)=>j!==i)})} disabled={(f.columns||[]).length<=1}
+                                    className="w-7 h-7 shrink-0 flex items-center justify-center border-2 border-neutral-300 text-neutral-500 hover:border-red-500 hover:text-red-600 disabled:opacity-30 disabled:cursor-not-allowed font-black" style={{borderRadius:'2px'}} title="열 삭제">×</button>
+                                </div>
+                              ))}
+                              <button onClick={()=>setF({columns:[...(f.columns||[]),5]})}
+                                className="w-full py-1.5 border-2 border-dashed border-neutral-400 text-neutral-600 font-black text-xs uppercase hover:border-black hover:text-black" style={{borderRadius:'2px'}}>+ 열 추가</button>
+                            </div>
+                          </div>
+                          <div className="text-[11px] text-neutral-500 font-bold bg-neutral-50 border border-neutral-200 p-2" style={{borderRadius:'2px'}}>
+                            → 총 <span className="text-black font-black">{(f.columns||[]).reduce((a,c)=>a+Math.max(0,parseInt(c)||0),0)}</span>칸 · 위치값 <span className="font-mono font-black text-black">{effPrefix}1</span> ~ <span className="font-mono font-black text-black">{effPrefix}{Math.max(1,(f.columns||[]).reduce((a,c)=>a+Math.max(0,parseInt(c)||0),0))}</span>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 mt-5">
+                          <button onClick={()=>setShelfEditPopup(null)} className="flex-1 py-2.5 border-2 border-neutral-300 text-black font-black text-sm uppercase hover:bg-neutral-100" style={{borderRadius:'2px'}}>취소</button>
+                          <button onClick={save} className="flex-1 py-2.5 bg-black text-white font-black text-sm uppercase hover:bg-neutral-800" style={{borderRadius:'2px'}}>저장</button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* 진열장 칸 배정 모달 */}
+                {shelfSlotPopup && (() => {
+                  const { posValue } = shelfSlotPopup;
+                  const norm = (v) => (v||'').replace(/[\[\]]/g,'').trim();
+                  const current = [];
+                  (masterProducts||[]).forEach(mp => {
+                    const pos = mp.positions||{};
+                    Object.keys(pos).forEach(c => { if (norm(pos[c])===posValue) current.push({ productId: mp.id, productName: mp.name, image: mp.image, color: c }); });
+                  });
+                  const q = (shelfSlotPopup.q||'').trim().toLowerCase();
+                  const selProductId = shelfSlotPopup.selProductId;
+                  const selProduct = selProductId ? masterProducts.find(m=>m.id===selProductId) : null;
+                  const matches = q ? (masterProducts||[]).filter(m => (m.name||'').toLowerCase().includes(q)).slice(0,30) : [];
+                  const setS = (patch)=>setShelfSlotPopup(prev=>({...prev,...patch}));
+                  const assign = (productId, color) => {
+                    const occupant = current.filter(x=>!(x.productId===productId && x.color===color));
+                    if (occupant.length > 0) {
+                      const names = occupant.map(o=>`${o.productName}·${o.color}`).join(', ');
+                      if (!confirm(`${posValue} 칸은 이미 [${names}]이(가) 사용 중입니다.\n\n비우고 새로 배정할까요?\n(기존 제품의 위치값이 삭제됩니다)`)) return;
+                    }
+                    saveMasterProducts(masterProducts.map(mp => {
+                      if (mp.id===productId) {
+                        return {...mp, positions: {...(mp.positions||{}), [color]: `[${posValue}]`}};
+                      }
+                      if (occupant.some(o=>o.productId===mp.id)) {
+                        const np = {...(mp.positions||{})};
+                        Object.keys(np).forEach(c=>{ if(norm(np[c])===posValue) delete np[c]; });
+                        return {...mp, positions: np};
+                      }
+                      return mp;
+                    }));
+                    setShelfSlotPopup(null);
+                  };
+                  const clearAll = () => {
+                    if (!confirm(`${posValue} 칸을 비울까요?\n(해당 제품 색상의 위치값이 삭제됩니다)`)) return;
+                    saveMasterProducts(masterProducts.map(mp => {
+                      if (!current.some(c=>c.productId===mp.id)) return mp;
+                      const np = {...(mp.positions||{})};
+                      Object.keys(np).forEach(c=>{ if(norm(np[c])===posValue) delete np[c]; });
+                      return {...mp, positions: np};
+                    }));
+                    setShelfSlotPopup(null);
+                  };
+                  return (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.6)'}}>
+                      <div className="bg-white border-2 border-black w-full max-w-md p-6 max-h-[90vh] overflow-y-auto" style={{borderRadius:'2px'}}>
+                        <div className="flex items-center justify-between mb-4 pb-3 border-b-2 border-neutral-300">
+                          <h3 className="text-lg font-black text-black tracking-tight">📍 <span className="font-mono">{posValue}</span> 칸 배정</h3>
+                          <button onClick={()=>setShelfSlotPopup(null)} className="text-neutral-400 hover:text-black text-xl font-bold">×</button>
+                        </div>
+                        {current.length > 0 && (
+                          <div className="mb-4">
+                            <div className="text-[11px] font-black text-neutral-500 uppercase mb-1.5">현재 배정</div>
+                            {current.map((c,i)=>(
+                              <div key={i} className="flex items-center gap-2 bg-neutral-50 border border-neutral-300 p-2 mb-1" style={{borderRadius:'2px'}}>
+                                {c.image ? <img src={c.image} className="w-9 h-9 object-cover border border-neutral-300" style={{borderRadius:'2px'}}/> : <div className="w-9 h-9 bg-neutral-100 border border-neutral-300 flex items-center justify-center" style={{borderRadius:'2px'}}>📦</div>}
+                                <div className="flex-1 min-w-0"><div className="text-sm font-black truncate">{c.productName}</div><div className="text-[11px] text-neutral-500 font-bold">{c.color}</div></div>
+                              </div>
+                            ))}
+                            <button onClick={clearAll} className="mt-1 w-full py-2 border-2 border-red-500 text-red-600 font-black text-xs uppercase hover:bg-red-600 hover:text-white" style={{borderRadius:'2px'}}>이 칸 비우기</button>
+                          </div>
+                        )}
+                        <div className="mb-3">
+                          <div className="text-[11px] font-black text-neutral-500 uppercase mb-1.5">{current.length>0?'다른 제품으로 교체':'제품 배정'}</div>
+                          <input type="text" value={shelfSlotPopup.q||''} onChange={e=>setS({q:e.target.value, selProductId:null})} placeholder="상품명 검색…" autoFocus
+                            className="w-full px-3 py-2 border-2 border-neutral-300 focus:border-black outline-none text-sm" style={{borderRadius:'2px'}}/>
+                        </div>
+                        {!selProduct && matches.length>0 && (
+                          <div className="border border-neutral-200 divide-y divide-neutral-100 max-h-52 overflow-y-auto" style={{borderRadius:'2px'}}>
+                            {matches.map(m=>(
+                              <button key={m.id} onClick={()=>setS({selProductId:m.id})} className="w-full flex items-center gap-2 p-2 hover:bg-neutral-50 text-left">
+                                {m.image ? <img src={m.image} className="w-8 h-8 object-cover border border-neutral-300 shrink-0" style={{borderRadius:'2px'}}/> : <div className="w-8 h-8 bg-neutral-100 border border-neutral-300 flex items-center justify-center shrink-0 text-xs" style={{borderRadius:'2px'}}>📦</div>}
+                                <span className="text-sm font-bold truncate">{m.name}</span>
+                                <span className="text-[10px] text-neutral-400 ml-auto shrink-0">{(m.colors||[]).length}색</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {!selProduct && q && matches.length===0 && <div className="text-center text-neutral-400 text-sm py-4 font-bold">검색 결과 없음</div>}
+                        {selProduct && (
+                          <div>
+                            <div className="flex items-center gap-2 mb-2 bg-black text-white p-2" style={{borderRadius:'2px'}}>
+                              {selProduct.image ? <img src={selProduct.image} className="w-8 h-8 object-cover" style={{borderRadius:'2px'}}/> : <span>📦</span>}
+                              <span className="text-sm font-black truncate flex-1">{selProduct.name}</span>
+                              <button onClick={()=>setS({selProductId:null})} className="text-neutral-300 hover:text-white text-xs font-bold shrink-0">← 다시</button>
+                            </div>
+                            <div className="text-[11px] font-black text-neutral-500 uppercase mb-1.5">색상 선택 → {posValue} 배정</div>
+                            <div className="grid grid-cols-2 gap-1.5">
+                              {(selProduct.colors||[]).map(c=>{
+                                const cur = norm((selProduct.positions||{})[c]);
+                                return (
+                                  <button key={c} onClick={()=>assign(selProduct.id, c)}
+                                    className="flex items-center justify-between gap-1 px-2 py-2 border-2 border-neutral-300 hover:border-black hover:bg-neutral-50 text-left" style={{borderRadius:'2px'}}>
+                                    <span className="text-xs font-bold truncate">{c}</span>
+                                    {cur && <span className={`text-[9px] font-mono font-black shrink-0 ${cur===posValue?'text-green-600':'text-amber-600'}`} title="현재 위치">{cur}</span>}
+                                  </button>
+                                );
+                              })}
+                              {(selProduct.colors||[]).length===0 && <div className="col-span-2 text-neutral-400 text-xs py-2 font-bold text-center">이 제품에 등록된 색상이 없습니다</div>}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* 원가/마진 탭 (v20260520.02 신규 - Phase 1/2B) */}
                 {activeMainTab === 'costMargin' && (() => {
